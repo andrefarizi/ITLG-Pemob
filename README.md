@@ -60,28 +60,3 @@ Aplikasi mobile Flutter untuk manajemen praktikum laboratorium komputer dengan d
 | **Validasi Rekapitulasi Akhir** | Pengguna dapat meninjau dan memvalidasi akumulasi nilai akhir dari seluruh asisten sebelum disinkronisasi dengan portal akademik kampus. |
 | **Generate Laporan** | Pengguna dapat mengunduh rekap akhir pelaksanaan praktikum dan pelaporan nilai dalam format spreadsheet atau PDF dengan satu kali klik. |
 
----
-
-## 🎨 Panduan Warna Role
-
-| Role | Warna | Hex |
-|---|---|---|
-| 🎓 Praktikan | Teal / Emerald | `#0D9488` |
-| 🖥️ Aslab | Violet / Purple | `#7C3AED` |
-| 🔧 Laboran | Amber / Orange | `#D97706` |
-| 👨‍🏫 Dosen | Deep Blue / Indigo | `#1E40AF` |
-
----
-
-## 🚀 Cara Menjalankan
-
-```bash
-# Install dependencies
-flutter pub get
-
-# Jalankan aplikasi
-flutter run
-
-# Analisis kode
-flutter analyze
-```
