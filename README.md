@@ -1,4 +1,4 @@
-# 🧪 ITLG Mobile — Sistem Praktikum & Laboratorium Terpadu
+# 🧪 ITLG Mobile — Sistem  Manajemen Informasi Praktikum & Laboratorium
 
 Aplikasi mobile Flutter untuk manajemen praktikum laboratorium komputer dengan dukungan **4 Role Pengguna** yang terintegrasi dalam satu sistem.
 
