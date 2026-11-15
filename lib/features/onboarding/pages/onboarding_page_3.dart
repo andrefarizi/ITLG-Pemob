@@ -5,25 +5,56 @@ class OnboardingPage3 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.school_rounded,
-            size: 80,
-            color: Color(0xFF1E3A8A),
+    return Scaffold(
+      backgroundColor: const Color(0xFF6A1B1A), // Merah gelap
+      body: SafeArea(
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/logo_icon.png',
+                width: 60,
+                height: 60,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.terminal_rounded,
+                  color: Colors.white,
+                  size: 54,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ITLG',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      fontStyle: FontStyle.italic,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  Text(
+                    'Information Technology\nLaboratory Group',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          SizedBox(height: 24),
-          Text(
-            'Welcome - Page 3',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+
+typedef ItlgSplashScreen = OnboardingPage3;

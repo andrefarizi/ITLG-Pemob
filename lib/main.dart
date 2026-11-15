@@ -8,6 +8,8 @@ import 'features/dashboard/pages/dashboard_page.dart';
 import 'features/attendance/pages/attendance_page.dart';
 import 'features/reports/pages/reports_page.dart';
 import 'features/users/pages/users_page.dart';
+import 'features/onboarding/onboarding_screen.dart';
+import 'features/splash/splash_screen.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -22,6 +24,8 @@ class ITLGApp extends StatefulWidget {
 
 class _ITLGAppState extends State<ITLGApp> {
   final AuthController _authController = AuthController.instance;
+  bool _showSplash = true;
+  bool _showOnboarding = true;
 
   @override
   void initState() {
@@ -46,13 +50,32 @@ class _ITLGAppState extends State<ITLGApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       onGenerateRoute: AppRoutes.onGenerateRoute,
-      home: _authController.isLoggedIn
-          ? const MainNavigationShell()
-          : LoginPage(
-              onLoginSuccess: () {
-                setState(() {});
+      home: _showSplash
+          ? SplashScreen(
+              // Peran sudah dipilih di splash, jadi langsung lanjut
+              // (melewati onboarding yang juga berisi pilihan peran).
+              onRoleSelected: (_) {
+                setState(() {
+                  _showSplash = false;
+                  _showOnboarding = false;
+                });
               },
-            ),
+            )
+          : _showOnboarding
+          ? OnboardingScreen(
+              onFinish: () {
+                setState(() {
+                  _showOnboarding = false;
+                });
+              },
+            )
+          : (_authController.isLoggedIn
+              ? const MainNavigationShell()
+              : LoginPage(
+                  onLoginSuccess: () {
+                    setState(() {});
+                  },
+                )),
     );
   }
 }

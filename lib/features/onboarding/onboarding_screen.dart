@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/utils/constants.dart';
+import '../auth/auth_controller.dart';
 import 'pages/onboarding_page_1.dart';
 import 'pages/onboarding_page_2.dart';
 import 'pages/onboarding_page_3.dart';
@@ -19,13 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<Widget> _pages = const [
-    OnboardingPage1(),
-    OnboardingPage2(),
-    OnboardingPage3(),
-    OnboardingPage4(),
-    OnboardingPage5(),
-  ];
+  static const Color maroon = Color(0xFF6A1B1A);
 
   @override
   void dispose() {
@@ -34,7 +29,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _onNext() {
-    if (_currentPage < _pages.length - 1) {
+    if (_currentPage < 4) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -46,13 +41,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _onSkip() {
     _pageController.animateToPage(
-      _pages.length - 1,
+      4,
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
     );
   }
 
-  void _finishOnboarding() {
+  void _finishOnboarding([UserRole? role]) {
+    if (role != null) {
+      AuthController.instance.setRole(role);
+    }
     if (widget.onFinish != null) {
       widget.onFinish!();
     } else {
@@ -60,90 +58,122 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  bool get _isDarkPage => _currentPage <= 2;
+
   @override
   Widget build(BuildContext context) {
-    final bool isLastPage = _currentPage == _pages.length - 1;
+    final bool isLastPage = _currentPage == 4;
+    final Color activeColor = _isDarkPage ? Colors.white : maroon;
+    final Color inactiveColor = _isDarkPage ? Colors.white38 : Colors.grey.shade300;
+
+    final List<Widget> pages = [
+      const OnboardingPage1(),
+      const OnboardingPage2(),
+      const OnboardingPage3(),
+      const OnboardingPage4(),
+      OnboardingPage5(
+        onSelectPraktikan: () => _finishOnboarding(UserRole.praktikan),
+        onSelectAslab: () => _finishOnboarding(UserRole.aslab),
+      ),
+    ];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
+      backgroundColor: _isDarkPage ? maroon : Colors.white,
+      body: Stack(
+        children: [
+          // 1. PageView (Geser Halaman 1 sampai 5)
+          PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPage = index;
+              });
+            },
+            children: pages,
+          ),
+
+          // 2. Tombol "Lewati" di Kanan Atas
           if (!isLastPage)
-            TextButton(
-              onPressed: _onSkip,
-              child: const Text(
-                'Lewati',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8.0, right: 16.0),
+                  child: TextButton(
+                    onPressed: _onSkip,
+                    style: TextButton.styleFrom(
+                      foregroundColor: activeColor.withValues(alpha: 0.9),
+                    ),
+                    child: const Text(
+                      'Lewati',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // 3. Kontrol Bawah (Indikator Titik + Tombol Lanjut)
+          // Di Halaman 5 (terakhir), tombol navigasi bawah disembunyikan
+          // karena Page 5 sudah memiliki tombol "Sebagai Praktikan" & "Sebagai Asisten Lab"
+          if (!isLastPage)
+            Positioned(
+              left: 24,
+              right: 24,
+              bottom: 24,
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Indikator Titik (Dots)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        5,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentPage == index ? 24 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _currentPage == index ? activeColor : inactiveColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Tombol Lanjut
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _onNext,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _isDarkPage ? Colors.white : maroon,
+                          foregroundColor: _isDarkPage ? maroon : Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Lanjut',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
         ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                children: _pages,
-              ),
-            ),
-            // Indikator Titik (Dots Indicator)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _pages.length,
-                (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: _currentPage == index ? 24 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _currentPage == index
-                        ? AppColors.primary
-                        : AppColors.border,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Tombol Navigasi Bawah
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _onNext,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    isLastPage ? 'Mulai Sekarang' : 'Lanjut',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
