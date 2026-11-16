@@ -341,7 +341,10 @@ Future<void> showAuthResultDialog(
   );
 }
 
-/// Kartu "Pusat Bantuan Lab" di halaman Masuk.
+/// Kartu "Pusat Bantuan Lab" di halaman Masuk (Figma: Frame 14, 370 x 160).
+///
+/// Posisi mengikuti Figma: judul di (19, 14), teks mulai x = 59 / y = 49,
+/// baris jam di y = 127, jarak bawah 18.
 class HelpCenterCard extends StatelessWidget {
   const HelpCenterCard({super.key});
 
@@ -357,26 +360,29 @@ class HelpCenterCard extends StatelessWidget {
               Container(
                 width: 32,
                 height: 32,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: ItlgColors.field,
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: ItlgShadows.outline,
                 ),
-                child: const Icon(Icons.contact_support_outlined,
-                    size: 21, color: ItlgColors.secondary),
+                child: Image.asset('assets/ic_login_ask.png',
+                    width: 21, height: 21),
               ),
               const SizedBox(width: 8),
               Text('Pusat Bantuan Lab',
-                  style: ItlgText.style(size: 16, weight: FontWeight.w700)),
+                  style: ItlgText.style(
+                      size: 16, weight: FontWeight.w700, height: 1.2)),
             ],
           ),
           Padding(
-            padding: const EdgeInsets.only(left: 40, top: 6),
+            padding: const EdgeInsets.only(left: 40, top: 3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Lokasi Pusat Bantuan jika Terjadi Kendala :',
-                    style: ItlgText.style(size: 12, color: Colors.black)),
+                    style: ItlgText.style(
+                        size: 12, color: Colors.black, height: 1.2)),
                 const SizedBox(height: 8),
                 Text(
                   'Gedung C & D Fasilkom-TI USU (Jl. Alumni, Medan). Lantai 3: '
@@ -385,14 +391,14 @@ class HelpCenterCard extends StatelessWidget {
                     size: 12,
                     color: ItlgColors.textMuted,
                     fontStyle: FontStyle.italic,
-                    height: 1.25,
+                    height: 1.2,
                   ),
                 ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    const Icon(Icons.schedule_rounded,
-                        size: 15, color: ItlgColors.textMuted),
+                    Image.asset('assets/ic_login_clock.png',
+                        width: 15, height: 15),
                     const SizedBox(width: 10),
                     Text.rich(
                       TextSpan(
@@ -403,12 +409,13 @@ class HelpCenterCard extends StatelessWidget {
                             style: ItlgText.style(
                                 size: 12,
                                 weight: FontWeight.w700,
-                                color: ItlgColors.textMuted),
+                                color: ItlgColors.textMuted,
+                                height: 1.2),
                           ),
                         ],
                       ),
                       style: ItlgText.style(
-                          size: 12, color: ItlgColors.textMuted),
+                          size: 12, color: ItlgColors.textMuted, height: 1.2),
                     ),
                   ],
                 ),

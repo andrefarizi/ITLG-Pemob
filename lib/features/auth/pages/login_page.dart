@@ -7,8 +7,15 @@ import '../auth_controller.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_1.dart';
 
-/// Halaman Masuk untuk semua peran (Figma: "05 Umum — Login & Notifikasi" >
-/// "Masuk-Semua Peran"). UI saja: belum terhubung ke backend.
+/// Halaman Masuk untuk semua peran. UI saja: belum terhubung ke backend.
+///
+/// Mengikuti empat status peran di Figma:
+/// - "06 Prototype — Status Peran Login" > Masuk-Mahasiswa, Masuk-Asisten,
+///   Masuk-Laboran
+/// - "05 Umum — Login & Notifikasi" > Masuk-Semua Peran (Dosen)
+///
+/// Yang berubah antar status hanya chip peran yang aktif serta label dan contoh
+/// nomor induk (NIM untuk Mahasiswa/Asisten, NIP untuk Laboran/Dosen).
 class LoginPage extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
 
@@ -24,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _password = TextEditingController();
 
   late UserRole _role = _auth.currentRole;
-  bool _remember = true;
+  bool _remember = false;
   bool _loading = false;
   String? _identifierError;
   String? _passwordError;
@@ -54,18 +61,10 @@ class _LoginPageState extends State<LoginPage> {
       ? 'Nomor Induk Mahasiswa (NIM)'
       : 'Nomor Induk Pegawai (NIP)';
 
-  String get _identifierHint {
-    switch (_role) {
-      case UserRole.praktikan:
-        return 'Contoh : 241402105';
-      case UserRole.aslab:
-        return 'Contoh : 221402004';
-      case UserRole.laboran:
-        return 'Contoh : 199001012019031001';
-      case UserRole.dosen:
-        return 'Contoh : 198501012010011001';
-    }
-  }
+  String get _identifierHint =>
+      _role == UserRole.praktikan || _role == UserRole.aslab
+          ? 'Contoh : 231402033'
+          : 'Contoh : 198501012010011001';
 
   void _selectRole(UserRole role) {
     if (role == _role) return;
@@ -116,7 +115,7 @@ class _LoginPageState extends State<LoginPage> {
         backgroundColor: ItlgColors.surfaceWhite,
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 56),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -145,7 +144,12 @@ class _LoginPageState extends State<LoginPage> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: ItlgShadows.outline,
           ),
-          child: const Center(child: ItlgWordmark(height: 50)),
+          child: Image.asset(
+            'assets/login_logo.png',
+            width: 134,
+            height: 53,
+            fit: BoxFit.contain,
+          ),
         ),
         const SizedBox(height: 24),
         Text(
@@ -177,7 +181,7 @@ class _LoginPageState extends State<LoginPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Masuk Sebagai', style: ItlgText.style()),
+          Text('Masuk Sebagai', style: ItlgText.style(height: 1.2)),
           const SizedBox(height: 8),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -197,12 +201,15 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(height: 18),
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 300),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeOut,
             child: ItlgTextField(
               key: ValueKey(_identifierLabel),
               label: _identifierLabel,
               hint: _identifierHint,
               icon: Icons.badge_outlined,
+              iconAsset: 'assets/ic_login_id_card.png',
               controller: _identifier,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.next,
@@ -217,8 +224,10 @@ class _LoginPageState extends State<LoginPage> {
           const SizedBox(height: 18),
           ItlgTextField(
             label: 'Kata Sandi',
-            hint: '••••••••••••',
+            hint: '************',
             icon: Icons.lock_outline_rounded,
+            iconAsset: 'assets/ic_login_lock.png',
+            showObscureToggle: false,
             controller: _password,
             obscure: true,
             textInputAction: TextInputAction.done,
@@ -239,7 +248,8 @@ class _LoginPageState extends State<LoginPage> {
                     _Checkbox(checked: _remember),
                     const SizedBox(width: 8),
                     Text('Ingat Saya',
-                        style: ItlgText.style(size: 12, color: Colors.black)),
+                        style: ItlgText.style(
+                            size: 12, color: Colors.black, height: 1.2)),
                   ],
                 ),
               ),
@@ -247,14 +257,12 @@ class _LoginPageState extends State<LoginPage> {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _openForgotPassword,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    'Lupa Password?',
-                    style: ItlgText.style(
-                      weight: FontWeight.w700,
-                      color: ItlgColors.secondary,
-                    ),
+                child: Text(
+                  'Lupa Password?',
+                  style: ItlgText.style(
+                    weight: FontWeight.w700,
+                    color: ItlgColors.secondary,
+                    height: 1.2,
                   ),
                 ),
               ),
@@ -264,37 +272,20 @@ class _LoginPageState extends State<LoginPage> {
           ItlgPrimaryButton(
             label: 'Masuk',
             trailingIcon: Icons.login_rounded,
+            trailingAsset: 'assets/ic_login_enter.png',
             loading: _loading,
             onPressed: _login,
           ),
           const SizedBox(height: 18),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: _role == UserRole.praktikan
-                ? ItlgLinkRow(
-                    key: const ValueKey('daftar'),
-                    text: 'Belum Punya Akun?',
-                    link: 'Daftar',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          content: Text('Halaman daftar akun belum tersedia.'),
-                        ),
-                      );
-                    },
-                  )
-                : Text(
-                    'Akun Asisten, Laboran, dan Dosen didaftarkan oleh admin '
-                    'laboratorium.',
-                    key: const ValueKey('catatan'),
-                    textAlign: TextAlign.center,
-                    style: ItlgText.style(
-                      size: 12,
-                      color: ItlgColors.textMuted,
-                      height: 1.2,
-                    ),
-                  ),
+          Text(
+            'Akun Asisten, Laboran, dan Dosen didaftarkan oleh admin '
+            'laboratorium.',
+            textAlign: TextAlign.center,
+            style: ItlgText.style(
+              size: 12,
+              color: ItlgColors.textMuted,
+              height: 1.2,
+            ),
           ),
         ],
       ),
@@ -302,6 +293,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+/// Chip peran (Figma "Option": tinggi 39, padding 9, radius 12, Bold 12).
+/// Perpindahan status memakai 300 ms ease-out seperti Smart Animate di Figma.
 class _RoleChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -313,36 +306,34 @@ class _RoleChip extends StatelessWidget {
     required this.onTap,
   });
 
+  static const Duration _duration = Duration(milliseconds: 300);
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      height: 39,
-      decoration: BoxDecoration(
-        color: selected ? ItlgColors.primary : const Color(0xFFFEFEFE),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: selected ? ItlgShadows.primary : ItlgShadows.outline,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: _duration,
+        curve: Curves.easeOut,
+        height: 39,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? ItlgColors.primary : const Color(0xFFFEFEFE),
           borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9),
-            child: Center(
-              widthFactor: 1,
-              child: Text(
-                label,
-                style: ItlgText.style(
-                  size: 12,
-                  weight: FontWeight.w700,
-                  color: selected ? ItlgColors.surfaceWhite : ItlgColors.text,
-                ),
-              ),
-            ),
+          boxShadow: selected ? ItlgShadows.primary : ItlgShadows.outline,
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: _duration,
+          curve: Curves.easeOut,
+          style: ItlgText.style(
+            size: 12,
+            weight: FontWeight.w700,
+            color: selected ? ItlgColors.surfaceWhite : ItlgColors.text,
+            height: 1.2,
           ),
+          child: Text(label),
         ),
       ),
     );

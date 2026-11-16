@@ -239,6 +239,9 @@ class ItlgPrimaryButton extends StatelessWidget {
   final String label;
   final IconData? leadingIcon;
   final IconData? trailingIcon;
+
+  /// Ikon PNG hasil ekspor Figma (22 px) di kanan label.
+  final String? trailingAsset;
   final VoidCallback? onPressed;
   final bool loading;
 
@@ -247,6 +250,7 @@ class ItlgPrimaryButton extends StatelessWidget {
     required this.label,
     this.leadingIcon,
     this.trailingIcon,
+    this.trailingAsset,
     this.onPressed,
     this.loading = false,
   });
@@ -298,7 +302,10 @@ class ItlgPrimaryButton extends StatelessWidget {
                               height: 1.2,
                             ),
                           ),
-                          if (trailingIcon != null) ...[
+                          if (trailingAsset != null) ...[
+                            const SizedBox(width: 8),
+                            Image.asset(trailingAsset!, width: 22, height: 22),
+                          ] else if (trailingIcon != null) ...[
                             const SizedBox(width: 8),
                             Icon(trailingIcon,
                                 size: 22, color: ItlgColors.surfaceWhite),
@@ -319,8 +326,14 @@ class ItlgTextField extends StatefulWidget {
   final String label;
   final String hint;
   final IconData icon;
+
+  /// Ikon PNG hasil ekspor Figma (20 px); menggantikan [icon] bila diisi.
+  final String? iconAsset;
   final TextEditingController? controller;
   final bool obscure;
+
+  /// Tampilkan tombol mata untuk melihat kata sandi (tidak ada di desain Masuk).
+  final bool showObscureToggle;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final String? errorText;
@@ -332,8 +345,10 @@ class ItlgTextField extends StatefulWidget {
     required this.label,
     required this.hint,
     required this.icon,
+    this.iconAsset,
     this.controller,
     this.obscure = false,
+    this.showObscureToggle = true,
     this.keyboardType,
     this.textInputAction,
     this.errorText,
@@ -354,7 +369,7 @@ class _ItlgTextFieldState extends State<ItlgTextField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label, style: ItlgText.style()),
+        Text(widget.label, style: ItlgText.style(height: 1.2)),
         const SizedBox(height: 8),
         InnerShadowBox(
           radius: 12,
@@ -370,7 +385,10 @@ class _ItlgTextFieldState extends State<ItlgTextField> {
               padding: const EdgeInsets.only(left: 16, right: 8),
               child: Row(
                 children: [
-                  Icon(widget.icon, size: 20, color: ItlgColors.textMuted),
+                  if (widget.iconAsset != null)
+                    Image.asset(widget.iconAsset!, width: 20, height: 20)
+                  else
+                    Icon(widget.icon, size: 20, color: ItlgColors.textMuted),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -381,15 +399,15 @@ class _ItlgTextFieldState extends State<ItlgTextField> {
                       onChanged: widget.onChanged,
                       onSubmitted: widget.onSubmitted,
                       cursorColor: ItlgColors.primary,
-                      style: ItlgText.style(size: 13),
+                      style: ItlgText.style(size: 12, height: 1.2),
                       decoration: InputDecoration.collapsed(
                         hintText: widget.hint,
                         hintStyle: ItlgText.style(
-                            size: 12, color: ItlgColors.textMuted),
+                            size: 12, color: ItlgColors.textMuted, height: 1.2),
                       ),
                     ),
                   ),
-                  if (widget.obscure)
+                  if (widget.obscure && widget.showObscureToggle)
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       icon: Icon(
