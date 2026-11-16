@@ -1,14 +1,19 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
+import 'package:flutter/services.dart';
+
+import '../../../core/widgets/itlg_ui.dart';
+import '../widgets/auth_design.dart';
 import 'forgot_password_page_3.dart';
 
+/// Lupa Password – langkah 2: OTP (Figma "Lupa Password 2").
 class ForgotPasswordPage2 extends StatefulWidget {
   final String targetIdentifier;
 
   const ForgotPasswordPage2({
     super.key,
-    this.targetIdentifier = 'email / NIM Anda',
+    this.targetIdentifier = 'email USU anda',
   });
 
   @override
@@ -16,336 +21,208 @@ class ForgotPasswordPage2 extends StatefulWidget {
 }
 
 class _ForgotPasswordPage2State extends State<ForgotPasswordPage2> {
-  final List<TextEditingController> _otpControllers =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  static const int _length = 6;
+  static const int _resendSeconds = 60;
 
-  int _resendCountdown = 60;
+  final List<TextEditingController> _boxes =
+      List.generate(_length, (_) => TextEditingController());
+  final List<FocusNode> _nodes = List.generate(_length, (_) => FocusNode());
+
   Timer? _timer;
-  bool _isLoading = false;
+  int _countdown = _resendSeconds;
+  bool _loading = false;
+  String? _error;
+
+  String get _code => _boxes.map((c) => c.text).join();
 
   @override
   void initState() {
     super.initState();
     _startCountdown();
-  }
-
-  void _startCountdown() {
-    setState(() => _resendCountdown = 60);
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_resendCountdown > 0) {
-        setState(() => _resendCountdown--);
-      } else {
-        timer.cancel();
-      }
-    });
+    for (final n in _nodes) {
+      n.addListener(() => setState(() {}));
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    for (var c in _otpControllers) {
+    for (final c in _boxes) {
       c.dispose();
     }
-    for (var f in _focusNodes) {
-      f.dispose();
+    for (final n in _nodes) {
+      n.dispose();
     }
     super.dispose();
   }
 
-  String get _currentOtp =>
-      _otpControllers.map((controller) => controller.text).join();
-
-  void _handleVerify() {
-    final otp = _currentOtp;
-    if (otp.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Silakan masukkan 6-digit kode verifikasi lengkap'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const ForgotPasswordPage3(),
-        ),
-      );
+  void _startCountdown() {
+    _timer?.cancel();
+    setState(() => _countdown = _resendSeconds);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_countdown <= 1) {
+        t.cancel();
+        setState(() => _countdown = 0);
+      } else {
+        setState(() => _countdown--);
+      }
     });
   }
 
-  void _handleResend() {
-    if (_resendCountdown > 0) return;
+  void _onBoxChanged(int i, String value) {
+    if (_error != null) setState(() => _error = null);
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 1) {
+      // Tempel (paste) beberapa digit sekaligus
+      for (var k = 0; k < _length; k++) {
+        final at = i + k;
+        if (at >= _length || k >= digits.length) break;
+        _boxes[at].text = digits[k];
+      }
+      final next = i + digits.length >= _length ? _length - 1 : i + digits.length;
+      _nodes[next].requestFocus();
+    } else {
+      _boxes[i].text = digits;
+      _boxes[i].selection = TextSelection.collapsed(offset: digits.length);
+      if (digits.isNotEmpty && i < _length - 1) _nodes[i + 1].requestFocus();
+    }
+    setState(() {});
+    if (_code.length == _length) FocusScope.of(context).unfocus();
+  }
+
+  KeyEventResult _onKey(int i, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.backspace &&
+        _boxes[i].text.isEmpty &&
+        i > 0) {
+      _boxes[i - 1].clear();
+      _nodes[i - 1].requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _confirm() async {
+    if (_code.length < _length) {
+      setState(() => _error = 'Masukkan 6 digit kode OTP');
+      return;
+    }
+    setState(() => _loading = true);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    setState(() => _loading = false);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ForgotPasswordPage3()),
+    );
+  }
+
+  void _resend() {
+    for (final c in _boxes) {
+      c.clear();
+    }
+    _nodes.first.requestFocus();
     _startCountdown();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Kode baru telah dikirimkan ulang!'),
-        backgroundColor: AppColors.info,
+      SnackBar(
         behavior: SnackBarBehavior.floating,
+        content: Text('Kode OTP baru dikirim ke ${widget.targetIdentifier}'),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Verifikasi Kode'),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+    return AuthScaffold(
+      children: [
+        const ResetPasswordHeader(step: 2),
+        const SizedBox(height: 24),
+        ItlgCard(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Step Indicator (Langkah 2 dari 3)
+              Text('Kode OTP', style: ItlgText.style()),
+              const SizedBox(height: 13),
               Row(
                 children: [
-                  _buildStepDot(isActive: true),
-                  _buildStepDivider(isActive: true),
-                  _buildStepDot(isActive: true),
-                  _buildStepDivider(isActive: false),
-                  _buildStepDot(isActive: false),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Langkah 2 / 3',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
+                  for (var i = 0; i < _length; i++) ...[
+                    Expanded(child: _otpBox(i)),
+                    if (i < _length - 1) const SizedBox(width: 8),
+                  ],
                 ],
               ),
-
-              const SizedBox(height: 32),
-
-              // Header Icon
-              Center(
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6A1B1A).withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.security_rounded,
-                    size: 40,
-                    color: Color(0xFF6A1B1A),
-                  ),
-                ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!,
+                    style: ItlgText.style(size: 12, color: ItlgColors.error)),
+              ],
+              const SizedBox(height: 18),
+              const AuthNotice(),
+              const SizedBox(height: 18),
+              ItlgPrimaryButton(
+                label: 'Konfirmasi OTP',
+                leadingIcon: Icons.mark_email_read_rounded,
+                loading: _loading,
+                onPressed: _confirm,
               ),
-
-              const SizedBox(height: 24),
-
-              const Center(
-                child: Text(
-                  'Masukkan Kode Verifikasi',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Center(
-                child: RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      height: 1.5,
-                    ),
-                    children: [
-                      const TextSpan(text: 'Kami telah mengirimkan 6-digit kode ke\n'),
-                      TextSpan(
-                        text: widget.targetIdentifier,
-                        style: const TextStyle(
-                          color: Color(0xFF6A1B1A),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 36),
-
-              // 6-Digit OTP Boxes
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) => _buildOtpBox(index)),
-              ),
-
-              const SizedBox(height: 28),
-
-              // Countdown & Tombol Kirim Ulang
-              Center(
-                child: _resendCountdown > 0
-                    ? Text(
-                        'Kirim ulang kode dalam $_resendCountdown detik',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      )
-                    : TextButton.icon(
-                        onPressed: _handleResend,
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: const Text(
-                          'Kirim Ulang Kode Sekarang',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF6A1B1A),
-                        ),
-                      ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Tombol Verifikasi
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleVerify,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6A1B1A),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Verifikasi & Lanjutkan',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Tombol Kembali
-              Center(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  child: const Text(
-                    'Ubah Email / NIM',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+              const SizedBox(height: 12),
+              ItlgLinkRow(
+                text: 'Tidak Menerima Kode?',
+                link: _countdown > 0
+                    ? 'Kirim Ulang (${_countdown}s)'
+                    : 'Kirim Ulang >',
+                onTap: _countdown > 0 ? null : _resend,
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildOtpBox(int index) {
-    return SizedBox(
-      width: 46,
-      height: 56,
-      child: TextFormField(
-        controller: _otpControllers[index],
-        focusNode: _focusNodes[index],
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        maxLength: 1,
-        style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF6A1B1A),
-        ),
-        decoration: InputDecoration(
-          counterText: '',
-          contentPadding: EdgeInsets.zero,
-          filled: true,
-          fillColor: Colors.grey.shade50,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+  Widget _otpBox(int i) {
+    final focused = _nodes[i].hasFocus;
+    return AspectRatio(
+      aspectRatio: 50 / 63,
+      child: InnerShadowBox(
+        radius: 12,
+        color: ItlgColors.surfaceWhite,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: focused
+                  ? ItlgColors.primary
+                  : (_error != null
+                      ? ItlgColors.error.withValues(alpha: 0.5)
+                      : Colors.transparent),
+              width: 1.4,
+            ),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF6A1B1A), width: 2),
+          child: Center(
+            child: Focus(
+              onKeyEvent: (_, e) => _onKey(i, e),
+              child: TextField(
+                controller: _boxes[i],
+                focusNode: _nodes[i],
+                autofocus: i == 0,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                cursorColor: ItlgColors.primary,
+                style: ItlgText.style(size: 22, weight: FontWeight.w700),
+                decoration: const InputDecoration.collapsed(hintText: ''),
+                onChanged: (v) => _onBoxChanged(i, v),
+              ),
+            ),
           ),
         ),
-        onChanged: (value) {
-          if (value.isNotEmpty && index < 5) {
-            _focusNodes[index + 1].requestFocus();
-          } else if (value.isEmpty && index > 0) {
-            _focusNodes[index - 1].requestFocus();
-          }
-          if (_currentOtp.length == 6) {
-            FocusScope.of(context).unfocus();
-          }
-        },
       ),
-    );
-  }
-
-  Widget _buildStepDot({required bool isActive}) {
-    return Container(
-      width: 14,
-      height: 14,
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF6A1B1A) : Colors.grey.shade300,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-
-  Widget _buildStepDivider({required bool isActive}) {
-    return Container(
-      width: 24,
-      height: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: isActive ? const Color(0xFF6A1B1A) : Colors.grey.shade300,
     );
   }
 }
-
-typedef LupaPasswordPage2 = ForgotPasswordPage2;
-

@@ -10,6 +10,7 @@ import 'features/reports/pages/reports_page.dart';
 import 'features/users/pages/users_page.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/splash/splash_screen.dart';
+import 'features/gyro/gyro_page.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -112,6 +113,20 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       body: IndexedStack(
         index: _currentIndex,
         children: pages,
+      ),
+      // Pintu masuk ke asisten AI Gyro
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'tanya-gyro',
+        backgroundColor: const Color(0xFF850909),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.smart_toy_rounded),
+        label: const Text(
+          'Tanya Gyro',
+          style: TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.w700),
+        ),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const GyroPage()),
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,

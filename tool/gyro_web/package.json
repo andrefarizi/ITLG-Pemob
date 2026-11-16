@@ -1,0 +1,12 @@
+{
+  "name": "itlg-gyro-web",
+  "private": true,
+  "description": "Membundel gyro/mascot.js + three.js menjadi assets/gyro/gyro.html untuk WebView Flutter",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "three": "0.170.0"
+  }
+}
