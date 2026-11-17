@@ -773,15 +773,18 @@ class LabTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Center(widthFactor: 1) supaya tag selebar teksnya, juga di dalam Column.
     return Container(
       height: 16,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(text, style: labText(10, w: kSemiBold, c: fg)),
+      child: Center(
+        widthFactor: 1,
+        child: Text(text, style: labText(10, w: kSemiBold, c: fg)),
+      ),
     );
   }
 }

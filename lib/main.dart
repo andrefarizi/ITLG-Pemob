@@ -13,6 +13,7 @@ import 'features/splash/splash_screen.dart';
 import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
 import 'features/dosen/dosen_shell.dart';
+import 'features/praktikan/praktikan_shell.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -86,10 +87,12 @@ class _ITLGAppState extends State<ITLGApp> {
   }
 }
 
-/// Halaman utama setelah Masuk. Laboran dan Dosen memakai halaman hasil
-/// desain Figma; peran lain masih memakai tampilan lama.
+/// Halaman utama setelah Masuk. Praktikan, Laboran, dan Dosen memakai
+/// halaman hasil desain Figma; peran lain masih memakai tampilan lama.
 Widget _roleHome(UserRole role) {
   switch (role) {
+    case UserRole.praktikan:
+      return const PraktikanShell();
     case UserRole.laboran:
       return const LaboranShell();
     case UserRole.dosen:
