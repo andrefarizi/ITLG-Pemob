@@ -11,6 +11,7 @@ import 'features/users/pages/users_page.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/gyro/gyro_page.dart';
+import 'features/laboran/laboran_shell.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -56,6 +57,9 @@ class _ITLGAppState extends State<ITLGApp> {
               // Peran sudah dipilih di splash, jadi langsung lanjut
               // (melewati onboarding yang juga berisi pilihan peran).
               onRoleSelected: (_) {
+                // Alur Figma: Splash -> halaman Masuk (peran yang dipilih di
+                // splash sudah aktif di chip peran).
+                _authController.logout();
                 setState(() {
                   _showSplash = false;
                   _showOnboarding = false;
@@ -71,7 +75,10 @@ class _ITLGAppState extends State<ITLGApp> {
               },
             )
           : (_authController.isLoggedIn
-              ? const MainNavigationShell()
+              ? (_authController.currentRole == UserRole.laboran
+                  // Peran Laboran memakai halaman hasil desain Figma.
+                  ? const LaboranShell()
+                  : const MainNavigationShell())
               : LoginPage(
                   onLoginSuccess: () {
                     setState(() {});
