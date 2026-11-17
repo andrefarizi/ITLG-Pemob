@@ -12,6 +12,7 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
+import 'features/dosen/dosen_shell.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -75,16 +76,26 @@ class _ITLGAppState extends State<ITLGApp> {
               },
             )
           : (_authController.isLoggedIn
-              ? (_authController.currentRole == UserRole.laboran
-                  // Peran Laboran memakai halaman hasil desain Figma.
-                  ? const LaboranShell()
-                  : const MainNavigationShell())
+              ? _roleHome(_authController.currentRole)
               : LoginPage(
                   onLoginSuccess: () {
                     setState(() {});
                   },
                 )),
     );
+  }
+}
+
+/// Halaman utama setelah Masuk. Laboran dan Dosen memakai halaman hasil
+/// desain Figma; peran lain masih memakai tampilan lama.
+Widget _roleHome(UserRole role) {
+  switch (role) {
+    case UserRole.laboran:
+      return const LaboranShell();
+    case UserRole.dosen:
+      return const DosenShell();
+    default:
+      return const MainNavigationShell();
   }
 }
 
