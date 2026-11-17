@@ -14,6 +14,7 @@ import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
 import 'features/dosen/dosen_shell.dart';
 import 'features/praktikan/praktikan_shell.dart';
+import 'features/aslab/aslab_shell.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -54,6 +55,12 @@ class _ITLGAppState extends State<ITLGApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       onGenerateRoute: AppRoutes.onGenerateRoute,
+      // Ukuran teks mengikuti desain Figma walaupun pengaturan "Teks Lebih
+      // Besar" di HP aktif, supaya tidak ada elemen yang bertabrakan.
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.0,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: _showSplash
           ? SplashScreen(
               // Peran sudah dipilih di splash, jadi langsung lanjut
@@ -87,18 +94,18 @@ class _ITLGAppState extends State<ITLGApp> {
   }
 }
 
-/// Halaman utama setelah Masuk. Praktikan, Laboran, dan Dosen memakai
-/// halaman hasil desain Figma; peran lain masih memakai tampilan lama.
+/// Halaman utama setelah Masuk. Semua peran (Praktikan, Asisten Lab,
+/// Laboran, Dosen) memakai halaman hasil desain Figma.
 Widget _roleHome(UserRole role) {
   switch (role) {
     case UserRole.praktikan:
       return const PraktikanShell();
+    case UserRole.aslab:
+      return const AslabShell();
     case UserRole.laboran:
       return const LaboranShell();
     case UserRole.dosen:
       return const DosenShell();
-    default:
-      return const MainNavigationShell();
   }
 }
 

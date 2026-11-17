@@ -1264,6 +1264,16 @@ class PrakStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const labels = ['Verifikasi', 'Tanda Tangan', 'Selesai'];
+    final row = Row(
+      children: [
+        for (var i = 0; i < 3; i++) ...[
+          if (i > 0) _line(i <= step),
+          _dot(i),
+          const SizedBox(width: 6),
+          _label(i, labels[i]),
+        ],
+      ],
+    );
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1272,15 +1282,17 @@ class PrakStepper extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: ItlgShadows.outline,
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < 3; i++) ...[
-            if (i > 0) _line(i <= step),
-            _dot(i),
-            const SizedBox(width: 6),
-            _label(i, labels[i]),
-          ],
-        ],
+      // Isi stepper butuh ~290 px; di layar yang lebih sempit diperkecil.
+      child: LayoutBuilder(
+        builder: (context, box) => FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: box.maxWidth < 300 ? 300 : box.maxWidth,
+            height: 44,
+            child: row,
+          ),
+        ),
       ),
     );
   }
@@ -1364,6 +1376,97 @@ Future<void> prakShowPresensiBerhasil(
       ),
     ),
   );
+}
+
+/// Peta 338 x 180 (gambar dasar dari Figma + pin lab + posisi anda).
+/// Dipakai di Tombol Hadir (Praktikan) dan Bukti Presensi (Asisten Lab).
+class PrakLocationMap extends StatelessWidget {
+  final bool inside;
+  const PrakLocationMap({super.key, required this.inside});
+
+  Widget _label(String text, Color bg, Color fg, List<BoxShadow> shadow) {
+    return Container(
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: shadow,
+      ),
+      child: Text(text, style: labText(10, w: kSemiBold, c: fg)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 338 / 180,
+      child: FittedBox(
+        fit: BoxFit.fill,
+        child: SizedBox(
+          width: 338,
+          height: 180,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: Image.asset('assets/praktikan_map.png',
+                    fit: BoxFit.fill),
+              ),
+              Positioned(
+                left: 158,
+                top: 74,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: ItlgColors.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: ItlgShadows.primary,
+                  ),
+                  child: const LabIcon('location',
+                      size: 18, color: Colors.white),
+                ),
+              ),
+              Positioned(
+                left: 127,
+                top: 114,
+                width: 97,
+                child: _label('Lab Komputer 1', Colors.white, ItlgColors.text,
+                    ItlgShadows.outline),
+              ),
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+                left: inside ? 204 : 296,
+                top: inside ? 58 : 124,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: ItlgColors.secondary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                ),
+              ),
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+                left: inside ? 224 : 248,
+                top: inside ? 57 : 123,
+                width: 44,
+                child: _label(
+                    'Anda', ItlgColors.secondary, Colors.white, const []),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // =============================================================================

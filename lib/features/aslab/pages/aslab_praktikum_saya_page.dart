@@ -1,0 +1,159 @@
+import 'package:flutter/material.dart';
+
+import '../../../core/widgets/itlg_ui.dart';
+import '../../laboran/widgets/laboran_ui.dart';
+import '../../praktikan/widgets/praktikan_ui.dart';
+import '../aslab_nav.dart';
+import '../aslab_store.dart';
+
+/// Figma: "Praktikum Saya-Aslab".
+class AslabPraktikumSayaPage extends StatefulWidget {
+  final AslabNav nav;
+  const AslabPraktikumSayaPage({super.key, required this.nav});
+
+  @override
+  State<AslabPraktikumSayaPage> createState() => _AslabPraktikumSayaPageState();
+}
+
+class _AslabPraktikumSayaPageState extends State<AslabPraktikumSayaPage> {
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _query.trim().toLowerCase();
+    final courses = widget.nav.store.courses
+        .where((c) => q.isEmpty || c.name.toLowerCase().contains(q))
+        .toList();
+    return LabTabBody(
+      children: [
+        const LabTitle(
+          title: 'Praktikum Saya',
+          subtitle: 'Praktikum yang anda ampu Semester Ganjil 2026/2027',
+        ),
+        PrakSearchField(
+          hint: 'Cari praktikum...',
+          controller: _search,
+          onChanged: (v) => setState(() => _query = v),
+        ),
+        if (courses.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Text('Praktikum tidak ditemukan.',
+                textAlign: TextAlign.center,
+                style: labText(12, c: ItlgColors.textSubtle)),
+          )
+        else
+          AslabCourseGrid(
+            courses: courses,
+            thirdMeta: (c) => ('door', c.room),
+            onTap: (c) => widget.nav.detailPraktikum(context, c),
+          ),
+      ],
+    );
+  }
+}
+
+/// Dua kartu praktikum 178 x 270 berdampingan (dipakai juga di Absensi).
+class AslabCourseGrid extends StatelessWidget {
+  final List<AslabCourse> courses;
+  final (String, String) Function(AslabCourse) thirdMeta;
+  final ValueChanged<AslabCourse> onTap;
+
+  const AslabCourseGrid({
+    super.key,
+    required this.courses,
+    required this.thirdMeta,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < 2; i++) ...[
+            if (i > 0) const SizedBox(width: 14),
+            Expanded(
+              child: i < courses.length
+                  ? _CourseCard(
+                      course: courses[i],
+                      third: thirdMeta(courses[i]),
+                      onTap: () => onTap(courses[i]),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CourseCard extends StatelessWidget {
+  final AslabCourse course;
+  final (String, String) third;
+  final VoidCallback onTap;
+
+  const _CourseCard({
+    required this.course,
+    required this.third,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 270),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        decoration: BoxDecoration(
+          color: ItlgColors.surfaceDark,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: ItlgShadows.outline,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                LabIconTile('book_open'),
+                LabTag.blue('Kelas C'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text('Praktikum\n${course.name}',
+                style: labText(16, w: kBold, c: Colors.black)),
+            const SizedBox(height: 10),
+            const PrakDivider(),
+            const SizedBox(height: 10),
+            LabColumn(
+              gap: 6,
+              children: [
+                const LabMeta(icon: 'people_group', text: '24 Praktikan'),
+                LabMeta(icon: 'clock', text: course.jadwal),
+                LabMeta(icon: third.$1, text: third.$2),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const LabProgress(
+              label: 'Pertemuan',
+              value: '4 / 12',
+              fraction: 50 / 150,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

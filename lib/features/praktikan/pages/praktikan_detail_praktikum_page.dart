@@ -38,7 +38,10 @@ class _PraktikanDetailPraktikumPageState
       onLogoTap: nav.home,
       children: [
         _header(c),
-        Row(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          child: Row(
           children: [
             for (var i = 0; i < _labels.length; i++) ...[
               if (i > 0) const SizedBox(width: 16),
@@ -50,6 +53,7 @@ class _PraktikanDetailPraktikumPageState
               ),
             ],
           ],
+        ),
         ),
         LabColumn(
           gap: 16,
