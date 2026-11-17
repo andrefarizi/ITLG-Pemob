@@ -7,6 +7,7 @@ import '../laboran/widgets/laboran_ui.dart';
 import 'dosen_store.dart';
 import 'pages/dosen_beranda_page.dart';
 import 'pages/dosen_detail_peringatan_page.dart';
+import 'pages/dosen_hubungi_page.dart';
 import 'pages/dosen_laporan_page.dart';
 import 'pages/dosen_notifikasi_page.dart';
 import 'pages/dosen_peringatan_page.dart';
@@ -51,6 +52,15 @@ class _DosenShellState extends State<DosenShell> {
     _openTab(tab);
   }
 
+  void _goHome() => _openTabFromSubPage(DosenShell.tabBeranda);
+
+  void _openHubungi(DosenStudent student) {
+    labPush(
+      context,
+      DosenHubungiPage(student: student, onLogoTap: _goHome),
+    );
+  }
+
   void _openDetail(DosenStudent student) {
     labPush(
       context,
@@ -92,11 +102,15 @@ class _DosenShellState extends State<DosenShell> {
   Widget _page() {
     switch (_tab) {
       case DosenShell.tabValidasi:
-        return DosenValidasiPage(store: _store);
+        return DosenValidasiPage(store: _store, onHome: _goHome);
       case DosenShell.tabLaporan:
-        return DosenLaporanPage(store: _store);
+        return DosenLaporanPage(store: _store, onHome: _goHome);
       case DosenShell.tabPeringatan:
-        return DosenPeringatanPage(store: _store, onOpenDetail: _openDetail);
+        return DosenPeringatanPage(
+          store: _store,
+          onOpenDetail: _openDetail,
+          onOpenHubungi: _openHubungi,
+        );
       case DosenShell.tabProfil:
         return DosenProfilPage(
           store: _store,

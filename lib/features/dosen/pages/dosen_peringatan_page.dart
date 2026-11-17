@@ -8,11 +8,13 @@ import '../dosen_store.dart';
 class DosenPeringatanPage extends StatefulWidget {
   final DosenStore store;
   final ValueChanged<DosenStudent> onOpenDetail;
+  final ValueChanged<DosenStudent> onOpenHubungi;
 
   const DosenPeringatanPage({
     super.key,
     required this.store,
     required this.onOpenDetail,
+    required this.onOpenHubungi,
   });
 
   @override
@@ -55,8 +57,7 @@ class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
           DosenStudentCard(
             student: s,
             onDetail: () => widget.onOpenDetail(s),
-            onContact: () => labToast(
-                context, 'Pesan tentang ${s.name} dikirim ke asisten ${s.kelas}'),
+            onContact: () => widget.onOpenHubungi(s),
           ),
       ],
     );

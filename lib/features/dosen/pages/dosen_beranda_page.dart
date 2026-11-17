@@ -347,7 +347,9 @@ class _BarGroup extends StatelessWidget {
   }
 }
 
-/// Batang 14 px yang tumbuh dari bawah saat halaman dibuka.
+/// Batang 14 px yang tumbuh dari bawah saat halaman dibuka: jeda 100 ms lalu
+/// 600 ms ease-out, sama dengan frame "Page Beranda-Dosen (Animasi Grafik)"
+/// di prototipe Figma.
 class _Bar extends StatelessWidget {
   final double height;
   final Color color;
@@ -357,8 +359,8 @@ class _Bar extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: height),
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 700),
+      curve: const Interval(1 / 7, 1, curve: Curves.easeOut),
       builder: (context, h, _) => Container(
         width: 14,
         height: h,
