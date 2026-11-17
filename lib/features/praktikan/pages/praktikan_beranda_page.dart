@@ -278,16 +278,24 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (var i = 0; i < _days.length; i++)
-                _DayButton(
-                  day: _days[i],
-                  selected: i == _day,
-                  onTap: () => setState(() => _day = i),
-                ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final w = ((box.maxWidth - 5 * 6) / _days.length)
+                  .clamp(40.0, 52.0)
+                  .toDouble();
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (var i = 0; i < _days.length; i++)
+                    _DayButton(
+                      day: _days[i],
+                      width: w,
+                      selected: i == _day,
+                      onTap: () => setState(() => _day = i),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -314,11 +322,13 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
 /// Tombol hari 52 x 64 (radius 12).
 class _DayButton extends StatelessWidget {
   final (String, String, String) day;
+  final double width;
   final bool selected;
   final VoidCallback onTap;
 
   const _DayButton({
     required this.day,
+    required this.width,
     required this.selected,
     required this.onTap,
   });
@@ -333,7 +343,7 @@ class _DayButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
-        width: 52,
+        width: width,
         height: 64,
         decoration: BoxDecoration(
           color: selected ? ItlgColors.primary : LabColors.tile,

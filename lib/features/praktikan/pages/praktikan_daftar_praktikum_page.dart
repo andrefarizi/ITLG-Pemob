@@ -60,8 +60,9 @@ class _PraktikanDaftarPraktikumPageState
                   style: labText(12, c: ItlgColors.textSubtle)),
             )
           else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            IntrinsicHeight(
+              child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (var i = 0; i < 2; i++) ...[
                   if (i > 0) const SizedBox(width: 14),
@@ -76,6 +77,7 @@ class _PraktikanDaftarPraktikumPageState
                   ),
                 ],
               ],
+            ),
             ),
         ],
       ),
@@ -115,60 +117,66 @@ class _CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Di 402 px posisinya sama dengan Figma (info asisten mulai di y 134,
+    // progress di bawah). Bila judul lebih panjang, kartu ikut memanjang
+    // sehingga tidak ada teks yang bertumpuk.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: 258,
+        constraints: const BoxConstraints(minHeight: 258),
+        padding: const EdgeInsets.only(top: 18, bottom: 20),
         decoration: BoxDecoration(
           color: ItlgColors.surfaceDark,
           borderRadius: BorderRadius.circular(24),
           boxShadow: ItlgShadows.outline,
         ),
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Positioned(
-              left: 12,
-              right: 6,
-              top: 18,
-              child: Column(
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 8),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const PrakBookTile(),
-                  const SizedBox(height: 6),
-                  Text('Praktikum \n${course.name}',
-                      style: labText(16, w: kBold, c: Colors.black)),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  PrakBookTile(),
+                  Padding(
+                    padding: EdgeInsets.only(top: 5),
+                    child: PrakTag17('Modul 4'),
+                  ),
                 ],
               ),
             ),
-            const Positioned(right: 8, top: 23, child: PrakTag17('Modul 4')),
-            Positioned(
-              left: 15,
-              right: 17,
-              top: 134,
-              child: Container(
-                padding: const EdgeInsets.only(top: 8),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: Color(0x33A3B1C6), width: 1),
-                  ),
-                ),
-                child: LabColumn(
-                  gap: 6,
-                  children: [
-                    _meta('m_person_small', 9.3, course.asisten,
-                        PrakColors.ink),
-                    _meta('m_clock', 11.7, course.jadwalDaftar,
-                        ItlgColors.textSubtle),
-                    _meta('m_door', 10.5, course.room, ItlgColors.textSubtle),
-                  ],
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 6),
+              child: Text('Praktikum \n${course.name}',
+                  style: labText(16, w: kBold, c: Colors.black)),
+            ),
+            const SizedBox(height: 16),
+            const Spacer(),
+            Container(
+              margin: const EdgeInsets.only(left: 15, right: 17),
+              padding: const EdgeInsets.only(top: 8),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Color(0x33A3B1C6), width: 1),
                 ),
               ),
+              child: LabColumn(
+                gap: 6,
+                children: [
+                  _meta('m_person_small', 9.3, course.asisten, PrakColors.ink),
+                  _meta('m_clock', 11.7, course.jadwalDaftar,
+                      ItlgColors.textSubtle),
+                  _meta('m_door', 10.5, course.room, ItlgColors.textSubtle),
+                ],
+              ),
             ),
-            Positioned(
-              left: 16,
-              right: 16,
-              top: 213,
+            const SizedBox(height: 17),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: LabColumn(
                 gap: 4,
                 children: [
