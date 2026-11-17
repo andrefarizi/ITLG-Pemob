@@ -7,6 +7,7 @@ import '../../praktikan/dashboard/praktikan_dashboard_page.dart';
 import '../../aslab/dashboard/aslab_dashboard_page.dart';
 import '../../laboran/dashboard/laboran_dashboard_page.dart';
 import '../../dosen/dashboard/dosen_dashboard_page.dart';
+import '../../notifications/notifikasi_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final Function(int) onTabChange;
@@ -268,6 +269,17 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Notifikasi',
+            icon: const Badge(
+              smallSize: 8,
+              backgroundColor: Color(0xFF850909),
+              child: Icon(Icons.notifications_none_rounded),
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotifikasiPage()),
+            ),
+          ),
           IconButton(
             tooltip: 'Ganti Role',
             icon: RoleBadge(role: role),

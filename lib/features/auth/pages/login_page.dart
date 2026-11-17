@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/constants.dart';
-import '../auth_controller.dart';
-import 'forgot_password_page.dart';
+import 'package:flutter/services.dart';
 
+import '../../../core/utils/constants.dart';
+import '../../../core/widgets/itlg_ui.dart';
+import '../auth_controller.dart';
+import '../widgets/auth_design.dart';
+import 'forgot_password_page_1.dart';
+
+/// Halaman Masuk untuk semua peran. UI saja: belum terhubung ke backend.
+///
+/// Mengikuti empat status peran di Figma:
+/// - "06 Prototype — Status Peran Login" > Masuk-Mahasiswa, Masuk-Asisten,
+///   Masuk-Laboran
+/// - "05 Umum — Login & Notifikasi" > Masuk-Semua Peran (Dosen)
+///
+/// Yang berubah antar status hanya chip peran yang aktif serta label dan contoh
+/// nomor induk (NIM untuk Mahasiswa/Asisten, NIP untuk Laboran/Dosen).
 class LoginPage extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
 
@@ -14,113 +26,344 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final AuthController _authController = AuthController.instance;
-  UserRole _selectedRole = UserRole.praktikan;
+  final AuthController _auth = AuthController.instance;
+  final TextEditingController _identifier = TextEditingController();
+  final TextEditingController _password = TextEditingController();
+
+  late UserRole _role = _auth.currentRole;
+  bool _remember = false;
+  bool _loading = false;
+  String? _identifierError;
+  String? _passwordError;
 
   @override
-  void initState() {
-    super.initState();
-    _selectedRole = _authController.currentRole;
+  void dispose() {
+    _identifier.dispose();
+    _password.dispose();
+    super.dispose();
   }
 
-  void _handleLogin() {
-    _authController.login(
-      identifier: _authController.userIdentifier,
-      role: _selectedRole,
-    );
+  String _roleLabel(UserRole role) {
+    switch (role) {
+      case UserRole.praktikan:
+        return 'Mahasiswa';
+      case UserRole.aslab:
+        return 'Asisten';
+      case UserRole.laboran:
+        return 'Laboran';
+      case UserRole.dosen:
+        return 'Dosen';
+    }
+  }
+
+  String get _identifierLabel => _role == UserRole.praktikan ||
+          _role == UserRole.aslab
+      ? 'Nomor Induk Mahasiswa (NIM)'
+      : 'Nomor Induk Pegawai (NIP)';
+
+  String get _identifierHint =>
+      _role == UserRole.praktikan || _role == UserRole.aslab
+          ? 'Contoh : 231402033'
+          : 'Contoh : 198501012010011001';
+
+  void _selectRole(UserRole role) {
+    if (role == _role) return;
+    setState(() {
+      _role = role;
+      _identifierError = null;
+    });
+  }
+
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
+    final id = _identifier.text.trim();
+    final pass = _password.text;
+    setState(() {
+      _identifierError = id.isEmpty ? '$_identifierLabel wajib diisi' : null;
+      _passwordError = pass.isEmpty ? 'Kata sandi wajib diisi' : null;
+    });
+    if (_identifierError != null || _passwordError != null) return;
+
+    setState(() => _loading = true);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    _auth.login(identifier: id, role: _role);
     if (widget.onLoginSuccess != null) {
       widget.onLoginSuccess!();
+    } else {
+      Navigator.of(context).maybePop();
     }
+  }
+
+  void _openForgotPassword() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: kForgotPasswordRoute),
+        builder: (_) => const ForgotPasswordPage1(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark
+          .copyWith(statusBarColor: Colors.transparent),
+      child: Scaffold(
+        backgroundColor: ItlgColors.surfaceWhite,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 56),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.biotech_rounded,
-                  size: 64,
-                  color: _selectedRole.color,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Welcome - Login',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                _buildIntro(),
                 const SizedBox(height: 24),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: UserRole.values.map((role) {
-                    final isSelected = _selectedRole == role;
-                    return ChoiceChip(
-                      label: Text(role.displayName),
-                      avatar: Icon(
-                        role.icon,
-                        size: 16,
-                        color: isSelected ? Colors.white : role.color,
-                      ),
-                      selected: isSelected,
-                      selectedColor: role.color,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedRole = role;
-                          _authController.setRole(role);
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
+                _buildForm(),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: 220,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: _handleLogin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedRole.color,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text('Masuk (${_selectedRole.displayName})'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ForgotPasswordPage(),
-                      ),
-                    );
-                  },
-                  child: const Text('Lupa Kata Sandi?'),
-                ),
+                const HelpCenterCard(),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIntro() {
+    return Column(
+      children: [
+        Container(
+          width: 154,
+          height: 73,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: ItlgColors.surfaceDark,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: ItlgShadows.outline,
+          ),
+          child: Image.asset(
+            'assets/login_logo.png',
+            width: 134,
+            height: 53,
+            fit: BoxFit.contain,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Selamat Datang\nKembali',
+          textAlign: TextAlign.center,
+          style: ItlgText.style(
+            size: 27,
+            weight: FontWeight.w700,
+            color: Colors.black,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Text(
+            'Pilih peran, lalu masukkan nomor induk dan kata sandi anda',
+            textAlign: TextAlign.center,
+            style: ItlgText.style(height: 1.2),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForm() {
+    return ItlgCard(
+      padding: const EdgeInsets.fromLTRB(16, 21, 16, 21),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Masuk Sebagai', style: ItlgText.style(height: 1.2)),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(
+              children: [
+                for (final role in UserRole.values) ...[
+                  _RoleChip(
+                    label: _roleLabel(role),
+                    selected: role == _role,
+                    onTap: () => _selectRole(role),
+                  ),
+                  if (role != UserRole.values.last) const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeOut,
+            child: ItlgTextField(
+              key: ValueKey(_identifierLabel),
+              label: _identifierLabel,
+              hint: _identifierHint,
+              icon: Icons.badge_outlined,
+              iconAsset: 'assets/ic_login_id_card.png',
+              controller: _identifier,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              errorText: _identifierError,
+              onChanged: (_) {
+                if (_identifierError != null) {
+                  setState(() => _identifierError = null);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+          ItlgTextField(
+            label: 'Kata Sandi',
+            hint: '************',
+            icon: Icons.lock_outline_rounded,
+            iconAsset: 'assets/ic_login_lock.png',
+            showObscureToggle: false,
+            controller: _password,
+            obscure: true,
+            textInputAction: TextInputAction.done,
+            errorText: _passwordError,
+            onChanged: (_) {
+              if (_passwordError != null) setState(() => _passwordError = null);
+            },
+            onSubmitted: (_) => _login(),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _remember = !_remember),
+                child: Row(
+                  children: [
+                    _Checkbox(checked: _remember),
+                    const SizedBox(width: 8),
+                    Text('Ingat Saya',
+                        style: ItlgText.style(
+                            size: 12, color: Colors.black, height: 1.2)),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _openForgotPassword,
+                child: Text(
+                  'Lupa Password?',
+                  style: ItlgText.style(
+                    weight: FontWeight.w700,
+                    color: ItlgColors.secondary,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          ItlgPrimaryButton(
+            label: 'Masuk',
+            trailingIcon: Icons.login_rounded,
+            trailingAsset: 'assets/ic_login_enter.png',
+            loading: _loading,
+            onPressed: _login,
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Akun Asisten, Laboran, dan Dosen didaftarkan oleh admin '
+            'laboratorium.',
+            textAlign: TextAlign.center,
+            style: ItlgText.style(
+              size: 12,
+              color: ItlgColors.textMuted,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Chip peran (Figma "Option": tinggi 39, padding 9, radius 12, Bold 12).
+/// Perpindahan status memakai 300 ms ease-out seperti Smart Animate di Figma.
+class _RoleChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RoleChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static const Duration _duration = Duration(milliseconds: 300);
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: _duration,
+        curve: Curves.easeOut,
+        height: 39,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? ItlgColors.primary : const Color(0xFFFEFEFE),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: selected ? ItlgShadows.primary : ItlgShadows.outline,
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: _duration,
+          curve: Curves.easeOut,
+          style: ItlgText.style(
+            size: 12,
+            weight: FontWeight.w700,
+            color: selected ? ItlgColors.surfaceWhite : ItlgColors.text,
+            height: 1.2,
+          ),
+          child: Text(label),
+        ),
+      ),
+    );
+  }
+}
+
+class _Checkbox extends StatelessWidget {
+  final bool checked;
+  const _Checkbox({required this.checked});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        const InnerShadowBox(width: 16, height: 16, radius: 4),
+        AnimatedScale(
+          duration: const Duration(milliseconds: 150),
+          scale: checked ? 1 : 0,
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: ItlgColors.primary,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 }

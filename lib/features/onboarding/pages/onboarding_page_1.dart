@@ -5,25 +5,35 @@ class OnboardingPage1 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.waving_hand_rounded,
-            size: 80,
-            color: Color(0xFF1E3A8A),
+    return const Scaffold(
+      backgroundColor: Color(0xFF6A1B1A), // Merah gelap
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.computer_rounded,
+                size: 80,
+                color: Colors.white,
+              ),
+              SizedBox(height: 24),
+              Text(
+                'ITLG',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  fontStyle: FontStyle.italic,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 24),
-          Text(
-            'Welcome - Page 1',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+
+typedef DarkRedPage = OnboardingPage1;

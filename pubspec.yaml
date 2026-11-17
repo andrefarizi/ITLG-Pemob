@@ -35,6 +35,9 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Menampilkan maskot 3D Gyro (three.js) di halaman Tanya Gyro
+  webview_flutter: ^4.10.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -56,6 +59,35 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/gyro/
+    - assets/icons/
+
+  # Font Montserrat (Design System ITLG) - dipakai di Splash Screen
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Montserrat-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/Montserrat-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Montserrat-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Montserrat-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Montserrat-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Montserrat-ExtraBoldItalic.ttf
+          weight: 800
+          style: italic
+        - asset: assets/fonts/Montserrat-BlackItalic.ttf
+          weight: 900
+          style: italic
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -8,6 +8,11 @@ import 'features/dashboard/pages/dashboard_page.dart';
 import 'features/attendance/pages/attendance_page.dart';
 import 'features/reports/pages/reports_page.dart';
 import 'features/users/pages/users_page.dart';
+import 'features/onboarding/onboarding_screen.dart';
+import 'features/splash/splash_screen.dart';
+import 'features/gyro/gyro_page.dart';
+import 'features/laboran/laboran_shell.dart';
+import 'features/dosen/dosen_shell.dart';
 
 void main() {
   runApp(const ITLGApp());
@@ -22,6 +27,8 @@ class ITLGApp extends StatefulWidget {
 
 class _ITLGAppState extends State<ITLGApp> {
   final AuthController _authController = AuthController.instance;
+  bool _showSplash = true;
+  bool _showOnboarding = true;
 
   @override
   void initState() {
@@ -46,14 +53,49 @@ class _ITLGAppState extends State<ITLGApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       onGenerateRoute: AppRoutes.onGenerateRoute,
-      home: _authController.isLoggedIn
-          ? const MainNavigationShell()
-          : LoginPage(
-              onLoginSuccess: () {
-                setState(() {});
+      home: _showSplash
+          ? SplashScreen(
+              // Peran sudah dipilih di splash, jadi langsung lanjut
+              // (melewati onboarding yang juga berisi pilihan peran).
+              onRoleSelected: (_) {
+                // Alur Figma: Splash -> halaman Masuk (peran yang dipilih di
+                // splash sudah aktif di chip peran).
+                _authController.logout();
+                setState(() {
+                  _showSplash = false;
+                  _showOnboarding = false;
+                });
               },
-            ),
+            )
+          : _showOnboarding
+          ? OnboardingScreen(
+              onFinish: () {
+                setState(() {
+                  _showOnboarding = false;
+                });
+              },
+            )
+          : (_authController.isLoggedIn
+              ? _roleHome(_authController.currentRole)
+              : LoginPage(
+                  onLoginSuccess: () {
+                    setState(() {});
+                  },
+                )),
     );
+  }
+}
+
+/// Halaman utama setelah Masuk. Laboran dan Dosen memakai halaman hasil
+/// desain Figma; peran lain masih memakai tampilan lama.
+Widget _roleHome(UserRole role) {
+  switch (role) {
+    case UserRole.laboran:
+      return const LaboranShell();
+    case UserRole.dosen:
+      return const DosenShell();
+    default:
+      return const MainNavigationShell();
   }
 }
 
@@ -89,6 +131,20 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       body: IndexedStack(
         index: _currentIndex,
         children: pages,
+      ),
+      // Pintu masuk ke asisten AI Gyro
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'tanya-gyro',
+        backgroundColor: const Color(0xFF850909),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.smart_toy_rounded),
+        label: const Text(
+          'Tanya Gyro',
+          style: TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.w700),
+        ),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const GyroPage()),
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
