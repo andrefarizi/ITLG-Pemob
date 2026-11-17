@@ -3,12 +3,29 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
+import '../widgets/dosen_ui.dart';
+import 'dosen_riwayat_page.dart';
+
+/// Pop-up setelah mengunduh laporan (Figma: "Pop up Laporan Diunduh").
+void dosenShowDownloaded(BuildContext context) => dosenShowResult(
+      context,
+      icon: 'download',
+      title: 'Laporan Diunduh',
+      message: 'Berkas laporan tersimpan di folder Unduhan perangkat anda.',
+      button: 'Selesai',
+    );
 
 /// Figma: "Generate Laporan-Dosen" (halaman tab, tombol Kembali
 /// disembunyikan di Figma).
 class DosenLaporanPage extends StatefulWidget {
   final DosenStore store;
-  const DosenLaporanPage({super.key, required this.store});
+  final VoidCallback onHome;
+
+  const DosenLaporanPage({
+    super.key,
+    required this.store,
+    required this.onHome,
+  });
 
   @override
   State<DosenLaporanPage> createState() => _DosenLaporanPageState();
@@ -21,72 +38,26 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
     ['Rekap Kedisiplinan Asisten', 'Presensi dan ketepatan waktu asisten'],
   ];
 
-  Future<void> _pick({
-    required String title,
-    required List<String> options,
-    required int selected,
-    required ValueChanged<int> onPicked,
-  }) async {
-    final picked = await showModalBottomSheet<int>(
-      context: context,
-      backgroundColor: ItlgColors.surfaceWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-          child: LabColumn(
-            gap: 8,
-            children: [
-              Text(title, style: labText(16, w: kBold, c: Colors.black)),
-              const SizedBox(height: 4),
-              for (var i = 0; i < options.length; i++)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(context).pop(i),
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: ItlgShadows.outline,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            options[i],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: labText(12,
-                                w: i == selected ? kBold : FontWeight.w400),
-                          ),
-                        ),
-                        if (i == selected)
-                          const LabIcon('check',
-                              size: 16, color: ItlgColors.primary),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _pickPraktikum() async {
+    final store = widget.store;
+    final i = await dosenShowPicker(
+      context,
+      title: 'Pilih Praktikum',
+      options: store.praktikumOptions,
+      selected: store.praktikumIndex,
     );
-    if (picked != null && mounted) setState(() => onPicked(picked));
+    if (i != null && mounted) setState(() => store.praktikumIndex = i);
   }
 
-  void _download() {
+  Future<void> _pickPeriode() async {
     final store = widget.store;
-    if (store.isiLaporan.isEmpty) {
-      labToast(context, 'Pilih minimal satu isi laporan');
-      return;
-    }
-    final ext = store.format == 0 ? '.xlsx' : '.pdf';
-    labToast(context, 'Laporan $ext sedang diunduh');
+    final i = await dosenShowPicker(
+      context,
+      title: 'Pilih Periode',
+      options: store.periodeOptions,
+      selected: store.periodeIndex,
+    );
+    if (i != null && mounted) setState(() => store.periodeIndex = i);
   }
 
   @override
@@ -116,29 +87,19 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
             _Select(
               label: 'Praktikum',
               value: store.praktikumOptions[store.praktikumIndex],
-              onTap: () => _pick(
-                title: 'Pilih Praktikum',
-                options: store.praktikumOptions,
-                selected: store.praktikumIndex,
-                onPicked: (i) => store.praktikumIndex = i,
-              ),
+              onTap: _pickPraktikum,
             ),
             _Select(
               label: 'Periode',
               value: store.periodeOptions[store.periodeIndex],
-              onTap: () => _pick(
-                title: 'Pilih Periode',
-                options: store.periodeOptions,
-                selected: store.periodeIndex,
-                onPicked: (i) => store.periodeIndex = i,
-              ),
+              onTap: _pickPeriode,
             ),
             LabColumn(
               gap: 8,
               children: [
                 Text('Isi Laporan', style: labText(14)),
                 for (var i = 0; i < _isi.length; i++)
-                  _ReportOption(
+                  DosenCheckOption(
                     title: _isi[i][0],
                     subtitle: _isi[i][1],
                     checked: store.isiLaporan.contains(i),
@@ -183,7 +144,7 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
           icon: 'download',
           label: 'Unduh Laporan',
           large: true,
-          onTap: _download,
+          onTap: () => dosenShowDownloaded(context),
         ),
         LabCard(
           children: [
@@ -193,8 +154,10 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
                 const Spacer(),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () =>
-                      labToast(context, 'Riwayat lengkap belum tersedia'),
+                  onTap: () => labPush(
+                    context,
+                    DosenRiwayatPage(store: store, onLogoTap: widget.onHome),
+                  ),
                   child: Text('Lihat Semua',
                       style: labText(12, c: ItlgColors.primary)),
                 ),
@@ -203,31 +166,41 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
             LabColumn(
               gap: 8,
               children: [
-                LabListItem(
-                  leading: const LabIconTile('table'),
-                  title: 'Rekap_PemMobile_C.xlsx',
-                  subtitle: '21 Sep 2026 • 248 KB',
-                  titleSize: 12,
-                  trailing: const LabIcon('download',
-                      size: 18, color: ItlgColors.primary),
-                  onTap: () =>
-                      labToast(context, 'Mengunduh Rekap_PemMobile_C.xlsx'),
-                ),
-                LabListItem(
-                  leading: const LabIconTile('file'),
-                  title: 'Nilai_BasisData_B.pdf',
-                  subtitle: '14 Sep 2026 • 1,1 MB',
-                  titleSize: 12,
-                  trailing: const LabIcon('download',
-                      size: 18, color: ItlgColors.primary),
-                  onTap: () =>
-                      labToast(context, 'Mengunduh Nilai_BasisData_B.pdf'),
-                ),
+                for (final d in store.downloads.take(2))
+                  DosenDownloadItem(
+                    download: d,
+                    onTap: () => dosenShowDownloaded(context),
+                  ),
               ],
             ),
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Baris berkas unduhan: ikon tabel/berkas, nama, tanggal & ukuran, ikon unduh.
+class DosenDownloadItem extends StatelessWidget {
+  final DosenDownload download;
+  final VoidCallback onTap;
+
+  const DosenDownloadItem({
+    super.key,
+    required this.download,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LabListItem(
+      leading: LabIconTile(download.spreadsheet ? 'table' : 'file'),
+      title: download.name,
+      subtitle: download.meta,
+      titleSize: 12,
+      trailing:
+          const LabIcon('download', size: 18, color: ItlgColors.primary),
+      onTap: onTap,
     );
   }
 }
@@ -271,80 +244,6 @@ class _Select extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Pilihan isi laporan. Tercentang: kartu putih timbul. Tidak: putih cekung.
-class _ReportOption extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final bool checked;
-  final VoidCallback onTap;
-
-  const _ReportOption({
-    required this.title,
-    required this.subtitle,
-    required this.checked,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const pad = EdgeInsets.symmetric(horizontal: 14, vertical: 12);
-    final content = Row(
-      children: [
-        checked
-            ? Container(
-                width: 22,
-                height: 22,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: ItlgColors.primary,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child:
-                    const LabIcon('check', size: 14, color: Colors.white),
-              )
-            : const InnerShadowBox(
-                width: 22,
-                height: 22,
-                radius: 6,
-                color: LabColors.tile,
-                shadows: LabShadows.track,
-              ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: LabColumn(
-            gap: 2,
-            children: [
-              Text(title, style: labText(12, w: kBold)),
-              Text(subtitle,
-                  style: labText(11, w: kMedium, c: ItlgColors.textSubtle)),
-            ],
-          ),
-        ),
-      ],
-    );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: checked
-          ? Container(
-              padding: pad,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: ItlgShadows.outline,
-              ),
-              child: content,
-            )
-          : InnerShadowBox(
-              radius: 12,
-              color: Colors.white,
-              padding: pad,
-              child: content,
-            ),
     );
   }
 }
