@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
@@ -23,6 +24,19 @@ class AslabDetailPresensiPage extends StatefulWidget {
 class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
   final TextEditingController _search = TextEditingController();
   String _query = '';
+
+  /// Filter status: 0 Semua, lalu 1 + indeks [AslabAttend].
+  int _status = 0;
+
+  Future<void> _openFilter() async {
+    final i = await prakShowPicker(
+      context,
+      title: 'Filter Status Kehadiran',
+      options: const ['Semua', 'Hadir', 'Izin', 'Alpa'],
+      selected: _status,
+    );
+    if (i != null && mounted) setState(() => _status = i);
+  }
 
   /// Status awal (untuk tanda "Diubah dari ..." dan tombol Simpan).
   late final List<AslabAttend> _initial =
@@ -51,9 +65,11 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
     final q = _query.trim().toLowerCase();
     final items = [
       for (var i = 0; i < _list.length; i++)
-        if (q.isEmpty ||
-            _list[i].student.name.toLowerCase().contains(q) ||
-            _list[i].student.nim.contains(q))
+        if ((_status == 0 ||
+                _list[i].status == AslabAttend.values[_status - 1]) &&
+            (q.isEmpty ||
+                _list[i].student.name.toLowerCase().contains(q) ||
+                _list[i].student.nim.contains(q)))
           i,
     ];
     return LabSubPage(
@@ -85,7 +101,16 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
           hint: 'Cari nama atau NIM praktikan...',
           controller: _search,
           onChanged: (v) => setState(() => _query = v),
+          onFilter: _openFilter,
+          filterActive: _status != 0,
         ),
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text('Tidak ada praktikan dengan filter ini.',
+                textAlign: TextAlign.center,
+                style: labText(12, c: ItlgColors.textSubtle)),
+          ),
         LabColumn(
           gap: 10,
           children: [
@@ -212,8 +237,11 @@ class _StudentCard extends StatelessWidget {
                       const Spacer(),
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () =>
-                            labToast(context, 'Membuka ${izin.$3}'),
+                        onTap: () => labShowFilePreview(
+                          context,
+                          name: izin.$3,
+                          source: 'Lampiran izin praktikan',
+                        ),
                         child: Text('Lihat Lampiran',
                             style: labText(12, c: ItlgColors.primary)),
                       ),

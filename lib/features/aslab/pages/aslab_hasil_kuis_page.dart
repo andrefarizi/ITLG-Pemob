@@ -95,6 +95,16 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
           hint: 'Cari nama atau NIM praktikan...',
           controller: _search,
           onChanged: (v) => setState(() => _query = v),
+          filterActive: _tab != 0,
+          onFilter: () async {
+            final i = await prakShowPicker(
+              context,
+              title: 'Filter Hasil Kuis',
+              options: const ['Semua (22)', 'Lulus (18)', 'Remedial (4)'],
+              selected: _tab,
+            );
+            if (i != null && mounted) setState(() => _tab = i);
+          },
         ),
         LabCard(
           children: [

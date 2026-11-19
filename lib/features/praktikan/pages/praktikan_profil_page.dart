@@ -139,7 +139,7 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
                 _SettingItem(
                   icon: 'question',
                   title: 'Pusat Bantuan Lab',
-                  subtitle: 'Gedung C & D Fasilkom-TI USU',
+                  subtitle: 'Gedung Teknologi Informasi • ITLG',
                   trailing: const LabIcon('chevron_right',
                       size: 16, color: ItlgColors.primary),
                   onTap: () => labToast(context,

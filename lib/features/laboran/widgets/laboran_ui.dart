@@ -242,7 +242,9 @@ class LabBackButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap ?? () => Navigator.of(context).maybePop(),
       child: Container(
-        width: 116,
+        // Lebar Figma 116 px; boleh melebar sedikit bila font perangkat
+        // lebih lebar supaya teks "Kembali" tidak terpotong (overflow).
+        constraints: const BoxConstraints(minWidth: 116),
         height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -251,6 +253,7 @@ class LabBackButton extends StatelessWidget {
           boxShadow: ItlgShadows.outline,
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const LabIcon('arrow_back', size: 24, color: ItlgColors.primary),
             const SizedBox(width: 7),

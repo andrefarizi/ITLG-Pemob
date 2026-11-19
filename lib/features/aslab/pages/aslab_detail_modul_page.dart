@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 
 /// Figma: "Detail Modul-Aslab".
@@ -80,8 +81,12 @@ class AslabDetailModulPage extends StatelessWidget {
               left: LabOutlineButton(
                 icon: 'eye',
                 label: 'Lihat Modul',
-                onTap: () => labToast(
-                    context, 'Membuka Modul_4_State_Management.pdf'),
+                onTap: () => labShowFilePreview(
+                  context,
+                  name: 'Modul_4_State_Management.pdf',
+                  size: '2,4 MB',
+                  source: 'Modul Pertemuan 4',
+                ),
               ),
               right: LabPrimaryButton(
                 icon: 'download',

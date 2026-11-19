@@ -5,6 +5,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
+import '../../shared/lab_actions.dart';
 
 /// Figma: "Lapor Kendala-Aslab".
 class AslabLaporKendalaPage extends StatefulWidget {
@@ -148,21 +149,40 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
         ),
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabSectionTitle(
+            PrakSpaceRow(
+              left: const LabSectionTitle(
                   icon: 'wrench_outline', text: 'Laporan Saya'),
-              right: PrakSideLink('Lihat Semua'),
+              right: PrakSideLink(
+                'Lihat Semua',
+                onTap: () => labPush(
+                  context,
+                  LabRiwayatLaporanPage(
+                    reports: [
+                      for (final r in _s.reports)
+                        (r.icon, r.title, r.meta, r.status),
+                    ],
+                    onLogoTap: widget.nav.home,
+                  ),
+                ),
+              ),
             ),
             LabColumn(
               gap: 8,
               children: [
-                for (final r in _s.reports)
+                for (final r in _s.reports.take(3))
                   LabListItem(
                     leading: LabIconTile(r.icon),
                     title: r.title,
                     subtitle: r.meta,
                     titleSize: 12,
                     trailing: _chip(r.status),
+                    onTap: () => labShowReportDetail(
+                      context,
+                      icon: r.icon,
+                      title: r.title,
+                      meta: r.meta,
+                      status: r.status,
+                    ),
                   ),
               ],
             ),

@@ -1082,12 +1082,20 @@ class PrakSearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final bool compact;
 
+  /// Ketuk tombol filter (kanan). Null = tombol hanya hiasan.
+  final VoidCallback? onFilter;
+
+  /// Ada filter yang sedang aktif (ikon filter berwarna merah).
+  final bool filterActive;
+
   const PrakSearchField({
     super.key,
     required this.hint,
     required this.controller,
     required this.onChanged,
     this.compact = false,
+    this.onFilter,
+    this.filterActive = false,
   });
 
   @override
@@ -1123,17 +1131,23 @@ class PrakSearchField extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Container(
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: LabColors.tile,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: compact ? PrakShadows.neu5 : LabShadows.neu,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onFilter,
+          child: Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: LabColors.tile,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: compact ? PrakShadows.neu5 : LabShadows.neu,
+            ),
+            child: LabIcon(compact ? 'm_filter' : 'settings_horizontal',
+                size: 15,
+                color:
+                    filterActive ? ItlgColors.primary : LabColors.filterIcon),
           ),
-          child: LabIcon(compact ? 'm_filter' : 'settings_horizontal',
-              size: 15, color: LabColors.filterIcon),
         ),
       ],
     );

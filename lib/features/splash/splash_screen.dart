@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/utils/constants.dart';
-import '../auth/auth_controller.dart';
 
 /// Splash Screen ITLG Mobile (UI + animasi saja, belum ada backend).
 ///
@@ -12,16 +10,16 @@ import '../auth/auth_controller.dart';
 ///   S3  logo bergeser ke kiri, teks "ITLG" muncul dari bawah (ease-out 800ms)
 ///   S4  latar berubah putih, logo & teks berubah biru (ease-out 800ms)
 ///   S5  setelah 0.5s, logo + teks mengecil naik ke atas dan konten
-///       sambutan (ilustrasi, judul, subjudul, 2 tombol peran) naik dari
+///       sambutan (ilustrasi, judul, subjudul, tombol Mulai) naik dari
 ///       bawah (ease-out 800ms)
 ///
 /// Semua posisi memakai koordinat frame Figma (402 x 874) lalu diskalakan
 /// ke layar dengan [FittedBox], jadi hasilnya sama persis dengan prototype.
 class SplashScreen extends StatefulWidget {
-  /// Dipanggil setelah pengguna memilih peran (Praktikan / Asisten Lab).
-  final ValueChanged<UserRole>? onRoleSelected;
+  /// Dipanggil saat tombol "Mulai" ditekan. Peran dipilih di halaman Masuk.
+  final VoidCallback? onStart;
 
-  const SplashScreen({super.key, this.onRoleSelected});
+  const SplashScreen({super.key, this.onStart});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -31,7 +29,6 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   // ---- Warna dari Design System ----
   static const Color _primary = Color(0xFF850909); // Primary/Normal
-  static const Color _primaryDark = Color(0xFF640707);
   static const Color _secondary = Color(0xFF2369B7); // Secondary/Normal
   static const Color _secondaryDarker = Color(0xFF0C2540); // Secondary/Darker
   static const Color _surfaceWhite = Color(0xFFFDFEFE);
@@ -105,10 +102,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  void _selectRole(UserRole role) {
-    AuthController.instance.setRole(role);
-    widget.onRoleSelected?.call(role);
-  }
+  void _start() => widget.onStart?.call();
 
   @override
   Widget build(BuildContext context) {
@@ -279,16 +273,16 @@ class _SplashScreenState extends State<SplashScreen>
   // ---------------------------------------------------------------------------
 
   Widget _buildWelcomeContent() {
-    // Frame 40: dari y=874 (di luar layar) ke (15, 202), ukuran 370 x 583
+    // Frame 40: dari y=874 (di luar layar) ke (15, 246), ukuran 370 x 531
     final double left = 16 + (15 - 16) * _settle.value;
-    final double top = 874 + (202 - 874) * _settle.value;
+    final double top = 874 + (246 - 874) * _settle.value;
     final bool interactive = _controller.value >= 1.0;
 
     return Positioned(
       left: left,
       top: top,
       width: 370,
-      height: 583,
+      height: 531,
       child: IgnorePointer(
         ignoring: !interactive,
         child: Stack(
@@ -345,32 +339,18 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
             ),
-            // Tombol Praktikan
+            // Tombol Mulai
             Positioned(
               left: 0,
               top: 475,
               width: 370,
-              height: 50,
-              child: _RoleButton(
-                label: 'Sebagai Praktikan',
+              height: 56,
+              child: _StartButton(
+                label: 'Mulai',
                 backgroundColor: _primary,
                 textColor: _surfaceWhite,
                 glowColor: _primary,
-                onTap: () => _selectRole(UserRole.praktikan),
-              ),
-            ),
-            // Tombol Asisten Lab
-            Positioned(
-              left: 0,
-              top: 533,
-              width: 370,
-              height: 50,
-              child: _RoleButton(
-                label: 'Sebagai Asisten Lab',
-                backgroundColor: _surfaceWhite,
-                textColor: _primary,
-                borderColor: _primaryDark,
-                onTap: () => _selectRole(UserRole.aslab),
+                onTap: _start,
               ),
             ),
           ],
@@ -478,24 +458,22 @@ class _InnerShadowPainter extends CustomPainter {
 }
 
 // -----------------------------------------------------------------------------
-// Tombol peran (370 x 50, radius 12, bayangan dari Design System)
+// Tombol Mulai (370 x 56, radius 12, bayangan dari Design System)
 // -----------------------------------------------------------------------------
 
-class _RoleButton extends StatelessWidget {
+class _StartButton extends StatelessWidget {
   final String label;
   final Color backgroundColor;
   final Color textColor;
-  final Color? borderColor;
-  final Color? glowColor;
+  final Color glowColor;
   final VoidCallback onTap;
 
-  const _RoleButton({
+  const _StartButton({
     required this.label,
     required this.backgroundColor,
     required this.textColor,
+    required this.glowColor,
     required this.onTap,
-    this.borderColor,
-    this.glowColor,
   });
 
   @override
@@ -513,22 +491,16 @@ class _RoleButton extends StatelessWidget {
               offset: Offset(8, 12), blurRadius: 8, color: Color(0x08000000)),
           const BoxShadow(
               offset: Offset(14, 21), blurRadius: 10, color: Color(0x03000000)),
-          if (glowColor != null)
-            BoxShadow(
-              offset: const Offset(0, 4),
-              blurRadius: 4,
-              color: glowColor!.withValues(alpha: 0.25),
-            ),
+          BoxShadow(
+            offset: const Offset(0, 4),
+            blurRadius: 4,
+            color: glowColor.withValues(alpha: 0.25),
+          ),
         ],
       ),
       child: Material(
         color: backgroundColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: radius,
-          side: borderColor != null
-              ? BorderSide(color: borderColor!, width: 1)
-              : BorderSide.none,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: radius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -537,7 +509,7 @@ class _RoleButton extends StatelessWidget {
               label,
               style: TextStyle(
                 fontFamily: 'Montserrat',
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: textColor,
               ),

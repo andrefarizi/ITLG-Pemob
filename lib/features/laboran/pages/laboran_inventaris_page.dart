@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../praktikan/widgets/praktikan_ui.dart';
+import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
-
-class _Desk {
-  final String name;
-  final String spec;
-  final bool ready;
-  const _Desk(this.name, this.spec, this.ready);
-}
+import 'laboran_tambah_perangkat_page.dart';
 
 class _Lab {
   final String tab;
@@ -19,7 +15,10 @@ class _Lab {
 
 /// Figma: "Data Inventaris-Laboran".
 class LaboranInventarisPage extends StatefulWidget {
-  const LaboranInventarisPage({super.key});
+  final LaboranStore store;
+  final VoidCallback? onLogoTap;
+
+  const LaboranInventarisPage({super.key, required this.store, this.onLogoTap});
 
   @override
   State<LaboranInventarisPage> createState() => _LaboranInventarisPageState();
@@ -32,16 +31,55 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
     _Lab('Multimedia', 'Lab Multimedia', 'Gedung D • Lantai 2'),
   ];
 
-  static const String _spec = 'Core i5-12400 • 16 GB • SSD 512 GB';
-  static const List<_Desk> _desks = [
-    _Desk('Meja 01 • PC-01', _spec, true),
-    _Desk('Meja 02 • PC-02', _spec, true),
-    _Desk('Meja 12 • PC-12', _spec, false),
+  static const List<String> _statusFilter = [
+    'Semua Status',
+    'Siap',
+    'Rusak',
   ];
 
   final TextEditingController _search = TextEditingController();
   int _tab = 0;
   String _query = '';
+
+  /// 0 Semua, 1 Siap, 2 Rusak.
+  int _status = 0;
+
+  Future<void> _openFilter() async {
+    final i = await prakShowPicker(
+      context,
+      title: 'Filter Status Perangkat',
+      options: _statusFilter,
+      selected: _status,
+    );
+    if (i != null && mounted) setState(() => _status = i);
+  }
+
+  Future<void> _changeStatus(LabDesk d) async {
+    final i = await prakShowPicker(
+      context,
+      title: 'Status ${d.name}',
+      options: const ['Siap digunakan', 'Rusak / perlu perbaikan'],
+      selected: d.ready ? 0 : 1,
+    );
+    if (i == null || !mounted) return;
+    final ready = i == 0;
+    if (ready == d.ready) return;
+    setState(() => d.ready = ready);
+    labToast(context,
+        '${d.name} ditandai ${ready ? 'siap' : 'rusak'}');
+  }
+
+  Future<void> _tambah() async {
+    await labPush<bool>(
+      context,
+      LaboranTambahPerangkatPage(
+        store: widget.store,
+        initialLab: _tab,
+        onLogoTap: widget.onLogoTap,
+      ),
+    );
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
@@ -53,13 +91,13 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
   Widget build(BuildContext context) {
     final lab = _labs[_tab];
     final q = _query.trim().toLowerCase();
-    final desks = q.isEmpty
-        ? _desks
-        : _desks
-            .where((d) =>
+    final desks = widget.store.desks[_tab]
+        .where((d) =>
+            (_status == 0 || d.ready == (_status == 1)) &&
+            (q.isEmpty ||
                 d.name.toLowerCase().contains(q) ||
-                d.spec.toLowerCase().contains(q))
-            .toList();
+                d.spec.toLowerCase().contains(q)))
+        .toList();
 
     return LabTabBody(
       children: [
@@ -101,7 +139,7 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
             const SizedBox(width: 8),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => labToast(context, 'Filter belum tersedia'),
+              onTap: _openFilter,
               child: Container(
                 width: 48,
                 height: 48,
@@ -111,8 +149,11 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: LabShadows.neu,
                 ),
-                child: const LabIcon('settings_horizontal',
-                    size: 15, color: LabColors.filterIcon),
+                child: LabIcon('settings_horizontal',
+                    size: 15,
+                    color: _status != 0
+                        ? ItlgColors.primary
+                        : LabColors.filterIcon),
               ),
             ),
           ],
@@ -166,7 +207,10 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     _search.clear();
-                    setState(() => _query = '');
+                    setState(() {
+                      _query = '';
+                      _status = 0;
+                    });
                   },
                   child: Text('Lihat Semua',
                       style: labText(12, c: ItlgColors.primary)),
@@ -174,7 +218,7 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
               ],
             ),
             if (desks.isEmpty)
-              Text('Tidak ada meja yang cocok dengan pencarian.',
+              Text('Tidak ada meja yang cocok dengan pencarian / filter.',
                   style: labText(12, c: ItlgColors.textSubtle))
             else
               LabColumn(
@@ -189,6 +233,7 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                       trailing: d.ready
                           ? const LabChip.live('Siap')
                           : const LabChip.danger('Rusak'),
+                      onTap: () => _changeStatus(d),
                     ),
                 ],
               ),
@@ -198,7 +243,7 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
           icon: 'plus',
           label: 'Tambah Perangkat',
           large: true,
-          onTap: () => labToast(context, 'Form tambah perangkat belum tersedia'),
+          onTap: _tambah,
         ),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
 
@@ -20,6 +21,12 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
     'Lab Komputer 1 • Gedung C Lantai 2',
     'Lab Komputer 2 • Gedung C Lantai 2',
     'Lab Jaringan 2 • Gedung D Lantai 1',
+  ];
+  /// Koordinat tiap titik lokasi (urutan sama dengan [_titik]).
+  static const List<String> _koordinat = [
+    '3.5621, 98.6600',
+    '3.5623, 98.6604',
+    '3.5617, 98.6612',
   ];
   static const List<String> _radius = [
     '25 meter dari titik lab',
@@ -44,6 +51,25 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
     final i = await prakShowPicker(context,
         title: title, options: options, selected: current);
     if (i != null && mounted) setState(() => onPicked(i));
+  }
+
+  void _openMap() {
+    labShowInfoSheet(
+      context,
+      title: 'Titik Lokasi di Peta',
+      header: const PrakLocationMap(inside: true),
+      rows: [
+        ('location', 'Titik', _titik[_tt]),
+        ('crosshairs_gps', 'Koordinat', _koordinat[_tt]),
+        ('map_marker_radius_outline', 'Radius', _radius[_rd]),
+      ],
+      note: 'Praktikan hanya bisa menekan Tombol Hadir di dalam radius ini.',
+      primary: (
+        'location',
+        'Pindahkan Titik',
+        () => _pick('Titik Lokasi', _titik, _tt, (i) => _tt = i),
+      ),
+    );
   }
 
   void _mulai() {
@@ -160,13 +186,9 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                   ),
                   const PrakDivider(),
                   PrakSpaceRow(
-                    left: const LabMeta(
-                        icon: 'crosshairs_gps', text: '3.5621, 98.6600'),
-                    right: PrakSideLink(
-                      'Ubah di Peta',
-                      onTap: () =>
-                          labToast(context, 'Peta akan tersedia bersama GPS'),
-                    ),
+                    left: LabMeta(
+                        icon: 'crosshairs_gps', text: _koordinat[_tt]),
+                    right: PrakSideLink('Ubah di Peta', onTap: _openMap),
                   ),
                 ],
               ),
@@ -197,6 +219,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                 value: _ttd,
                 onChanged: (v) => setState(() => _ttd = v),
               ),
+              onTap: () => setState(() => _ttd = !_ttd),
             ),
             PrakField(
               label: 'Batas Waktu Presensi',

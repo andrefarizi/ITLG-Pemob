@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
+import '../../shared/lab_actions.dart';
 import '../widgets/laboran_ui.dart';
 
 /// Figma: "Presensi Asisten-Laboran".
@@ -67,8 +68,13 @@ class _LaboranPresensiAsistenPageState
               left: LabOutlineButton(
                 icon: 'qrcode',
                 label: 'Tampilkan QR',
-                onTap: () => labToast(
-                    context, 'QR untuk kode ${widget.store.accessCode}'),
+                onTap: () => labShowQr(
+                  context,
+                  title: 'QR Presensi Asisten',
+                  code: widget.store.accessCode,
+                  caption: 'Asisten memindai QR ini untuk presensi shift. '
+                      'Berlaku sampai 17:00 WIB.',
+                ),
               ),
               right: LabPrimaryButton(
                 icon: 'key',

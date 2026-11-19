@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/lab_actions.dart';
+import '../../shared/profil_data.dart';
+import '../../shared/ubah_profil_page.dart';
 import '../../auth/pages/forgot_password_page_1.dart';
 import '../../auth/widgets/auth_design.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -22,6 +25,35 @@ class DosenProfilPage extends StatefulWidget {
 }
 
 class _DosenProfilPageState extends State<DosenProfilPage> {
+  ProfilData get _p => ProfilData.dosen;
+
+  void _onProfil() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _p.addListener(_onProfil);
+  }
+
+  @override
+  void dispose() {
+    _p.removeListener(_onProfil);
+    super.dispose();
+  }
+
+  void _openUbahProfil() {
+    labPush(
+      context,
+      UbahProfilPage(
+        data: _p,
+        roleLabel: 'Dosen Pengampu',
+        onLogoTap: () => Navigator.of(context).popUntil((r) => r.isFirst),
+      ),
+    );
+  }
+
   void _openChangePassword() {
     Navigator.of(context).push(
       PageRouteBuilder<void>(
@@ -61,12 +93,12 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Dr. Sari Lubis',
+                    Text(_p.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: labText(16, w: kBold, c: Colors.black)),
                     const SizedBox(height: 2),
-                    Text('NIP 198501012010011001',
+                    Text('${_p.idLabel} ${_p.idValue}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: labText(12, c: ItlgColors.textSubtle)),
@@ -78,7 +110,7 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
               const SizedBox(width: 8),
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => labToast(context, 'Ubah profil belum tersedia'),
+                onTap: _openUbahProfil,
                 child: Container(
                   width: 40,
                   height: 40,
@@ -95,9 +127,9 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
             ],
           ),
         ),
-        const LabCard(
+        LabCard(
           children: [
-            Align(
+            const Align(
               alignment: Alignment.centerLeft,
               child: LabSectionTitle(icon: 'person', text: 'Data Diri'),
             ),
@@ -118,11 +150,11 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                 label: 'Mata Kuliah',
                 value: 'Mobile & Basis Data'),
             _DataRow(
-                icon: 'envelope', label: 'Email', value: 'sari.lubis@usu.ac.id'),
+                icon: 'envelope', label: 'Email', value: _p.email),
             _DataRow(
                 icon: 'phone_outline',
                 label: 'No. HP',
-                value: '0812-0000-0000'),
+                value: _p.phone),
           ],
         ),
         LabCard(
@@ -156,11 +188,10 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                 _SettingItem(
                   icon: 'question',
                   title: 'Pusat Bantuan Lab',
-                  subtitle: 'Gedung C & D Fasilkom-TI USU',
+                  subtitle: 'Gedung Teknologi Informasi • ITLG',
                   trailing: const LabIcon('chevron_right',
                       size: 16, color: ItlgColors.primary),
-                  onTap: () => labToast(context,
-                      'Pusat Bantuan Lab: Senin-Jumat 08:00-16:30 WIB'),
+                  onTap: () => labShowHelpCenter(context),
                 ),
               ],
             ),

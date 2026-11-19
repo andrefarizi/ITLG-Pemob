@@ -63,11 +63,10 @@ class _ITLGAppState extends State<ITLGApp> {
       ),
       home: _showSplash
           ? SplashScreen(
-              // Peran sudah dipilih di splash, jadi langsung lanjut
-              // (melewati onboarding yang juga berisi pilihan peran).
-              onRoleSelected: (_) {
-                // Alur Figma: Splash -> halaman Masuk (peran yang dipilih di
-                // splash sudah aktif di chip peran).
+              // Alur Figma: Splash -> tombol "Mulai" -> halaman Masuk
+              // (melewati onboarding). Peran dipilih lewat chip di halaman
+              // Masuk.
+              onStart: () {
                 _authController.logout();
                 setState(() {
                   _showSplash = false;

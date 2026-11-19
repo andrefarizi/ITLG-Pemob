@@ -75,6 +75,16 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
           hint: 'Cari nama atau NIM praktikan...',
           controller: _search,
           onChanged: (v) => setState(() => _query = v),
+          filterActive: _tab != 0,
+          onFilter: () async {
+            final i = await prakShowPicker(
+              context,
+              title: 'Filter Status Tugas',
+              options: const ['Menunggu (6)', 'Sudah Dinilai', 'Terlambat'],
+              selected: _tab,
+            );
+            if (i != null && mounted) setState(() => _tab = i);
+          },
         ),
         LabCard(
           children: [

@@ -341,10 +341,10 @@ Future<void> showAuthResultDialog(
   );
 }
 
-/// Kartu "Pusat Bantuan Lab" di halaman Masuk (Figma: Frame 14, 370 x 160).
+/// Kartu "Pusat Bantuan Lab" di halaman Masuk (Figma: Frame 14, 370 x 146).
 ///
 /// Posisi mengikuti Figma: judul di (19, 14), teks mulai x = 59 / y = 49,
-/// baris jam di y = 127, jarak bawah 18.
+/// baris jam di y = 113, jarak bawah 18 (tinggi kartu 146).
 class HelpCenterCard extends StatelessWidget {
   const HelpCenterCard({super.key});
 
@@ -385,8 +385,8 @@ class HelpCenterCard extends StatelessWidget {
                         size: 12, color: Colors.black, height: 1.2)),
                 const SizedBox(height: 8),
                 Text(
-                  'Gedung C & D Fasilkom-TI USU (Jl. Alumni, Medan). Lantai 3: '
-                  'Sekretariat ITLG (Gedung C) & Sekretariat IKLC (Gedung D).',
+                  'Gedung Teknologi Informasi USU (Jl. Alumni, Medan). '
+                  'Lantai 3: Sekretariat ITLG.',
                   style: ItlgText.style(
                     size: 12,
                     color: ItlgColors.textMuted,

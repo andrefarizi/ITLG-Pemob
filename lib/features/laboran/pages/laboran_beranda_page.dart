@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/profil_data.dart';
 import '../laboran_shell.dart';
 import '../widgets/laboran_ui.dart';
 
@@ -139,10 +140,14 @@ class _Greeting extends StatelessWidget {
               children: [
                 Text('Selamat Datang', style: labText(14, c: Colors.black)),
                 const SizedBox(height: 2),
-                Text('Budi Santoso',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: labText(16, w: kBold, c: Colors.black)),
+                ListenableBuilder(
+                  listenable: ProfilData.laboran,
+                  builder: (_, __) => Text(
+                      ProfilData.laboran.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(16, w: kBold, c: Colors.black)),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

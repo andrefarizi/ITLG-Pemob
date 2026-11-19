@@ -4,6 +4,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 
 /// Figma: "Detail Materi-Praktikan".
 class PraktikanDetailMateriPage extends StatelessWidget {
@@ -78,8 +79,12 @@ class PraktikanDetailMateriPage extends StatelessWidget {
               left: LabOutlineButton(
                 icon: 'eye',
                 label: 'Lihat Materi',
-                onTap: () => labToast(
-                    context, 'Membuka Panduan Penggunaan Figma.pdf'),
+                onTap: () => labShowFilePreview(
+                  context,
+                  name: 'Panduan Penggunaan Figma.pdf',
+                  size: '3,1 MB',
+                  source: 'Materi Pertemuan 4',
+                ),
               ),
               right: LabPrimaryButton(
                 icon: 'download',

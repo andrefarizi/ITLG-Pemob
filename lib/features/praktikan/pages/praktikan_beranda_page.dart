@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -89,10 +90,14 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                 Text('Selamat Datang',
                     style: labText(14, c: Colors.black)),
                 const SizedBox(height: 2),
-                Text('Nama Praktikan',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: labText(16, w: kBold, c: Colors.black)),
+                ListenableBuilder(
+                  listenable: ProfilData.praktikan,
+                  builder: (_, __) => Text(
+                      ProfilData.praktikan.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(16, w: kBold, c: Colors.black)),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

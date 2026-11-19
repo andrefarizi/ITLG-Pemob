@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_shell.dart';
 
@@ -155,10 +156,14 @@ class _Greeting extends StatelessWidget {
               children: [
                 Text('Selamat Datang', style: labText(14, c: Colors.black)),
                 const SizedBox(height: 2),
-                Text('Dr. Sari Lubis',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: labText(16, w: kBold, c: Colors.black)),
+                ListenableBuilder(
+                  listenable: ProfilData.dosen,
+                  builder: (_, __) => Text(
+                      ProfilData.dosen.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(16, w: kBold, c: Colors.black)),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -347,7 +352,9 @@ class _BarGroup extends StatelessWidget {
   }
 }
 
-/// Batang 14 px yang tumbuh dari bawah saat halaman dibuka.
+/// Batang 14 px yang tumbuh dari bawah saat halaman dibuka: jeda 100 ms lalu
+/// 600 ms ease-out, sama dengan frame "Page Beranda-Dosen (Animasi Grafik)"
+/// di prototipe Figma.
 class _Bar extends StatelessWidget {
   final double height;
   final Color color;
@@ -357,8 +364,8 @@ class _Bar extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: height),
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 700),
+      curve: const Interval(1 / 7, 1, curve: Curves.easeOut),
       builder: (context, h, _) => Container(
         width: 14,
         height: h,

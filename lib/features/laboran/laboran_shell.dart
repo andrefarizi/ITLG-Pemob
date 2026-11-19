@@ -110,7 +110,10 @@ class _LaboranShellState extends State<LaboranShell> {
       case LaboranShell.tabRuangan:
         return LaboranApprovalPage(store: _store);
       case LaboranShell.tabInventaris:
-        return const LaboranInventarisPage();
+        return LaboranInventarisPage(
+          store: _store,
+          onLogoTap: () => _openTabFromSubPage(LaboranShell.tabBeranda),
+        );
       case LaboranShell.tabProfil:
         return LaboranProfilPage(
           store: _store,

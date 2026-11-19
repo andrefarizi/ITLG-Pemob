@@ -52,6 +52,16 @@ class _PraktikanPengumumanPageState extends State<PraktikanPengumumanPage> {
           hint: 'Cari pengumuman...',
           controller: _search,
           onChanged: (v) => setState(() => _query = v),
+          filterActive: _tab != 0,
+          onFilter: () async {
+            final i = await prakShowPicker(
+              context,
+              title: 'Filter Kategori',
+              options: const ['Semua', 'Perubahan Jadwal', 'Umum'],
+              selected: _tab,
+            );
+            if (i != null && mounted) setState(() => _tab = i);
+          },
         ),
         LabTabs(
           labels: const ['Semua', 'Perubahan Jadwal', 'Umum'],

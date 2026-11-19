@@ -3,35 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
+import '../widgets/dosen_ui.dart';
 import 'dosen_peringatan_page.dart';
 
-enum _Attend { upcoming, alpa, hadir }
-
-class _Meeting {
-  final int number;
-  final String module;
-  final String date;
-  final _Attend status;
-
-  /// Chip "Alpa" pertemuan 4 di Figma memakai Bold + bayangan.
-  final bool emphasis;
-  final String? noteIcon;
-  final String? note;
-  final Color? noteColor;
-
-  const _Meeting({
-    required this.number,
-    required this.module,
-    required this.date,
-    required this.status,
-    this.emphasis = false,
-    this.noteIcon,
-    this.note,
-    this.noteColor,
-  });
-}
-
-/// Figma: "Detail Peringatan-Dosen".
+/// Figma: "Detail Peringatan-Dosen" (Yoga), "(Lia)", dan "(Bagas)".
 class DosenDetailPeringatanPage extends StatefulWidget {
   final DosenStudent student;
   final VoidCallback? onLogoTap;
@@ -48,66 +23,27 @@ class DosenDetailPeringatanPage extends StatefulWidget {
 }
 
 class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
-  static const List<_Meeting> _meetings = [
-    _Meeting(
-      number: 5,
-      module: 'Modul 5 • Navigasi & Routing',
-      date: 'Sen, 05 Okt 2026 • 08:00–09:40 WIB',
-      status: _Attend.upcoming,
-    ),
-    _Meeting(
-      number: 4,
-      module: 'Modul 4 • State Management',
-      date: 'Sen, 28 Sep 2026 • 08:00–09:40 WIB',
-      status: _Attend.alpa,
-      emphasis: true,
-      noteIcon: 'cross',
-      note: 'Tidak ada presensi tercatat',
-      noteColor: ItlgColors.primary,
-    ),
-    _Meeting(
-      number: 3,
-      module: 'Modul 3 • Layout & Navigasi',
-      date: 'Sen, 21 Sep 2026 • 08:00–09:40 WIB',
-      status: _Attend.hadir,
-      noteIcon: 'location',
-      note: 'Tercatat 08:01 WIB melalui tombol hadir & lokasi',
-      noteColor: LabColors.green,
-    ),
-    _Meeting(
-      number: 2,
-      module: 'Modul 2 • Widget Dasar',
-      date: 'Sen, 14 Sep 2026 • 08:00–09:40 WIB',
-      status: _Attend.alpa,
-    ),
-    _Meeting(
-      number: 1,
-      module: 'Modul 1 • Pengenalan Flutter',
-      date: 'Sen, 07 Sep 2026 • 08:00–09:40 WIB',
-      status: _Attend.hadir,
-      noteIcon: 'qrcode',
-      note: 'Tercatat 07:58 WIB melalui pindai QR',
-      noteColor: LabColors.green,
-    ),
-  ];
-
   /// 0 Semua, 1 Hadir, 2 Izin, 3 Alpa.
   int _tab = 0;
 
+  bool _match(DosenMeeting m) {
+    switch (_tab) {
+      case 1:
+        return m.status == MeetingStatus.hadir ||
+            m.status == MeetingStatus.terlambat;
+      case 2:
+        return m.status == MeetingStatus.izin;
+      case 3:
+        return m.status == MeetingStatus.alpa;
+      default:
+        return true;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final shown = _meetings.where((m) {
-      switch (_tab) {
-        case 1:
-          return m.status == _Attend.hadir;
-        case 2:
-          return false; // tidak ada izin pada data contoh
-        case 3:
-          return m.status == _Attend.alpa;
-        default:
-          return true;
-      }
-    }).toList();
+    final s = widget.student;
+    final shown = s.meetings.where(_match).toList();
 
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
@@ -116,23 +52,15 @@ class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
           title: 'Detail Peringatan',
           subtitle: 'Ringkasan kehadiran dan nilai praktikan berisiko',
         ),
-        DosenStudentCard(student: widget.student),
+        DosenStudentCard(student: s),
         LabCard(
           children: [
-            LabColumn(
-              gap: 6,
-              children: [
-                Text('TIF 3001 - ${widget.student.kelas}',
-                    style: labText(16, w: kBold, c: ItlgColors.primaryDark)),
-                Text('Praktikum\nPemrograman Mobile',
-                    style: labText(22, w: kBold, c: Colors.black)),
-              ],
-            ),
-            const LabStatRow(
+            DosenClassTitle(kelas: s.kelas),
+            LabStatRow(
               stats: [
-                LabStat(icon: 'check', label: 'Hadir', value: '2'),
-                LabStat(icon: 'file', label: 'Izin', value: '0'),
-                LabStat(icon: 'cross', label: 'Alpa', value: '2'),
+                LabStat(icon: 'check', label: 'Hadir', value: '${s.hadir}'),
+                LabStat(icon: 'file', label: 'Izin', value: '${s.izin}'),
+                LabStat(icon: 'cross', label: 'Alpa', value: '${s.alpa}'),
               ],
             ),
             const LabProgress(
@@ -167,16 +95,20 @@ class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
 }
 
 class _MeetingCard extends StatelessWidget {
-  final _Meeting meeting;
+  final DosenMeeting meeting;
   const _MeetingCard({required this.meeting});
 
   Widget _chip() {
     switch (meeting.status) {
-      case _Attend.upcoming:
+      case MeetingStatus.upcoming:
         return const LabChip.idle('Akan Datang');
-      case _Attend.hadir:
+      case MeetingStatus.hadir:
         return const LabChip.live('Hadir');
-      case _Attend.alpa:
+      case MeetingStatus.terlambat:
+        return const LabChip.warn('Terlambat');
+      case MeetingStatus.izin:
+        return const LabChip.info('Izin');
+      case MeetingStatus.alpa:
         return meeting.emphasis
             ? const LabChip(
                 'Alpa',
@@ -186,6 +118,19 @@ class _MeetingCard extends StatelessWidget {
                 shadow: true,
               )
             : const LabChip.danger('Alpa');
+    }
+  }
+
+  Color get _noteColor {
+    switch (meeting.status) {
+      case MeetingStatus.alpa:
+        return ItlgColors.primary;
+      case MeetingStatus.izin:
+        return ItlgColors.secondary;
+      case MeetingStatus.terlambat:
+        return LabColors.warnText;
+      default:
+        return LabColors.green;
     }
   }
 
@@ -227,7 +172,7 @@ class _MeetingCard extends StatelessWidget {
         ),
         LabMeta(icon: 'calendar', text: m.date),
         if (m.note != null)
-          LabMeta(icon: m.noteIcon!, text: m.note!, color: m.noteColor!),
+          LabMeta(icon: m.noteIcon!, text: m.note!, color: _noteColor),
       ],
     );
   }
