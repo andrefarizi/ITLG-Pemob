@@ -744,11 +744,13 @@ class PrakField extends StatelessWidget {
 }
 
 /// Kolom isian 48 px (#F9FAFB, inner shadow).
-class PrakInput extends StatelessWidget {
+class PrakInput extends StatefulWidget {
   final TextEditingController controller;
   final String? leadingIcon;
   final Color textColor;
   final String hint;
+  final FocusNode? focusNode;
+  final TextInputType? keyboardType;
 
   const PrakInput({
     super.key,
@@ -756,32 +758,120 @@ class PrakInput extends StatelessWidget {
     this.leadingIcon,
     this.textColor = ItlgColors.text,
     this.hint = '',
+    this.focusNode,
+    this.keyboardType,
   });
 
   @override
+  State<PrakInput> createState() => _PrakInputState();
+}
+
+class _PrakInputState extends State<PrakInput> {
+  late FocusNode _focusNode;
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(PrakInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusNode != oldWidget.focusNode) {
+      oldWidget.focusNode?.removeListener(_onFocusChange);
+      _focusNode = widget.focusNode ?? FocusNode();
+      _focusNode.addListener(_onFocusChange);
+    }
+  }
+
+  void _onFocusChange() {
+    if (_isFocused != _focusNode.hasFocus) {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return InnerShadowBox(
-      radius: 12,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          if (leadingIcon != null) ...[
-            LabIcon(leadingIcon!, size: 18, color: ItlgColors.textMuted),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: TextField(
-              controller: controller,
-              cursorColor: ItlgColors.primary,
-              style: labText(12, c: textColor),
-              decoration: InputDecoration.collapsed(
-                hintText: hint,
-                hintStyle: labText(12, c: ItlgColors.textSubtle),
-              ),
+      decoration: BoxDecoration(
+        color: _isFocused ? Colors.white : ItlgColors.field,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isFocused ? ItlgColors.primary : const Color(0xFFE2E8F0),
+          width: _isFocused ? 1.5 : 1.0,
+        ),
+        boxShadow: _isFocused
+            ? [
+                BoxShadow(
+                  color: ItlgColors.primary.withValues(alpha: 0.15),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: InnerShadowBox(
+          radius: 11,
+          color: _isFocused ? Colors.white : ItlgColors.field,
+          shadows: _isFocused ? const [] : ItlgShadows.inner,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                if (widget.leadingIcon != null) ...[
+                  LabIcon(
+                    widget.leadingIcon!,
+                    size: 18,
+                    color: _isFocused
+                        ? ItlgColors.primary
+                        : ItlgColors.textMuted,
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: _focusNode,
+                    keyboardType: widget.keyboardType,
+                    cursorColor: ItlgColors.primary,
+                    cursorWidth: 2.0,
+                    cursorRadius: const Radius.circular(2),
+                    style: labText(14, c: widget.textColor),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 12),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      hintText: widget.hint,
+                      hintStyle: labText(14, c: ItlgColors.textSubtle),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -816,11 +906,12 @@ class PrakSelect extends StatelessWidget {
 }
 
 /// Area teks (#F9FAFB, inner shadow). Nonaktif = tidak bisa diketik.
-class PrakTextArea extends StatelessWidget {
+class PrakTextArea extends StatefulWidget {
   final TextEditingController? controller;
   final String hint;
   final double height;
   final bool enabled;
+  final FocusNode? focusNode;
 
   const PrakTextArea({
     super.key,
@@ -828,25 +919,103 @@ class PrakTextArea extends StatelessWidget {
     this.hint = '',
     this.height = 110,
     this.enabled = true,
+    this.focusNode,
   });
 
   @override
+  State<PrakTextArea> createState() => _PrakTextAreaState();
+}
+
+class _PrakTextAreaState extends State<PrakTextArea> {
+  late FocusNode _focusNode;
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(PrakTextArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusNode != oldWidget.focusNode) {
+      oldWidget.focusNode?.removeListener(_onFocusChange);
+      _focusNode = widget.focusNode ?? FocusNode();
+      _focusNode.addListener(_onFocusChange);
+    }
+  }
+
+  void _onFocusChange() {
+    if (_isFocused != _focusNode.hasFocus) {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return InnerShadowBox(
-      radius: 12,
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: TextField(
-        controller: controller,
-        enabled: enabled,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.top,
-        cursorColor: ItlgColors.primary,
-        style: labText(12),
-        decoration: InputDecoration.collapsed(
-          hintText: hint,
-          hintStyle: labText(12, c: ItlgColors.textSubtle),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: _isFocused ? Colors.white : ItlgColors.field,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isFocused ? ItlgColors.primary : const Color(0xFFE2E8F0),
+          width: _isFocused ? 1.5 : 1.0,
+        ),
+        boxShadow: _isFocused
+            ? [
+                BoxShadow(
+                  color: ItlgColors.primary.withValues(alpha: 0.15),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: InnerShadowBox(
+          radius: 11,
+          height: widget.height,
+          color: _isFocused ? Colors.white : ItlgColors.field,
+          shadows: _isFocused ? const [] : ItlgShadows.inner,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            enabled: widget.enabled,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            cursorColor: ItlgColors.primary,
+            cursorWidth: 2.0,
+            cursorRadius: const Radius.circular(2),
+            style: labText(14),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              hintText: widget.hint,
+              hintStyle: labText(14, c: ItlgColors.textSubtle),
+            ),
+          ),
         ),
       ),
     );
@@ -1158,10 +1327,20 @@ class PrakSearchField extends StatelessWidget {
                     controller: controller,
                     onChanged: onChanged,
                     cursorColor: ItlgColors.primary,
-                    style: labText(12),
-                    decoration: InputDecoration.collapsed(
+                    cursorWidth: 2.0,
+                    cursorRadius: const Radius.circular(2),
+                    style: labText(14),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
                       hintText: hint,
-                      hintStyle: labText(12, c: ItlgColors.textSubtle),
+                      hintStyle: labText(14, c: ItlgColors.textSubtle),
                     ),
                   ),
                 ),

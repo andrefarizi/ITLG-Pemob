@@ -330,6 +330,7 @@ class ItlgTextField extends StatefulWidget {
   /// Ikon PNG hasil ekspor Figma (20 px); menggantikan [icon] bila diisi.
   final String? iconAsset;
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final bool obscure;
 
   /// Tampilkan tombol mata untuk melihat kata sandi (tidak ada di desain Masuk).
@@ -347,6 +348,7 @@ class ItlgTextField extends StatefulWidget {
     required this.icon,
     this.iconAsset,
     this.controller,
+    this.focusNode,
     this.obscure = false,
     this.showObscureToggle = true,
     this.keyboardType,
@@ -362,66 +364,172 @@ class ItlgTextField extends StatefulWidget {
 
 class _ItlgTextFieldState extends State<ItlgTextField> {
   late bool _hidden = widget.obscure;
+  late FocusNode _focusNode;
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(ItlgTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusNode != oldWidget.focusNode) {
+      oldWidget.focusNode?.removeListener(_onFocusChange);
+      _focusNode = widget.focusNode ?? FocusNode();
+      _focusNode.addListener(_onFocusChange);
+    }
+  }
+
+  void _onFocusChange() {
+    if (_isFocused != _focusNode.hasFocus) {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final hasError = widget.errorText != null;
+    final activeBorderColor = hasError
+        ? ItlgColors.error
+        : (_isFocused ? ItlgColors.primary : const Color(0xFFE2E8F0));
+    final activeBorderWidth = (hasError || _isFocused) ? 1.5 : 1.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label, style: ItlgText.style(height: 1.2)),
+        Text(
+          widget.label,
+          style: ItlgText.style(
+            size: 13,
+            weight: FontWeight.w600,
+            color: ItlgColors.text,
+            height: 1.2,
+          ),
+        ),
         const SizedBox(height: 8),
-        InnerShadowBox(
-          radius: 12,
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
           height: 48,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: hasError
-                  ? Border.all(color: ItlgColors.error.withValues(alpha: 0.6))
-                  : null,
+          decoration: BoxDecoration(
+            color: _isFocused ? Colors.white : ItlgColors.field,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: activeBorderColor,
+              width: activeBorderWidth,
             ),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16, right: 8),
-              child: Row(
-                children: [
-                  if (widget.iconAsset != null)
-                    Image.asset(widget.iconAsset!, width: 20, height: 20)
-                  else
-                    Icon(widget.icon, size: 20, color: ItlgColors.textMuted),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: widget.controller,
-                      obscureText: _hidden,
-                      keyboardType: widget.keyboardType,
-                      textInputAction: widget.textInputAction,
-                      onChanged: widget.onChanged,
-                      onSubmitted: widget.onSubmitted,
-                      cursorColor: ItlgColors.primary,
-                      style: ItlgText.style(size: 12, height: 1.2),
-                      decoration: InputDecoration.collapsed(
-                        hintText: widget.hint,
-                        hintStyle: ItlgText.style(
-                            size: 12, color: ItlgColors.textMuted, height: 1.2),
+            boxShadow: _isFocused
+                ? [
+                    BoxShadow(
+                      color: (hasError ? ItlgColors.error : ItlgColors.primary)
+                          .withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : (hasError
+                    ? [
+                        BoxShadow(
+                          color: ItlgColors.error.withValues(alpha: 0.12),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: InnerShadowBox(
+              radius: 11,
+              color: _isFocused ? Colors.white : ItlgColors.field,
+              shadows: _isFocused ? const [] : ItlgShadows.inner,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    if (widget.iconAsset != null)
+                      Image.asset(widget.iconAsset!, width: 20, height: 20)
+                    else
+                      Icon(
+                        widget.icon,
+                        size: 20,
+                        color: _isFocused
+                            ? ItlgColors.primary
+                            : ItlgColors.textMuted,
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: widget.controller,
+                        focusNode: _focusNode,
+                        obscureText: _hidden,
+                        keyboardType: widget.keyboardType,
+                        textInputAction: widget.textInputAction,
+                        onChanged: widget.onChanged,
+                        onSubmitted: widget.onSubmitted,
+                        cursorColor: ItlgColors.primary,
+                        cursorWidth: 2.0,
+                        cursorRadius: const Radius.circular(2),
+                        style: ItlgText.style(
+                          size: 14,
+                          weight: FontWeight.w500,
+                          color: ItlgColors.text,
+                          height: 1.3,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          hintText: widget.hint,
+                          hintStyle: ItlgText.style(
+                            size: 14,
+                            weight: FontWeight.w400,
+                            color: ItlgColors.textMuted,
+                            height: 1.3,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  if (widget.obscure && widget.showObscureToggle)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(
-                        _hidden
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        size: 18,
-                        color: ItlgColors.textMuted,
-                      ),
-                      onPressed: () => setState(() => _hidden = !_hidden),
-                    )
-                  else
-                    const SizedBox(width: 8),
-                ],
+                    if (widget.obscure && widget.showObscureToggle)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _hidden = !_hidden),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 8),
+                          child: Icon(
+                            _hidden
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
+                            color: _isFocused
+                                ? ItlgColors.primary
+                                : ItlgColors.textMuted,
+                          ),
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 4),
+                  ],
+                ),
               ),
             ),
           ),

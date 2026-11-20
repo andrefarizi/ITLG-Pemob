@@ -220,38 +220,120 @@ class DosenClassTitle extends StatelessWidget {
 }
 
 /// Label Regular 14 + kolom teks 110 px (#F9FAFB, inner shadow).
-class DosenTextArea extends StatelessWidget {
+class DosenTextArea extends StatefulWidget {
   final String label;
   final TextEditingController controller;
   final String hint;
+  final FocusNode? focusNode;
 
   const DosenTextArea({
     super.key,
     required this.label,
     required this.controller,
     this.hint = '',
+    this.focusNode,
   });
+
+  @override
+  State<DosenTextArea> createState() => _DosenTextAreaState();
+}
+
+class _DosenTextAreaState extends State<DosenTextArea> {
+  late FocusNode _focusNode;
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(DosenTextArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusNode != oldWidget.focusNode) {
+      oldWidget.focusNode?.removeListener(_onFocusChange);
+      _focusNode = widget.focusNode ?? FocusNode();
+      _focusNode.addListener(_onFocusChange);
+    }
+  }
+
+  void _onFocusChange() {
+    if (_isFocused != _focusNode.hasFocus) {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return LabColumn(
       gap: 8,
       children: [
-        Text(label, style: labText(14)),
-        InnerShadowBox(
-          radius: 12,
+        Text(
+          widget.label,
+          style: labText(14, w: FontWeight.w600, c: ItlgColors.text),
+        ),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
           height: 110,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: TextField(
-            controller: controller,
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            cursorColor: ItlgColors.primary,
-            style: labText(12),
-            decoration: InputDecoration.collapsed(
-              hintText: hint,
-              hintStyle: labText(12, c: ItlgColors.textSubtle),
+          decoration: BoxDecoration(
+            color: _isFocused ? Colors.white : ItlgColors.field,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _isFocused ? ItlgColors.primary : const Color(0xFFE2E8F0),
+              width: _isFocused ? 1.5 : 1.0,
+            ),
+            boxShadow: _isFocused
+                ? [
+                    BoxShadow(
+                      color: ItlgColors.primary.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: InnerShadowBox(
+              radius: 11,
+              height: 110,
+              color: _isFocused ? Colors.white : ItlgColors.field,
+              shadows: _isFocused ? const [] : ItlgShadows.inner,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: TextField(
+                controller: widget.controller,
+                focusNode: _focusNode,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                cursorColor: ItlgColors.primary,
+                cursorWidth: 2.0,
+                cursorRadius: const Radius.circular(2),
+                style: labText(14),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  hintText: widget.hint,
+                  hintStyle: labText(14, c: ItlgColors.textSubtle),
+                ),
+              ),
             ),
           ),
         ),
@@ -376,10 +458,20 @@ class DosenSearchField extends StatelessWidget {
                     controller: controller,
                     onChanged: onChanged,
                     cursorColor: ItlgColors.primary,
-                    style: labText(12),
-                    decoration: InputDecoration.collapsed(
+                    cursorWidth: 2.0,
+                    cursorRadius: const Radius.circular(2),
+                    style: labText(14),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
                       hintText: hint,
-                      hintStyle: labText(12, c: ItlgColors.textSubtle),
+                      hintStyle: labText(14, c: ItlgColors.textSubtle),
                     ),
                   ),
                 ),
