@@ -53,6 +53,20 @@ class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
           hint: 'Cari nama atau NIM praktikan...',
           controller: _search,
           onChanged: (v) => setState(() => _query = v),
+          filterActive: _tab != 0,
+          onFilter: () async {
+            final i = await dosenShowPicker(
+              context,
+              title: 'Filter Status Kelulusan',
+              options: [
+                'Semua (${all.length})',
+                'Lulus ($lulus)',
+                'Tidak Lulus (${all.length - lulus})',
+              ],
+              selected: _tab,
+            );
+            if (i != null && mounted) setState(() => _tab = i);
+          },
         ),
         LabTabs(
           labels: [

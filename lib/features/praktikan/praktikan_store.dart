@@ -618,6 +618,9 @@ class PraktikanStore {
   };
   int selectedDesk = 14;
 
+  /// Meja yang sudah dibooking (null = belum booking).
+  int? bookedDesk;
+
   final List<PrakReport> reports = [
     const PrakReport(
         'wifi', 'Koneksi jaringan putus', 'Lab Jaringan 2 • 27 Sep', 1),

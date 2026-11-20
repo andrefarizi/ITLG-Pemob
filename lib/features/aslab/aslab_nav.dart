@@ -10,6 +10,7 @@ import 'pages/aslab_buat_sesi_page.dart';
 import 'pages/aslab_bukti_presensi_page.dart';
 import 'pages/aslab_detail_absensi_page.dart';
 import 'pages/aslab_detail_modul_page.dart';
+import 'pages/aslab_detail_pertemuan_page.dart';
 import 'pages/aslab_detail_praktikum_page.dart';
 import 'pages/aslab_detail_presensi_page.dart';
 import 'pages/aslab_edit_modul_page.dart';
@@ -89,6 +90,9 @@ class AslabNav {
 
   Future<void> detailPraktikum(BuildContext c, AslabCourse course) =>
       _open(c, AslabDetailPraktikumPage(nav: this, course: course), false);
+
+  Future<void> detailPertemuan(BuildContext c, AslabMeeting meeting) =>
+      _open(c, AslabDetailPertemuanPage(nav: this, meeting: meeting), false);
 
   Future<void> detailModul(BuildContext c) =>
       _open(c, AslabDetailModulPage(nav: this), false);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
@@ -124,8 +125,8 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
                   title: 'github.com/rinanovita/erd-toko',
                   meta: 'Tautan Repositori Kode',
                   action: 'chevron_right',
-                  onTap: () => labToast(
-                      context, 'Membuka github.com/rinanovita/erd-toko'),
+                  onTap: () => labShowLink(
+                      context, url: 'https://github.com/rinanovita/erd-toko'),
                 ),
               ],
             ),

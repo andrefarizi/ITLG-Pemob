@@ -341,11 +341,19 @@ class DosenSearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
 
+  /// Ketuk tombol filter (kanan). Null = tombol hanya hiasan.
+  final VoidCallback? onFilter;
+
+  /// Ada filter yang sedang aktif (ikon filter berwarna merah).
+  final bool filterActive;
+
   const DosenSearchField({
     super.key,
     required this.hint,
     required this.controller,
     required this.onChanged,
+    this.onFilter,
+    this.filterActive = false,
   });
 
   @override
@@ -380,17 +388,23 @@ class DosenSearchField extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Container(
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: LabColors.tile,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: LabShadows.neu,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onFilter,
+          child: Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: LabColors.tile,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: LabShadows.neu,
+            ),
+            child: LabIcon('settings_horizontal',
+                size: 15,
+                color:
+                    filterActive ? ItlgColors.primary : LabColors.filterIcon),
           ),
-          child: const LabIcon('settings_horizontal',
-              size: 15, color: LabColors.filterIcon),
         ),
       ],
     );

@@ -46,7 +46,14 @@ class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
       gap: 10,
       children: [
         Text(label, style: labText(12, w: kBold, c: ItlgColors.textSubtle)),
-        for (final n in items) _NotifCard(notif: n, onTap: () => _open(n)),
+        // Figma: notifikasi per kelompok di dalam satu "Kartu Daftar".
+        if (items.isNotEmpty)
+          LabListCard(
+            children: [
+              for (final n in items)
+                _NotifCard(notif: n, onTap: () => _open(n)),
+            ],
+          ),
       ],
     );
   }

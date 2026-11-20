@@ -21,10 +21,23 @@ class _PraktikanDaftarPraktikumPageState
   final TextEditingController _search = TextEditingController();
   String _query = '';
 
+  static const List<String> _sorts = [
+    'Urutan Default',
+    'Nama A–Z',
+    'Nama Z–A',
+  ];
+  int _sort = 0;
+
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  Future<void> _openFilter() async {
+    final i = await prakShowPicker(context,
+        title: 'Urutkan Praktikum', options: _sorts, selected: _sort);
+    if (i != null && mounted) setState(() => _sort = i);
   }
 
   @override
@@ -33,6 +46,8 @@ class _PraktikanDaftarPraktikumPageState
     final courses = widget.nav.store.courses
         .where((c) => q.isEmpty || c.name.toLowerCase().contains(q))
         .toList();
+    if (_sort == 1) courses.sort((a, b) => a.name.compareTo(b.name));
+    if (_sort == 2) courses.sort((a, b) => b.name.compareTo(a.name));
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(16, labTopBarHeight(context) + 16, 16, 40),
@@ -50,6 +65,8 @@ class _PraktikanDaftarPraktikumPageState
             controller: _search,
             compact: true,
             onChanged: (v) => setState(() => _query = v),
+            onFilter: _openFilter,
+            filterActive: _sort != 0,
           ),
           const SizedBox(height: 16),
           if (courses.isEmpty)

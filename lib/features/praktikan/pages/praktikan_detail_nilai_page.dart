@@ -89,11 +89,17 @@ class _PraktikanDetailNilaiPageState extends State<PraktikanDetailNilaiPage> {
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
-        for (final g in items)
-          _GradeCard(
-            grade: g,
-            asisten: c.asisten,
-            onSanggah: () => widget.nav.sanggah(context, c, g),
+        // Figma: semua nilai di dalam satu "Kartu Daftar".
+        if (items.isNotEmpty)
+          LabListCard(
+            children: [
+              for (final g in items)
+                _GradeCard(
+                  grade: g,
+                  asisten: c.asisten,
+                  onSanggah: () => widget.nav.sanggah(context, c, g),
+                ),
+            ],
           ),
       ],
     );
@@ -114,7 +120,8 @@ class _GradeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final waiting = grade.score == null;
-    return LabCard(
+    return LabRowCard(
+      gap: 16,
       children: [
         PrakSpaceRow(
           left: LabMeta(icon: 'calendar', text: grade.date),

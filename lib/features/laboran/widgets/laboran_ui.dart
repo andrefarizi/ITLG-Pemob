@@ -18,6 +18,9 @@ class LabColors {
   LabColors._();
 
   static const Color green = Color(0xFF2E9B5B);
+
+  /// Latar chip status hijau (Hadir, Digunakan, Siap, dst).
+  static const Color greenBg = Color(0xFFE8F5EE);
   static const Color tile = Color(0xFFEEF0F3);
   static const Color blueDark = Color(0xFF1A4F89);
   static const Color avatarBg = Color(0xFFE9F0F8);
@@ -25,6 +28,9 @@ class LabColors {
   static const Color tagRedBg = Color(0xFFEDDADA);
   static const Color warnBg = Color(0xFFE6EDB7);
   static const Color warnText = Color(0xFF9B712E);
+  static const Color warnSoftBg = Color(0xFFFBF1DC);
+  static const Color line = Color(0xFFEEF0F2);
+  static const Color textGrey = Color(0xFF5B636B);
   static const Color bar = Color(0xFFFBFCFC);
   static const Color chipIdle = Color(0xFFFEFEFE);
   static const Color divider = Color(0xFFB5B9BC);
@@ -146,9 +152,102 @@ void labToast(BuildContext context, String message) {
     );
 }
 
+/// Pop-up hasil (Figma: "Pop up Berkas Diunduh", "Pop up Izin Disetujui",
+/// dst): kartu 370 px, ikon 44 px di kotak cekung 80 px, judul Bold 22,
+/// pesan Regular 14, tombol merah 50 px. Muncul dengan fade 250 ms di atas
+/// latar gelap #0A0B0C 40%.
+Future<void> labShowResult(
+  BuildContext context, {
+  required String icon,
+  required String title,
+  required String message,
+  String button = 'Selesai',
+  VoidCallback? onPressed,
+}) {
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    barrierLabel: title,
+    barrierColor: const Color(0x660A0B0C),
+    transitionDuration: const Duration(milliseconds: 250),
+    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    transitionBuilder: (dialogContext, anim, _, __) => FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 370),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 22, 17, 22),
+                decoration: BoxDecoration(
+                  color: ItlgColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: ItlgShadows.outline,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: InnerShadowBox(
+                        width: 80,
+                        height: 80,
+                        radius: 19.875,
+                        shadows: ItlgShadows.innerLarge,
+                        child: Center(
+                          child: LabIcon(icon,
+                              size: 44, color: ItlgColors.primary),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(title,
+                        textAlign: TextAlign.center,
+                        style: labText(22, w: kBold)),
+                    const SizedBox(height: 8),
+                    Text(message,
+                        textAlign: TextAlign.center,
+                        style: labText(14, c: ItlgColors.textMuted)),
+                    const SizedBox(height: 13),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        Navigator.of(dialogContext).pop();
+                        onPressed?.call();
+                      },
+                      child: Container(
+                        height: 50,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: ItlgColors.primary,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: ItlgShadows.primary,
+                        ),
+                        child: Text(button,
+                            style: labText(16,
+                                w: kBold, c: ItlgColors.surfaceWhite)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 // =============================================================================
 // Header atas (Frame 41 + Frame 45) dan tombol Kembali (Frame 29)
 // =============================================================================
+
+/// Jarak antar-bagian di halaman (Figma: auto layout "Content" gap 28).
+const double kLabSectionGap = 28;
 
 /// Tinggi header di bawah status bar (112 - 60 di Figma).
 const double kLabTopBarBody = 52;
@@ -242,7 +341,9 @@ class LabBackButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap ?? () => Navigator.of(context).maybePop(),
       child: Container(
-        width: 116,
+        // Lebar Figma 116 px; boleh melebar sedikit bila font perangkat
+        // lebih lebar supaya teks "Kembali" tidak terpotong (overflow).
+        constraints: const BoxConstraints(minWidth: 116),
         height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -251,6 +352,7 @@ class LabBackButton extends StatelessWidget {
           boxShadow: ItlgShadows.outline,
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const LabIcon('arrow_back', size: 24, color: ItlgColors.primary),
             const SizedBox(width: 7),
@@ -269,7 +371,19 @@ class LabSubPage extends StatelessWidget {
   final List<Widget> children;
   final VoidCallback? onLogoTap;
 
-  const LabSubPage({super.key, required this.children, this.onLogoTap});
+  /// Jarak antar-bagian (Figma: gap auto layout "Content").
+  final double gap;
+
+  /// Aksi tombol Kembali (default: tutup halaman ini).
+  final VoidCallback? onBack;
+
+  const LabSubPage({
+    super.key,
+    required this.children,
+    this.onLogoTap,
+    this.gap = kLabSectionGap,
+    this.onBack,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -289,7 +403,7 @@ class LabSubPage extends StatelessWidget {
                   16,
                   56 + MediaQuery.of(context).padding.bottom,
                 ),
-                child: LabColumn(gap: 24, children: children),
+                child: LabColumn(gap: gap, children: children),
               ),
             ),
             Positioned(
@@ -298,7 +412,11 @@ class LabSubPage extends StatelessWidget {
               top: 0,
               child: LabTopBar(onLogoTap: onLogoTap),
             ),
-            Positioned(left: 16, top: bar + 7, child: const LabBackButton()),
+            Positioned(
+              left: 16,
+              top: bar + 7,
+              child: LabBackButton(onTap: onBack),
+            ),
           ],
         ),
       ),
@@ -317,7 +435,7 @@ class LabTabBody extends StatelessWidget {
     return SingleChildScrollView(
       padding:
           EdgeInsets.fromLTRB(16, labTopBarHeight(context) + 20, 16, 40),
-      child: LabColumn(gap: 24, children: children),
+      child: LabColumn(gap: kLabSectionGap, children: children),
     );
   }
 }
@@ -391,7 +509,9 @@ class _NavTab extends StatelessWidget {
             boxShadow: active ? ItlgShadows.primary : const [],
           ),
           child: LabIcon(
-            item.icon,
+            // Ikon navbar sengaja memakai aset tersendiri (ic_nav_*) supaya
+            // tidak ikut berubah ketika ikon konten diganti.
+            'nav_${item.icon}',
             size: 20,
             color: active ? Colors.white : ItlgColors.textSubtle,
           ),
@@ -517,23 +637,33 @@ class LabOverline extends StatelessWidget {
 // Elemen kecil
 // =============================================================================
 
-/// Kotak ikon 36 px (#EEF0F3, radius 9, bayangan timbul).
+/// Kotak ikon 36 px (#EEF0F3, radius 9). Datar, tanpa bayangan.
 class LabIconTile extends StatelessWidget {
   final String icon;
-  const LabIconTile(this.icon, {super.key});
+  final Color color;
+  final Color bg;
+  final double size;
+  final double iconSize;
+  const LabIconTile(
+    this.icon, {
+    super.key,
+    this.color = ItlgColors.primary,
+    this.bg = LabColors.tile,
+    this.size = 36,
+    this.iconSize = 20,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 36,
-      height: 36,
+      width: size,
+      height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: LabColors.tile,
-        borderRadius: BorderRadius.circular(9),
-        boxShadow: LabShadows.neu,
+        color: bg,
+        borderRadius: BorderRadius.circular(size / 4),
       ),
-      child: LabIcon(icon, size: 20, color: ItlgColors.primary),
+      child: LabIcon(icon, size: iconSize, color: color),
     );
   }
 }
@@ -556,12 +686,16 @@ class LabSectionTitle extends StatelessWidget {
           decoration: BoxDecoration(
             color: ItlgColors.primary,
             borderRadius: BorderRadius.circular(7),
-            boxShadow: ItlgShadows.outline,
           ),
           child: LabIcon(icon, size: 15, color: Colors.white),
         ),
         const SizedBox(width: 9),
-        Text(text, style: labText(14, w: kSemiBold, c: Colors.black)),
+        Flexible(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: labText(14, w: kSemiBold, c: Colors.black)),
+        ),
       ],
     );
   }
@@ -580,7 +714,12 @@ class LabHeading extends StatelessWidget {
       children: [
         LabIcon(icon, size: 20, color: LabColors.blueDark),
         const SizedBox(width: 8),
-        Text(text, style: labText(16, w: kBold, c: Colors.black)),
+        Flexible(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: labText(16, w: kBold, c: Colors.black)),
+        ),
       ],
     );
   }
@@ -640,14 +779,56 @@ class LabPerson extends StatelessWidget {
   }
 }
 
-/// Chip status 22 px (radius 24, padding 4/10).
+/// Titik status bercincin 10 px (Figma: radio-dot kecil, garis 0,9 px).
+class LabRingDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  const LabRingDot({super.key, required this.color, this.size = 10});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _RingDotPainter(color)),
+    );
+  }
+}
+
+class _RingDotPainter extends CustomPainter {
+  final Color color;
+  const _RingDotPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final s = size.shortestSide / 10;
+    canvas.drawCircle(
+      c,
+      3.75 * s,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.9 * s
+        ..color = color,
+    );
+    canvas.drawCircle(c, 1.9 * s, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingDotPainter old) => old.color != color;
+}
+
+/// Chip status 22 px (radius 24, padding 4/10). Datar, tanpa bayangan.
 class LabChip extends StatelessWidget {
   final String text;
   final Color bg;
   final Color fg;
   final FontWeight weight;
-  final bool shadow;
   final bool dot;
+
+  /// Tidak dipakai lagi (status tidak memakai bayangan); tetap ada supaya
+  /// pemanggil lama tidak perlu diubah.
+  final bool shadow;
 
   const LabChip(
     this.text, {
@@ -659,12 +840,12 @@ class LabChip extends StatelessWidget {
     this.dot = false,
   });
 
-  /// Chip putih hijau dengan ikon radio (Live, Digunakan, Siap, jam hadir).
+  /// Hijau muda dengan titik bercincin (Live, Digunakan, Siap, jam hadir).
   const LabChip.live(this.text, {super.key})
-      : bg = Colors.white,
+      : bg = LabColors.greenBg,
         fg = LabColors.green,
         weight = kBold,
-        shadow = true,
+        shadow = false,
         dot = true;
 
   /// Merah muda (Reported, Rusak).
@@ -707,27 +888,41 @@ class LabChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: shadow ? ItlgShadows.outline : const [],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (dot) ...[
-            LabIcon('radio_btn_active', size: 14, color: fg),
+            LabRingDot(color: fg),
             const SizedBox(width: 6),
           ],
-          Text(text, style: labText(12, w: weight, c: fg)),
+          // Flexible: teks panjang terpotong rapi, tidak overflow.
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: labText(12, w: weight, c: fg),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Pill abu-abu timbul dengan ikon 12 px (jam, Real-time, bulan).
+/// Pill abu-abu datar dengan ikon 12 px (jam, Real-time, minggu ke-n).
 class LabPill extends StatelessWidget {
   final String icon;
   final String text;
-  const LabPill({super.key, required this.icon, required this.text});
+  final Color color;
+  const LabPill({
+    super.key,
+    required this.icon,
+    required this.text,
+    this.color = ItlgColors.textSubtle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -737,14 +932,19 @@ class LabPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: ItlgColors.surfaceDark,
         borderRadius: BorderRadius.circular(11),
-        boxShadow: LabShadows.neu,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          LabIcon(icon, size: 12, color: ItlgColors.textSubtle),
+          LabIcon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(text, style: labText(12, c: ItlgColors.textSubtle)),
+          Flexible(
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: labText(12, c: color)),
+          ),
         ],
       ),
     );
@@ -1007,6 +1207,66 @@ class LabListItem extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Kartu abu-abu pembungkus daftar (Figma "Kartu Daftar": padding 12,
+/// jarak 10, radius 24, Outline Shadow). Isinya [LabRowCard].
+class LabListCard extends StatelessWidget {
+  final List<Widget> children;
+  final double gap;
+  final EdgeInsetsGeometry padding;
+  const LabListCard({
+    super.key,
+    required this.children,
+    this.gap = 10,
+    this.padding = const EdgeInsets.all(12),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: ItlgColors.surfaceDark,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: ItlgShadows.outline,
+      ),
+      child: LabColumn(gap: gap, children: children),
+    );
+  }
+}
+
+/// Baris putih timbul di dalam [LabListCard] (radius 16, padding 14).
+class LabRowCard extends StatelessWidget {
+  final List<Widget> children;
+  final double gap;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final VoidCallback? onTap;
+  const LabRowCard({
+    super.key,
+    required this.children,
+    this.gap = 12,
+    this.padding = const EdgeInsets.all(14),
+    this.radius = 16,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: ItlgShadows.outline,
+      ),
+      child: LabColumn(gap: gap, children: children),
+    );
+    if (onTap == null) return card;
+    return GestureDetector(
+        behavior: HitTestBehavior.opaque, onTap: onTap, child: card);
   }
 }
 

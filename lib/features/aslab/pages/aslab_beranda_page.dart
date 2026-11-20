@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
@@ -175,10 +176,14 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
               children: [
                 Text('Selamat Datang', style: labText(14, c: Colors.black)),
                 const SizedBox(height: 2),
-                Text('Andi Pratama',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: labText(16, w: kBold, c: Colors.black)),
+                ListenableBuilder(
+                  listenable: ProfilData.aslab,
+                  builder: (_, __) => Text(
+                      ProfilData.aslab.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(16, w: kBold, c: Colors.black)),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

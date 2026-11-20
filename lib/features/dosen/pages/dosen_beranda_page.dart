@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_shell.dart';
 
@@ -155,10 +156,14 @@ class _Greeting extends StatelessWidget {
               children: [
                 Text('Selamat Datang', style: labText(14, c: Colors.black)),
                 const SizedBox(height: 2),
-                Text('Dr. Sari Lubis',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: labText(16, w: kBold, c: Colors.black)),
+                ListenableBuilder(
+                  listenable: ProfilData.dosen,
+                  builder: (_, __) => Text(
+                      ProfilData.dosen.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(16, w: kBold, c: Colors.black)),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

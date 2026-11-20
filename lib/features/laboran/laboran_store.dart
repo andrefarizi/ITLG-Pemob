@@ -89,9 +89,37 @@ class LabNotif {
   });
 }
 
+/// Satu meja + PC di halaman Data Inventaris.
+class LabDesk {
+  final String name;
+  final String spec;
+  bool ready;
+
+  LabDesk(this.name, this.spec, this.ready);
+}
+
 class LaboranStore {
   String accessCode = 'ITLG-4821';
   bool pushOn = true;
+
+  static const String defaultSpec = 'Core i5-12400 • 16 GB • SSD 512 GB';
+
+  /// Nama lab di Data Inventaris (urutan = urutan tab).
+  static const List<String> inventoryLabs = [
+    'Lab Komputer 1',
+    'Lab Jaringan 2',
+    'Lab Multimedia',
+  ];
+
+  /// Daftar meja & PC per lab (indeks sama dengan [inventoryLabs]).
+  final List<List<LabDesk>> desks = [
+    for (var i = 0; i < 3; i++)
+      [
+        LabDesk('Meja 01 • PC-01', defaultSpec, true),
+        LabDesk('Meja 02 • PC-02', defaultSpec, true),
+        LabDesk('Meja 12 • PC-12', defaultSpec, false),
+      ],
+  ];
 
   final List<LabTicket> tickets = const [
     LabTicket(

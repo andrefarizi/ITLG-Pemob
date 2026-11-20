@@ -7,11 +7,13 @@ import 'pages/praktikan_ajukan_izin_page.dart';
 import 'pages/praktikan_detail_absensi_page.dart';
 import 'pages/praktikan_detail_materi_page.dart';
 import 'pages/praktikan_detail_nilai_page.dart';
+import 'pages/praktikan_detail_pertemuan_page.dart';
 import 'pages/praktikan_detail_praktikum_page.dart';
 import 'pages/praktikan_edit_tugas_page.dart';
 import 'pages/praktikan_hasil_kuis_page.dart';
 import 'pages/praktikan_kuis_page.dart';
 import 'pages/praktikan_laporkan_kerusakan_page.dart';
+import 'pages/praktikan_meja_kamu_page.dart';
 import 'pages/praktikan_notifikasi_page.dart';
 import 'pages/praktikan_penilaian_asisten_page.dart';
 import 'pages/praktikan_pengumuman_page.dart';
@@ -84,6 +86,17 @@ class PraktikanNav {
   Future<void> detailPraktikum(BuildContext c, PrakCourse course) =>
       _open(c, PraktikanDetailPraktikumPage(nav: this, course: course), false);
 
+  Future<void> detailPertemuan(
+    BuildContext c,
+    PrakCourse course,
+    PrakMeeting meeting,
+  ) =>
+      _open(
+        c,
+        PraktikanDetailPertemuanPage(nav: this, course: course, meeting: meeting),
+        false,
+      );
+
   Future<void> detailMateri(BuildContext c, {bool replace = false}) =>
       _open(c, PraktikanDetailMateriPage(nav: this), replace);
 
@@ -131,6 +144,10 @@ class PraktikanNav {
       if (c.mounted) labPush(c, PraktikanPilihMejaPage(nav: this));
     });
   }
+
+  /// Setelah booking: Pilih Meja diganti Meja Kamu (Kembali → Beranda).
+  Future<void> mejaKamu(BuildContext c, {bool replace = false}) =>
+      _open(c, PraktikanMejaKamuPage(nav: this), replace);
 
   Future<void> laporkanKerusakan(BuildContext c) =>
       _open(c, PraktikanLaporkanKerusakanPage(nav: this), false);

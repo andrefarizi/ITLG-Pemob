@@ -5,8 +5,12 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 
 /// Figma: "Laporkan Kerusakan Meja-Praktikan".
+///
+/// Dibuka dari halaman Meja Kamu. Meja terkunci sesuai meja yang dibooking,
+/// jadi laporan hanya bisa dibuat untuk alat/software di meja tersebut.
 class PraktikanLaporkanKerusakanPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanLaporkanKerusakanPage({super.key, required this.nav});
@@ -18,52 +22,30 @@ class PraktikanLaporkanKerusakanPage extends StatefulWidget {
 
 class _PraktikanLaporkanKerusakanPageState
     extends State<PraktikanLaporkanKerusakanPage> {
-  static const List<String> _labs = [
-    'Lab Komputer 1',
-    'Lab Komputer 2',
-    'Lab Jaringan 2',
-    'Lab Multimedia',
-  ];
+  static const String _lab = 'Lab Komputer 1';
 
   static const List<(String, String)> _kategori = [
-    ('desktop_device', 'PC'),
-    ('projector', 'Proyektor'),
-    ('air_conditioner', 'AC'),
+    ('desktop_device', 'PC / Monitor'),
+    ('chip', 'Keyboard & Mouse'),
     ('wifi', 'Jaringan'),
     ('code_tags', 'Software'),
   ];
 
-  late final TextEditingController _meja;
   final TextEditingController _deskripsi = TextEditingController();
-  int _lab = 0;
   int _kat = 0;
   bool _foto = false;
 
   PraktikanStore get _s => widget.nav.store;
 
-  @override
-  void initState() {
-    super.initState();
-    final n = _s.selectedDesk;
-    _meja = TextEditingController(
-        text: 'Meja $n • PC-${n.toString().padLeft(2, '0')}');
-  }
+  int get _meja => _s.bookedDesk ?? _s.selectedDesk;
+
+  String get _mejaLabel =>
+      'Meja $_meja • PC-${_meja.toString().padLeft(2, '0')}';
 
   @override
   void dispose() {
-    _meja.dispose();
     _deskripsi.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickLab() async {
-    final i = await prakShowPicker(
-      context,
-      title: 'Pilih Laboratorium',
-      options: _labs,
-      selected: _lab,
-    );
-    if (i != null && mounted) setState(() => _lab = i);
   }
 
   void _kirim() {
@@ -73,8 +55,8 @@ class _PraktikanLaporkanKerusakanPageState
       0,
       PrakReport(
         k.$1,
-        desc.isEmpty ? '${k.$2} bermasalah • ${_meja.text}' : desc,
-        '${_labs[_lab]} • 05 Okt',
+        desc.isEmpty ? '${k.$2} bermasalah • $_mejaLabel' : desc,
+        '$_lab • 05 Okt',
         0,
       ),
     );
@@ -116,20 +98,45 @@ class _PraktikanLaporkanKerusakanPageState
                   icon: 'triangle_alert', text: 'Detail Kendala'),
             ),
             PrakField(
-              label: 'Laboratorium',
-              child: PrakSelect(value: _labs[_lab], onTap: _pickLab),
+              label: 'Meja yang Kamu Booking',
+              child: LabColumn(
+                gap: 8,
+                children: [
+                  InnerShadowBox(
+                    radius: 12,
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$_lab • $_mejaLabel',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: labText(12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const LabIcon('lock_on',
+                            size: 16, color: ItlgColors.textSubtle),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'Terkunci sesuai meja yang kamu booking. Laporan hanya '
+                    'bisa dibuat untuk meja ini.',
+                    style: labText(12, c: LabColors.textGrey),
+                  ),
+                ],
+              ),
             ),
             PrakField(
-              label: 'Kategori Perangkat',
+              label: 'Jenis Kendala (Alat / Software)',
               child: PrakOptionChips(
                 options: _kategori,
                 index: _kat,
                 onChanged: (i) => setState(() => _kat = i),
               ),
-            ),
-            PrakField(
-              label: 'Nomor Meja / PC',
-              child: PrakInput(controller: _meja),
             ),
             PrakField(
               label: 'Deskripsi Kendala :',
@@ -159,21 +166,40 @@ class _PraktikanLaporkanKerusakanPageState
         ),
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabSectionTitle(
+            PrakSpaceRow(
+              left: const LabSectionTitle(
                   icon: 'wrench_outline', text: 'Laporan Saya'),
-              right: PrakSideLink('Lihat Semua'),
+              right: PrakSideLink(
+                'Lihat Semua',
+                onTap: () => labPush(
+                  context,
+                  LabRiwayatLaporanPage(
+                    reports: [
+                      for (final r in _s.reports)
+                        (r.icon, r.title, r.meta, r.status),
+                    ],
+                    onLogoTap: widget.nav.home,
+                  ),
+                ),
+              ),
             ),
             LabColumn(
               gap: 8,
               children: [
-                for (final r in _s.reports)
+                for (final r in _s.reports.take(3))
                   LabListItem(
                     leading: LabIconTile(r.icon),
                     title: r.title,
                     subtitle: r.meta,
                     titleSize: 12,
                     trailing: _chip(r.status),
+                    onTap: () => labShowReportDetail(
+                      context,
+                      icon: r.icon,
+                      title: r.title,
+                      meta: r.meta,
+                      status: r.status,
+                    ),
                   ),
               ],
             ),

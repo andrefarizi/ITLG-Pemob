@@ -52,13 +52,29 @@ class _PraktikanPengumumanPageState extends State<PraktikanPengumumanPage> {
           hint: 'Cari pengumuman...',
           controller: _search,
           onChanged: (v) => setState(() => _query = v),
+          filterActive: _tab != 0,
+          onFilter: () async {
+            final i = await prakShowPicker(
+              context,
+              title: 'Filter Kategori',
+              options: const ['Semua', 'Perubahan Jadwal', 'Umum'],
+              selected: _tab,
+            );
+            if (i != null && mounted) setState(() => _tab = i);
+          },
         ),
         LabTabs(
           labels: const ['Semua', 'Perubahan Jadwal', 'Umum'],
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
-        for (final a in items) _AnnouncementCard(item: a),
+        // Figma: semua pengumuman di dalam satu "Kartu Daftar".
+        if (items.isNotEmpty)
+          LabListCard(
+            children: [
+              for (final a in items) _AnnouncementCard(item: a),
+            ],
+          ),
         if (items.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -77,7 +93,8 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LabCard(
+    return LabRowCard(
+      gap: 16,
       children: [
         PrakSpaceRow(
           left: Align(

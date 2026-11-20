@@ -78,8 +78,10 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
                         builder: (_, __) => Positioned(
                           left: 24,
                           width: 152,
-                          // Figma: garis di tengah (y 100); bergerak 30–170.
-                          top: 30 + 140 * Curves.easeInOut.transform(_scan.value),
+                          // Figma: komponen "Garis Scan QR (Animasi)", pusat
+                          // garis bergerak y 30 <-> 170, Ease In and Out 1,6 s.
+                          top: 28.5 +
+                              140 * Curves.easeInOut.transform(_scan.value),
                           child: Container(
                             height: 3,
                             decoration: BoxDecoration(

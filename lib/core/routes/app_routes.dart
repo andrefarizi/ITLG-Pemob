@@ -26,8 +26,7 @@ class AppRoutes {
       case splash:
         return MaterialPageRoute(
           builder: (context) => SplashScreen(
-            onRoleSelected: (_) =>
-                Navigator.of(context).pushReplacementNamed(login),
+            onStart: () => Navigator.of(context).pushReplacementNamed(login),
           ),
         );
       case notifikasi:
