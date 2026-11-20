@@ -68,7 +68,13 @@ class _PraktikanPengumumanPageState extends State<PraktikanPengumumanPage> {
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
-        for (final a in items) _AnnouncementCard(item: a),
+        // Figma: semua pengumuman di dalam satu "Kartu Daftar".
+        if (items.isNotEmpty)
+          LabListCard(
+            children: [
+              for (final a in items) _AnnouncementCard(item: a),
+            ],
+          ),
         if (items.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -87,7 +93,8 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LabCard(
+    return LabRowCard(
+      gap: 16,
       children: [
         PrakSpaceRow(
           left: Align(

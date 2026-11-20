@@ -83,8 +83,8 @@ class _PraktikanDetailAbsensiPageState
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
-        LabColumn(
-          gap: 16,
+        // Figma: semua pertemuan di dalam satu "Kartu Daftar".
+        LabListCard(
           children: [
             for (final m in items)
               _MeetingCard(meeting: m, onIzin: () => _ajukanIzin(m)),
@@ -124,7 +124,7 @@ class _MeetingCard extends StatelessWidget {
     switch (meeting.status) {
       case PrakAttend.upcoming:
         return LabOutlineButton(
-          icon: 'file',
+          icon: 'h_file',
           label: 'Ajukan Izin Pertemuan ${meeting.number}',
           onTap: onIzin,
         );
@@ -143,20 +143,28 @@ class _MeetingCard extends StatelessWidget {
                     style: labText(12, w: kBold)),
               ),
               const SizedBox(width: 8),
-              InnerShadowBox(
-                radius: 12,
-                color: ItlgColors.surfaceDark,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const LabIcon('attach',
-                        size: 12, color: ItlgColors.primary),
-                    const SizedBox(width: 6),
-                    Text(meeting.izinFile ?? '',
-                        style: labText(11, w: kMedium)),
-                  ],
+              Flexible(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: ItlgColors.surfaceDark,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const LabIcon('attach',
+                          size: 12, color: ItlgColors.primary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(meeting.izinFile ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: labText(11, w: kMedium)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -174,7 +182,7 @@ class _MeetingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final extra = _extra();
-    return LabCard(
+    return LabRowCard(
       gap: 12,
       children: [
         Row(

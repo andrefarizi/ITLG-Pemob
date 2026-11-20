@@ -49,20 +49,24 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
         _presensiCard(),
         _pengumuman(),
         _jadwalHeader(),
-        if (_day == 0) ...[
-          _ScheduleCard(
-            course: _store.mobile,
-            module: 'Flutter State Management...',
-            onTap: () => _nav.detailPraktikum(context, _store.mobile),
-            onMateri: () => _nav.detailMateri(context),
-          ),
-          _ScheduleCard(
-            course: _store.desain,
-            module: 'Figma Management...',
-            onTap: () => _nav.detailPraktikum(context, _store.desain),
-            onMateri: () => _nav.detailMateri(context),
-          ),
-        ] else
+        if (_day == 0)
+          _TodayCard(
+            items: [
+              _TodayItem(
+                start: '08:00',
+                end: '09:40',
+                course: _store.mobile,
+                onTap: () => _nav.detailPraktikum(context, _store.mobile),
+              ),
+              _TodayItem(
+                start: '13:00',
+                end: '14:40',
+                course: _store.desain,
+                onTap: () => _nav.detailPraktikum(context, _store.desain),
+              ),
+            ],
+          )
+        else
           _emptyDay(),
       ],
     );
@@ -71,7 +75,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
   // Kartu sapaan (373 x 92).
   Widget _greeting() {
     return Container(
-      height: 92,
+      constraints: const BoxConstraints(minHeight: 92),
       padding: const EdgeInsets.fromLTRB(16, 12, 26, 15),
       decoration: BoxDecoration(
         color: ItlgColors.surfaceDark,
@@ -125,12 +129,12 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
               width: 40,
               height: 40,
               alignment: Alignment.center,
+              // Lonceng datar (tanpa bayangan) sesuai Figma.
               decoration: const BoxDecoration(
                 color: ItlgColors.primary,
                 shape: BoxShape.circle,
-                boxShadow: ItlgShadows.outline,
               ),
-              child: const LabIcon('m_bell', size: 16.7, color: Colors.white),
+              child: const LabIcon('m_bell', size: 18, color: Colors.white),
             ),
           ),
         ],
@@ -267,7 +271,6 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
             decoration: BoxDecoration(
               color: ItlgColors.surfaceDark,
               borderRadius: BorderRadius.circular(11),
-              boxShadow: PrakShadows.neu5,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -369,99 +372,96 @@ class _DayButton extends StatelessWidget {
   }
 }
 
-/// Kartu jadwal praktikum (373 x 208).
-class _ScheduleCard extends StatelessWidget {
+class _TodayItem {
+  final String start;
+  final String end;
   final PrakCourse course;
-  final String module;
   final VoidCallback onTap;
-  final VoidCallback onMateri;
-
-  const _ScheduleCard({
+  const _TodayItem({
+    required this.start,
+    required this.end,
     required this.course,
-    required this.module,
     required this.onTap,
-    required this.onMateri,
   });
+}
+
+/// Figma: "Kartu Jadwal Hari Ini" — satu kartu abu-abu (padding 4/16) berisi
+/// baris jadwal dengan garis pemisah. Ketuk baris → Detail Praktikum.
+class _TodayCard extends StatelessWidget {
+  final List<_TodayItem> items;
+  const _TodayCard({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: ItlgColors.surfaceDark,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: ItlgShadows.outline,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < items.length; i++)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: i < items.length - 1
+                    ? const Border(bottom: BorderSide(color: LabColors.line))
+                    : null,
+              ),
+              child: _TodayRow(item: items[i]),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TodayRow extends StatelessWidget {
+  final _TodayItem item;
+  const _TodayRow({required this.item});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(top: 22, bottom: 15),
-        decoration: BoxDecoration(
-          color: ItlgColors.surfaceDark,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: ItlgShadows.outline,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      onTap: item.onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
+            SizedBox(
+              width: 48,
+              child: LabColumn(
+                gap: 2,
                 children: [
-                  const PrakBookTile(),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('Praktikum \n${course.name}',
-                        style: labText(16, w: kBold, c: Colors.black)),
-                  ),
+                  Text(item.start,
+                      style: labText(14, w: kBold, c: ItlgColors.primary)),
+                  Text(item.end, style: labText(12, c: LabColors.textGrey)),
                 ],
               ),
             ),
-            const SizedBox(height: 19),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: PrakScheduleMeta(
-                jadwal: 'Senin • 08:00–09:40 WIB',
-                room: course.room,
-                asisten: course.asisten,
+            const SizedBox(width: 14),
+            Container(width: 1, height: 36, color: LabColors.line),
+            const SizedBox(width: 14),
+            Expanded(
+              child: LabColumn(
+                gap: 4,
+                children: [
+                  Text(item.course.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(14, w: kBold)),
+                  Text('${item.course.room} • ${item.course.asisten}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(12, c: LabColors.textGrey)),
+                ],
               ),
             ),
-            const SizedBox(height: 17),
-            Padding(
-              padding: const EdgeInsets.only(left: 18, right: 21),
-              child: InnerShadowBox(
-                radius: 12,
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(12, 12.5, 20, 12.5),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Modul 4\n',
-                              style: labText(12,
-                                  w: kBold, c: ItlgColors.textMuted),
-                            ),
-                            TextSpan(
-                              text: module,
-                              style: labText(12,
-                                      w: kBold, c: PrakColors.faded)
-                                  .copyWith(fontStyle: FontStyle.italic),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onMateri,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text('Lihat Materi',
-                            style: labText(12, c: ItlgColors.primary)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            const SizedBox(width: 14),
+            const LabIcon('chevron_right', size: 16, color: LabColors.divider),
           ],
         ),
       ),

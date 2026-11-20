@@ -10,12 +10,14 @@ class LaboranBerandaPage extends StatelessWidget {
   final ValueChanged<int> onOpenTab;
   final VoidCallback onOpenPresensi;
   final VoidCallback onOpenNotifikasi;
+  final VoidCallback? onOpenDenahMeja;
 
   const LaboranBerandaPage({
     super.key,
     required this.onOpenTab,
     required this.onOpenPresensi,
     required this.onOpenNotifikasi,
+    this.onOpenDenahMeja,
   });
 
   @override
@@ -42,7 +44,7 @@ class LaboranBerandaPage extends StatelessWidget {
               verifiedAt: '07:52',
               attendance: '21 / 24',
               fraction: 296 / 338,
-              onTap: onOpenPresensi,
+              onTap: onOpenDenahMeja ?? onOpenPresensi,
             ),
             _LabCard(
               name: 'Lab Jaringan 2',

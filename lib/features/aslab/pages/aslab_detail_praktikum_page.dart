@@ -90,16 +90,27 @@ class _MeetingCard extends StatelessWidget {
         .toList();
     return LabCard(
       children: [
-        LabMeta(icon: 'calendar', text: meeting.date),
-        Row(
-          children: [
-            PrakNumberTile('${meeting.number}'),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Text(meeting.title,
-                  style: labText(16, w: kBold, c: Colors.black)),
-            ),
-          ],
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => nav.detailPertemuan(context, meeting),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LabMeta(icon: 'calendar', text: meeting.date),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  PrakNumberTile('${meeting.number}'),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Text(meeting.title,
+                        style: labText(16, w: kBold, c: Colors.black)),
+                  ),
+                  const LabIcon('arrow_right', size: 16, color: LabColors.filterIcon),
+                ],
+              ),
+            ],
+          ),
         ),
         for (final it in items) _ItemBox(item: it, nav: nav),
       ],

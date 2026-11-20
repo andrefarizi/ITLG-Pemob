@@ -60,7 +60,7 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
     return LabTabBody(
       children: [
         Container(
-          height: 89,
+          constraints: const BoxConstraints(minHeight: 89),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: ItlgColors.surfaceDark,
@@ -102,8 +102,7 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
                   decoration: BoxDecoration(
                     color: LabColors.tile,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: LabShadows.neu,
-                  ),
+                                      ),
                   child: const LabIcon('pencil',
                       size: 18, color: ItlgColors.primary),
                 ),
@@ -170,7 +169,7 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
                   onTap: _openChangePassword,
                 ),
                 _SettingItem(
-                  icon: 'question',
+                  icon: 'h_help',
                   title: 'Pusat Bantuan Lab',
                   subtitle: 'Gedung Teknologi Informasi • ITLG',
                   trailing: const LabIcon('chevron_right',

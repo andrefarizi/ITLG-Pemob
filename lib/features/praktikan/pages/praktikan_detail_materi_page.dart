@@ -89,8 +89,14 @@ class PraktikanDetailMateriPage extends StatelessWidget {
               right: LabPrimaryButton(
                 icon: 'download',
                 label: 'Unduh Materi',
-                onTap: () => labToast(
-                    context, 'Panduan Penggunaan Figma.pdf diunduh'),
+                // Figma: Unduh Materi → "Pop up Materi Diunduh".
+                onTap: () => labShowResult(
+                  context,
+                  icon: 'download',
+                  title: 'Materi Diunduh',
+                  message: 'Berkas materi tersimpan di folder Unduhan '
+                      'perangkat anda.',
+                ),
               ),
             ),
           ],

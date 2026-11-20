@@ -74,7 +74,7 @@ class PrakTabBody extends StatelessWidget {
     required this.children,
     this.left = 16,
     this.top = 20,
-    this.gap = 24,
+    this.gap = kLabSectionGap,
   });
 
   @override
@@ -170,7 +170,6 @@ class PrakNumberTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: ItlgColors.primary,
         borderRadius: BorderRadius.circular(9),
-        boxShadow: LabShadows.neu,
       ),
       child: Text(number, style: labText(16, w: kBold, c: Colors.white)),
     );
@@ -192,7 +191,6 @@ class PrakBookTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(9.1),
-        boxShadow: PrakShadows.tile,
       ),
       child: child ??
           const LabIcon('book_solid', size: 27.4, color: ItlgColors.primaryDark),
@@ -200,7 +198,7 @@ class PrakBookTile extends StatelessWidget {
   }
 }
 
-/// Kotak ikon 34 px (#F5F5F5, Outline Shadow) untuk berkas & kuis.
+/// Kotak ikon 34 px (#F5F5F5, datar) untuk berkas & kuis.
 class PrakFileIcon extends StatelessWidget {
   final String icon;
   final Color color;
@@ -214,7 +212,7 @@ class PrakFileIcon extends StatelessWidget {
     this.color = ItlgColors.primary,
     this.iconSize = 18,
     this.radius = 9,
-    this.shadows = ItlgShadows.outline,
+    this.shadows = const [],
   });
 
   @override
@@ -270,17 +268,59 @@ class PrakLiveChip24 extends StatelessWidget {
       height: 24,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: LabColors.greenBg,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: ItlgShadows.outline,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const LabIcon('radio_btn_active', size: 14, color: LabColors.green),
+          const LabRingDot(color: LabColors.green),
           const SizedBox(width: 10),
-          Text(text, style: labText(12, w: kBold, c: LabColors.green)),
+          Flexible(
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labText(12, w: kBold, c: LabColors.green)),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Chip kecil 19 px (padding 3/10, SemiBold 11): kuning lembut untuk yang
+/// belum selesai, hijau muda untuk yang sudah selesai.
+class PrakSoftChip extends StatelessWidget {
+  final String text;
+  final Color bg;
+  final Color fg;
+
+  const PrakSoftChip(this.text,
+      {super.key, required this.bg, required this.fg});
+
+  const PrakSoftChip.warn(this.text, {super.key})
+      : bg = LabColors.warnSoftBg,
+        fg = LabColors.warnText;
+
+  const PrakSoftChip.done(this.text, {super.key})
+      : bg = LabColors.greenBg,
+        fg = LabColors.green;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 19,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Center(
+        widthFactor: 1,
+        child: Text(text,
+            maxLines: 1,
+            softWrap: false,
+            style: labText(11, w: kSemiBold, c: fg)),
       ),
     );
   }
@@ -311,7 +351,7 @@ class PrakWarnChipWide extends StatelessWidget {
   }
 }
 
-/// Pill abu-abu timbul untuk timer kuis (ikon & teks merah).
+/// Pill abu-abu datar untuk timer kuis (ikon & teks merah).
 class PrakTimerPill extends StatelessWidget {
   final String text;
   const PrakTimerPill(this.text, {super.key});
@@ -324,7 +364,6 @@ class PrakTimerPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: ItlgColors.surfaceDark,
         borderRadius: BorderRadius.circular(11),
-        boxShadow: LabShadows.neu,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1141,7 +1180,8 @@ class PrakSearchField extends StatelessWidget {
             decoration: BoxDecoration(
               color: LabColors.tile,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: compact ? PrakShadows.neu5 : LabShadows.neu,
+              // Daftar Praktikum (compact): tombol filter datar sesuai Figma.
+              boxShadow: compact ? const [] : LabShadows.neu,
             ),
             child: LabIcon(compact ? 'm_filter' : 'settings_horizontal',
                 size: 15,

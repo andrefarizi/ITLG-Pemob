@@ -6,6 +6,7 @@ import '../auth/auth_controller.dart';
 import 'laboran_store.dart';
 import 'pages/laboran_approval_page.dart';
 import 'pages/laboran_beranda_page.dart';
+import 'pages/laboran_denah_meja_page.dart';
 import 'pages/laboran_detail_tiket_page.dart';
 import 'pages/laboran_inventaris_page.dart';
 import 'pages/laboran_notifikasi_page.dart';
@@ -50,6 +51,17 @@ class _LaboranShellState extends State<LaboranShell> {
   void _openTabFromSubPage(int tab) {
     Navigator.of(context).popUntil((route) => route.isFirst);
     _openTab(tab);
+  }
+
+  void _openDenahMeja() {
+    labPush(
+      context,
+      LaboranDenahMejaPage(
+        store: _store,
+        onLogoTap: () => _openTabFromSubPage(LaboranShell.tabBeranda),
+        onOpenTiketTab: () => _openTabFromSubPage(LaboranShell.tabTiket),
+      ),
+    );
   }
 
   void _openPresensi() {
@@ -124,6 +136,7 @@ class _LaboranShellState extends State<LaboranShell> {
           onOpenTab: _openTab,
           onOpenPresensi: _openPresensi,
           onOpenNotifikasi: _openNotifikasi,
+          onOpenDenahMeja: _openDenahMeja,
         );
     }
   }
