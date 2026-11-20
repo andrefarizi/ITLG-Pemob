@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Brand colors
-  static const Color primary = Color(0xFF1E3A8A); // Deep Navy
-  static const Color primaryLight = Color(0xFF2563EB); // Royal Blue
+  static const Color primary = Color(0xFF850909); // ITLG Maroon / Red
+  static const Color primaryLight = Color(0xFFA51B1B); // Lighter Maroon
   static const Color background = Color(0xFFF8FAFC); // Slate 50
   static const Color surface = Colors.white;
 

@@ -1079,7 +1079,15 @@ class _InputField extends StatelessWidget {
                   height: 1.3,
                   color: _GyroColors.text,
                 ),
-                decoration: const InputDecoration.collapsed(
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
                   hintText: 'Tanya sesuatu ke Gyro...',
                   hintStyle: TextStyle(
                     fontFamily: _GyroColors.font,

@@ -29,19 +29,31 @@ class AuthInputField extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
+            fontFamily: 'Montserrat',
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           obscureText: isPassword,
           keyboardType: keyboardType,
+          cursorColor: AppColors.primary,
+          style: const TextStyle(
+            fontFamily: 'Montserrat',
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            hintStyle: const TextStyle(
+              fontFamily: 'Montserrat',
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
             prefixIcon: Icon(prefixIcon, color: AppColors.textSecondary, size: 20),
             suffixIcon: suffixIcon,
           ),

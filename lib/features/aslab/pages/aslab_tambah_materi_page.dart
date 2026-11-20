@@ -388,10 +388,20 @@ class _OptionRow extends StatelessWidget {
             child: TextField(
               controller: controller,
               cursorColor: ItlgColors.primary,
-              style: labText(12),
-              decoration: InputDecoration.collapsed(
+              cursorWidth: 2.0,
+              cursorRadius: const Radius.circular(2),
+              style: labText(14),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
                 hintText: 'Jawaban $letter',
-                hintStyle: labText(12, c: ItlgColors.textSubtle),
+                hintStyle: labText(14, c: ItlgColors.textSubtle),
               ),
             ),
           ),
