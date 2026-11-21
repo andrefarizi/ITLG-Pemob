@@ -6,7 +6,7 @@ import '../../../core/services/location_service.dart';
 /// Widget Google Maps nyata untuk presensi.
 /// Menampilkan:
 /// - Titik Lab Komputer 1 (Merah) dengan radius 50m
-/// - Titik Lokasi Anda (Hijau jika di dalam, Oranye/Biru jika di luar area, misal Fore Coffee Dr. Mansyur)
+/// - Titik Lokasi Perangkat Anda yang didapat langsung dari sensor GPS
 class PrakGoogleMap extends StatefulWidget {
   final bool inside;
   final LatLng? userPos;
@@ -42,28 +42,43 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
 
   void _moveCamera() {
     if (_mapController == null) return;
-    final user = widget.userPos ?? (widget.inside
-        ? const LatLng(3.56218, 98.66012)
-        : const LatLng(3.5678, 98.6552));
+    final user = widget.userPos;
 
-    if (widget.inside) {
+    if (widget.inside || user == null) {
       _mapController!.animateCamera(
         CameraUpdate.newCameraPosition(
-          const CameraPosition(
-            target: _labCoords,
+          CameraPosition(
+            target: user ?? _labCoords,
             zoom: 18.0,
           ),
         ),
       );
     } else {
-      // Tampilkan area antara Lab Komputer dan posisi user (misal Fore Coffee Mansyur)
+      // Tampilkan area yang mencakup posisi pengguna dan titik lab
       final midLat = (_labCoords.latitude + user.latitude) / 2;
       final midLng = (_labCoords.longitude + user.longitude) / 2;
+      final dist = LocationService.distanceInMeters(
+        user.latitude,
+        user.longitude,
+        _labCoords.latitude,
+        _labCoords.longitude,
+      );
+
+      // Sesuaikan zoom level berdasarkan jarak
+      double zoom = 16.0;
+      if (dist > 5000) {
+        zoom = 12.0;
+      } else if (dist > 2000) {
+        zoom = 13.5;
+      } else if (dist > 500) {
+        zoom = 15.0;
+      }
+
       _mapController!.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
             target: LatLng(midLat, midLng),
-            zoom: 15.5,
+            zoom: zoom,
           ),
         ),
       );
@@ -72,9 +87,7 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.userPos ?? (widget.inside
-        ? const LatLng(3.56218, 98.66012)
-        : const LatLng(3.5678, 98.6552));
+    final user = widget.userPos;
 
     final circles = <Circle>{
       Circle(
@@ -98,21 +111,24 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
         ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       ),
-      // Marker Posisi Anda
-      Marker(
-        markerId: const MarkerId('user_marker'),
-        position: user,
-        infoWindow: InfoWindow(
-          title: 'Lokasi Anda Saat Ini',
-          snippet: widget.inside
-              ? 'Di Dalam Area Lab (12 m)'
-              : 'Di Luar Area Lab (Fore Coffee Mansyur)',
+      // Marker Posisi Perangkat Pengguna
+      if (user != null)
+        Marker(
+          markerId: const MarkerId('user_marker'),
+          position: user,
+          infoWindow: InfoWindow(
+            title: 'Lokasi Perangkat Anda',
+            snippet: widget.inside
+                ? 'Di Dalam Area Lab (Presensi Diizinkan)'
+                : 'Di Luar Area Lab',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            widget.inside ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueAzure,
+          ),
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          widget.inside ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueAzure,
-        ),
-      ),
     };
+
+    final initialTarget = user ?? _labCoords;
 
     return AspectRatio(
       aspectRatio: 338 / 180,
@@ -120,15 +136,13 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
         borderRadius: BorderRadius.circular(16),
         child: GoogleMap(
           initialCameraPosition: CameraPosition(
-            target: widget.inside
-                ? _labCoords
-                : LatLng((_labCoords.latitude + user.latitude) / 2, (_labCoords.longitude + user.longitude) / 2),
+            target: initialTarget,
             zoom: widget.inside ? 18.0 : 15.5,
           ),
           circles: circles,
           markers: markers,
           myLocationEnabled: true,
-          myLocationButtonEnabled: false,
+          myLocationButtonEnabled: true,
           zoomControlsEnabled: false,
           mapToolbarEnabled: false,
           compassEnabled: true,

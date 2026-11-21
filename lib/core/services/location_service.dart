@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../config/app_config.dart';
+
 /// Koordinat Lab Komputer 1, Gedung C Lantai 2, Fasilkom-TI USU, Medan.
 const double kLabLat = 3.5621;
 const double kLabLng = 98.6600;
@@ -11,48 +13,62 @@ const double kLabLng = 98.6600;
 /// Radius area presensi dalam meter.
 const double kLabRadius = 50.0;
 
-/// Service GPS dan Geocoding untuk presensi akurat.
+/// Service GPS dan Geocoding perangkat aktual.
 class LocationService {
   static final LocationService instance = LocationService._();
   LocationService._();
 
-  static const String _mapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY';
+  static const String _mapsApiKey = AppConfig.googleMapsApiKey;
 
-  /// Minta permission lokasi dan dapatkan posisi saat ini dengan akurasi terbaik.
+  /// Mengambil posisi GPS aktual dari perangkat dengan akurasi tertinggi.
   Future<Position?> getCurrentPosition() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return null;
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return null;
-    }
-    if (permission == LocationPermission.deniedForever) return null;
-
-    // 1. Coba ambil posisi akurasi tinggi terkini
     try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('[LocationService] Layanan lokasi (GPS) tidak aktif.');
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('[LocationService] Izin lokasi ditolak oleh pengguna.');
+          return null;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('[LocationService] Izin lokasi ditolak permanen.');
+        return null;
+      }
+
+      // 1. Ambil posisi GPS terbaru dengan akurasi tinggi
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: AndroidSettings(
           accuracy: LocationAccuracy.best,
           distanceFilter: 0,
           forceLocationManager: false,
           intervalDuration: const Duration(seconds: 1),
-          timeLimit: const Duration(seconds: 7),
+          timeLimit: const Duration(seconds: 8),
         ),
       );
+      debugPrint('[LocationService] GPS aktual: ${pos.latitude}, ${pos.longitude} (Akurasi: ±${pos.accuracy}m)');
       return pos;
-    } catch (_) {
-      // 2. Fallback cepat ke last known position jika timeout
+    } catch (e) {
+      debugPrint('[LocationService] getCurrentPosition error: $e. Fallback ke lastKnownPosition...');
       try {
-        return await Geolocator.getLastKnownPosition();
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null) {
+          debugPrint('[LocationService] Menggunakan lastKnownPosition: ${last.latitude}, ${last.longitude}');
+        }
+        return last;
       } catch (_) {
         return null;
       }
     }
   }
 
-  /// Hitung jarak (meter) antara dua titik koordinat menggunakan Haversine.
+  /// Hitung jarak (meter) antara dua titik koordinat menggunakan formula Haversine.
   static double distanceInMeters(
       double lat1, double lng1, double lat2, double lng2) {
     const r = 6371000.0; // radius bumi meter
@@ -66,7 +82,7 @@ class LocationService {
 
   static double _rad(double deg) => deg * pi / 180;
 
-  /// Periksa apakah posisi ada di dalam radius lab (<= 50m).
+  /// Periksa apakah posisi berada dalam radius 50 meter dari lab.
   static bool isInsideLab(Position pos) {
     final d = distanceInMeters(pos.latitude, pos.longitude, kLabLat, kLabLng);
     return d <= kLabRadius;
@@ -76,10 +92,10 @@ class LocationService {
   static double distanceToLab(Position pos) =>
       distanceInMeters(pos.latitude, pos.longitude, kLabLat, kLabLng);
 
-  /// Mengambil nama jalan dan detail alamat akurat berdasarkan koordinat GPS.
+  /// Reverse Geocoding real-time menggunakan Google Maps Geocoding API & fallback Nominatim.
   Future<({String title, String detail})> getAddress(
       double lat, double lng) async {
-    // Jika berada dalam radius 50m dari Lab Komputer 1
+    // 1. Jika berada dalam radius 50m dari Lab Komputer 1
     final dist = distanceInMeters(lat, lng, kLabLat, kLabLng);
     if (dist <= kLabRadius) {
       return (
@@ -88,7 +104,7 @@ class LocationService {
       );
     }
 
-    // Coba Reverse Geocoding via Google Geocoding API resmi
+    // 2. Real-time Geocoding via Google Maps Geocoding API
     try {
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$_mapsApiKey&language=id',
@@ -108,42 +124,89 @@ class LocationService {
           final formatted = first['formatted_address'] as String? ?? '';
 
           String street = '';
+          String subdistrict = '';
+          String district = '';
+          String city = '';
           final components = first['address_components'] as List? ?? [];
           for (final c in components) {
             final types = (c['types'] as List).cast<String>();
-            if (types.contains('route') ||
-                types.contains('point_of_interest') ||
-                types.contains('premise')) {
+            if (types.contains('route') || types.contains('point_of_interest')) {
               street = c['long_name'] as String;
-              break;
+            }
+            if (types.contains('administrative_area_level_4') ||
+                types.contains('sublocality')) {
+              subdistrict = c['long_name'] as String;
+            }
+            if (types.contains('administrative_area_level_3')) {
+              district = c['long_name'] as String;
+            }
+            if (types.contains('administrative_area_level_2')) {
+              city = c['long_name'] as String;
             }
           }
 
-          final title = street.isNotEmpty
-              ? street
-              : 'Jl. Dr. Mansyur, Padang Bulan';
-          final detail = formatted.isNotEmpty
-              ? formatted
-              : 'Kec. Medan Baru, Kota Medan, Sumatera Utara';
-          return (title: title, detail: detail);
+          final title = street.isNotEmpty ? street : 'Lokasi Terdeteksi';
+          final details = <String>[];
+          if (subdistrict.isNotEmpty) details.add(subdistrict);
+          if (district.isNotEmpty) details.add(district);
+          if (city.isNotEmpty) details.add(city);
+          final detailText =
+              details.isNotEmpty ? details.join(', ') : formatted;
+
+          debugPrint('[LocationService] Google Geocoded: $title • $detailText');
+          return (title: title, detail: detailText);
         }
       }
     } catch (e) {
-      debugPrint('[LocationService] Geocoding API offline/timeout: $e');
+      debugPrint('[LocationService] Google Geocoding error: $e');
     }
 
-    // Fallback cerdas berdasarkan zona wilayah
-    // Wilayah Jl. Dr. Mansyur (Fore Coffee Mansyur & sekitar kampus USU)
-    if (lat >= 3.564 && lat <= 3.575 && lng >= 98.650 && lng <= 98.665) {
-      return (
-        title: 'Jl. Dr. Mansyur, Padang Bulan',
-        detail: 'Fore Coffee, Jl. Dr. Mansyur, Medan',
+    // 3. Fallback ke Nominatim OpenStreetMap
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json&accept-language=id',
       );
+      final client = HttpClient();
+      final request = await client.getUrl(uri);
+      request.headers.set('User-Agent', 'ITLGMobileApp/1.0');
+      final response =
+          await request.close().timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final body = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        final address = data['address'] as Map<String, dynamic>?;
+
+        if (address != null) {
+          final road = address['road'] as String? ??
+              address['amenity'] as String? ??
+              address['suburb'] as String? ??
+              'Lokasi Terdeteksi';
+
+          final sub = address['suburb'] as String?;
+          final district = address['city_district'] as String?;
+          final city = address['city'] as String? ?? 'Kota Medan';
+          final state = address['state'] as String? ?? 'Sumatera Utara';
+
+          final details = <String>[];
+          if (sub != null && sub != road) details.add(sub);
+          if (district != null) details.add(district);
+          details.add(city);
+          details.add(state);
+
+          final detailText = details.join(', ');
+          debugPrint('[LocationService] Nominatim Geocoded: $road • $detailText');
+          return (title: road, detail: detailText);
+        }
+      }
+    } catch (e) {
+      debugPrint('[LocationService] Nominatim error: $e');
     }
 
+    // 4. Fallback jika offline
     return (
-      title: 'Jl. Dr. Mansyur, Padang Bulan',
-      detail: 'Kec. Medan Baru, Kota Medan, Sumatera Utara',
+      title: 'Lokasi Perangkat Anda',
+      detail: 'Koordinat: ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}',
     );
   }
 }

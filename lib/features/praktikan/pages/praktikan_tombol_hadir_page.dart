@@ -9,8 +9,7 @@ import '../widgets/praktikan_ui.dart';
 import '../widgets/prak_google_map.dart';
 
 /// Figma: "Tombol Hadir & Lokasi-Praktikan" dan "(Di Luar Area)".
-/// Mengambil lokasi GPS aktual pengguna secara akurat (misal: Fore Coffee Dr. Mansyur)
-/// dan menghitung jarak aktual ke Lab Komputer 1.
+/// Mengambil lokasi GPS aktual perangkat secara presisi menggunakan sensor GPS perangkat bawaan.
 class PraktikanTombolHadirPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanTombolHadirPage({super.key, required this.nav});
@@ -23,12 +22,12 @@ class PraktikanTombolHadirPage extends StatefulWidget {
 class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
   bool _inside = false;
   LatLng? _userPos;
-  double _distance = 820;
-  double _accuracy = 5;
-  String _timeText = '08:03 WIB';
-  bool _loading = false;
-  String _addressTitle = 'Jl. Dr. Mansyur, Padang Bulan';
-  String _addressDetail = 'Fore Coffee, Jl. Dr. Mansyur, Medan';
+  double? _distance;
+  double? _accuracy;
+  String _timeText = '--:-- WIB';
+  bool _loading = true;
+  String _addressTitle = 'Mendeteksi lokasi...';
+  String _addressDetail = 'Mengambil data GPS perangkat';
 
   @override
   void initState() {
@@ -66,6 +65,7 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
         _loading = false;
       });
 
+      if (!mounted) return;
       if (showToast) {
         labToast(
           context,
@@ -75,18 +75,15 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
         );
       }
     } else {
-      // Fallback jika sensor GPS belum dapat sinyal
+      // Jika GPS perangkat tidak aktif / izin belum diberikan
       setState(() {
-        _inside = false;
-        _userPos = const LatLng(3.5684, 98.6548);
-        _distance = 820;
-        _accuracy = 5;
-        _addressTitle = 'Jl. Dr. Mansyur, Padang Bulan';
-        _addressDetail = 'Fore Coffee, Jl. Dr. Mansyur, Medan';
         _loading = false;
+        _inside = false;
+        _addressTitle = 'GPS Tidak Terdeteksi';
+        _addressDetail = 'Aktifkan GPS perangkat dan izinkan akses lokasi';
       });
       if (showToast) {
-        labToast(context, 'Memperbarui lokasi GPS...');
+        labToast(context, 'Gagal mengambil GPS. Pastikan lokasi perangkat aktif.');
       }
     }
   }
@@ -95,15 +92,24 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
     if (_userPos != null) {
       return '${_userPos!.latitude.toStringAsFixed(4)}, ${_userPos!.longitude.toStringAsFixed(4)}';
     }
-    return _inside ? '3.5621, 98.6600' : '3.5684, 98.6548';
+    return 'Mencari koordinat...';
   }
 
   String get _distanceText {
-    return '${_distance.toStringAsFixed(0)} meter';
+    if (_distance != null) {
+      if (_distance! >= 1000) {
+        return '${(_distance! / 1000).toStringAsFixed(1)} km';
+      }
+      return '${_distance!.toStringAsFixed(0)} meter';
+    }
+    return '-- meter';
   }
 
   String get _accuracyText {
-    return '± ${_accuracy.toStringAsFixed(0)} meter';
+    if (_accuracy != null) {
+      return '± ${_accuracy!.toStringAsFixed(0)} meter';
+    }
+    return '--';
   }
 
   @override
@@ -119,7 +125,7 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
           subtitle:
               'Pastikan anda berada di area laboratorium, lalu tekan Saya Hadir',
         ),
-        if (!_inside)
+        if (!_loading && !_inside)
           const PrakNotice.danger(
             icon: 'triangle_alert',
             text: 'Anda berada di luar area lab. Dekati Lab Komputer 1 hingga '
@@ -130,11 +136,13 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
             PrakSpaceRow(
               left: const LabSectionTitle(
                   icon: 'location', text: 'Verifikasi Lokasi'),
-              right: _inside
-                  ? const LabChip.live('Di Dalam Area')
-                  : const LabChip.danger('Di Luar Area'),
+              right: _loading
+                  ? const LabChip.idle('Mendeteksi...')
+                  : (_inside
+                      ? const LabChip.live('Di Dalam Area')
+                      : const LabChip.danger('Di Luar Area')),
             ),
-            // ── Google Maps Nyata dengan Marker Posisi Anda & Radius 50m ─
+            // ── Google Maps Nyata dengan Lokasi GPS Perangkat Aktual ─────
             PrakGoogleMap(inside: _inside, userPos: _userPos),
             LabInsetBox(
               child: LabColumn(
@@ -217,7 +225,7 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
             ),
           ],
         ),
-        if (_inside) ...[
+        if (!_loading && _inside) ...[
           const LabListItem(
             leading: LabIconTile('book_open'),
             title: 'Praktikum Pemrograman Mobile',

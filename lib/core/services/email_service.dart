@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 
+import '../config/app_config.dart';
+
 /// Service untuk pengiriman email OTP via SMTP Gmail.
 /// OTP disimpan in-memory selama sesi aktif (60 menit).
 class EmailService {
@@ -10,10 +12,10 @@ class EmailService {
   EmailService._internal();
 
   // ── SMTP credentials ──────────────────────────────────────────────────────
-  static const String _smtpHost = 'smtp.gmail.com';
-  static const int _smtpPort = 465;
-  static const String _smtpUser = '0andre.alfa.com@gmail.com';
-  static const String _smtpPass = 'YOUR_SMTP_APP_PASSWORD';
+  static const String _smtpHost = AppConfig.smtpHost;
+  static const int _smtpPort = AppConfig.smtpPort;
+  static const String _smtpUser = AppConfig.smtpUser;
+  static const String _smtpPass = AppConfig.smtpPass;
   static const String _fromName = 'ITLG Mobile';
 
   // ── OTP store (in-memory) ─────────────────────────────────────────────────
