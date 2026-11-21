@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
+import '../auth/auth_controller.dart';
+import '../../core/utils/constants.dart';
 
-/// Data profil yang bisa diubah dari halaman "Ubah Profil" (tersimpan di
-/// memori saja, belum terhubung ke backend). Satu objek per peran sehingga
-/// perubahan langsung terlihat di halaman Profil peran tersebut.
+/// Data profil yang bisa diubah dari halaman "Ubah Profil".
+/// Terhubung langsung dengan [AuthController.currentProfile] dan Supabase.
 class ProfilData extends ChangeNotifier {
   String _name;
   String _email;
@@ -26,46 +27,99 @@ class ProfilData extends ChangeNotifier {
   String get email => _email;
   String get phone => _phone;
 
-  void update({
+  Future<void> update({
     required String name,
     required String email,
     required String phone,
-  }) {
+  }) async {
+    await AuthController.instance.updateProfile(
+      fullName: name,
+      email: email,
+      phone: phone,
+    );
     _name = name;
     _email = email;
     _phone = phone;
     notifyListeners();
   }
 
-  static final ProfilData praktikan = ProfilData(
-    name: 'Nama Praktikan',
-    email: 'praktikan@students.usu.ac.id',
-    phone: '0812-0000-0000',
-    idLabel: 'NIM',
-    idValue: '231402033',
-  );
+  static ProfilData _fromProfile(UserRole role) {
+    final p = AuthController.instance.currentProfile;
+    final isNim = role == UserRole.praktikan || role == UserRole.aslab;
+    final phoneVal = (p?.phone != null && p!.phone!.isNotEmpty)
+        ? p.phone!
+        : _defaultPhone(role);
+    return ProfilData(
+      name: (p?.fullName != null && p!.fullName.isNotEmpty)
+          ? p.fullName
+          : _defaultName(role),
+      email: (p?.email != null && p!.email.isNotEmpty)
+          ? p.email
+          : _defaultEmail(role),
+      phone: phoneVal,
+      idLabel: isNim ? 'NIM' : 'NIP',
+      idValue: (p?.identifier != null && p!.identifier.isNotEmpty)
+          ? p.identifier
+          : _defaultId(role),
+    );
+  }
 
-  static final ProfilData aslab = ProfilData(
-    name: 'Andi Pratama',
-    email: 'asisten@students.usu.ac.id',
-    phone: '0812-0000-0000',
-    idLabel: 'NIM',
-    idValue: '211402017',
-  );
+  static ProfilData? _praktikan;
+  static ProfilData? _aslab;
+  static ProfilData? _laboran;
+  static ProfilData? _dosen;
 
-  static final ProfilData laboran = ProfilData(
-    name: 'Budi Santoso',
-    email: 'laboran@usu.ac.id',
-    phone: '0812-0000-0000',
-    idLabel: 'NIP',
-    idValue: '198703122015041002',
-  );
+  static ProfilData get praktikan =>
+      _praktikan ??= _fromProfile(UserRole.praktikan);
+  static ProfilData get aslab => _aslab ??= _fromProfile(UserRole.aslab);
+  static ProfilData get laboran =>
+      _laboran ??= _fromProfile(UserRole.laboran);
+  static ProfilData get dosen => _dosen ??= _fromProfile(UserRole.dosen);
 
-  static final ProfilData dosen = ProfilData(
-    name: 'Dr. Sari Lubis',
-    email: 'sari.lubis@usu.ac.id',
-    phone: '0812-0000-0000',
-    idLabel: 'NIP',
-    idValue: '198501012010011001',
-  );
+  static void refresh(UserRole role) {
+    switch (role) {
+      case UserRole.praktikan:
+        _praktikan = _fromProfile(role);
+        break;
+      case UserRole.aslab:
+        _aslab = _fromProfile(role);
+        break;
+      case UserRole.laboran:
+        _laboran = _fromProfile(role);
+        break;
+      case UserRole.dosen:
+        _dosen = _fromProfile(role);
+        break;
+    }
+  }
+
+  static void resetAll() {
+    _praktikan = null;
+    _aslab = null;
+    _laboran = null;
+    _dosen = null;
+  }
+
+  static String _defaultName(UserRole role) => switch (role) {
+        UserRole.praktikan => 'Nama Praktikan',
+        UserRole.aslab => 'Abbil Rizki',
+        UserRole.laboran => 'Reagan Brian',
+        UserRole.dosen => 'Dr. Eng. Daniele Christian, M.Kom.',
+      };
+
+  static String _defaultEmail(UserRole role) => switch (role) {
+        UserRole.praktikan => 'andre@students.usu.ac.id',
+        UserRole.aslab => 'abbil@itlg.usu.ac.id',
+        UserRole.laboran => 'reagan@itlg.usu.ac.id',
+        UserRole.dosen => 'daniele@usu.ac.id',
+      };
+
+  static String _defaultPhone(UserRole role) => '0812-0000-0000';
+
+  static String _defaultId(UserRole role) => switch (role) {
+        UserRole.praktikan => '231402033',
+        UserRole.aslab => '211402001',
+        UserRole.laboran => '198501012010011001',
+        UserRole.dosen => '198705122015041002',
+      };
 }

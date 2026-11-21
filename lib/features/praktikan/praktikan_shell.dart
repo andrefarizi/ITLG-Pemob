@@ -61,7 +61,7 @@ class _PraktikanShellState extends State<PraktikanShell> {
       case PrakTab.profil:
         return PraktikanProfilPage(
           nav: _nav,
-          onLogout: () => AuthController.instance.logout(),
+          onLogout: () async => await AuthController.instance.logout(),
         );
       default:
         return PraktikanBerandaPage(nav: _nav);

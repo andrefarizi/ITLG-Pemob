@@ -114,7 +114,7 @@ class _DosenShellState extends State<DosenShell> {
       case DosenShell.tabProfil:
         return DosenProfilPage(
           store: _store,
-          onLogout: () => AuthController.instance.logout(),
+          onLogout: () async => await AuthController.instance.logout(),
         );
       default:
         return DosenBerandaPage(

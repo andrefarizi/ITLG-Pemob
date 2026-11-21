@@ -57,7 +57,7 @@ class _AslabShellState extends State<AslabShell> {
       case AslabTab.profil:
         return AslabProfilPage(
           nav: _nav,
-          onLogout: () => AuthController.instance.logout(),
+          onLogout: () async => await AuthController.instance.logout(),
         );
       default:
         return AslabBerandaPage(

@@ -135,7 +135,7 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
             _DataRow(
                 icon: 'card_account_details_outline',
                 label: 'NIP',
-                value: '198501012010011001'),
+                value: _p.idValue),
             _DataRow(
                 icon: 'school_outline',
                 label: 'Program Studi',

@@ -191,6 +191,30 @@ class AuthService {
     }
   }
 
+  /// Update profil di Supabase
+  Future<void> updateProfile({
+    required String userId,
+    required String fullName,
+    required String email,
+    required String phone,
+  }) async {
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('profiles').update({
+          'full_name': fullName,
+          'email': email,
+          'phone': phone,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', userId);
+        debugPrint('[AuthService] Berhasil update profil di Supabase');
+      } catch (e) {
+        debugPrint('[AuthService] Error saat update profil Supabase: $e');
+        rethrow;
+      }
+    }
+  }
+
   /// Ambil profil default untuk role tertentu
   UserProfile defaultProfile(UserRole role) {
     return _dummyUsers.firstWhere((u) => u.profile.role == role).profile;

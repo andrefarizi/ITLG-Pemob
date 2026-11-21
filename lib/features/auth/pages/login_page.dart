@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/utils/constants.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../shared/profil_data.dart';
 import '../auth_controller.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_1.dart';
@@ -105,6 +106,8 @@ class _LoginPageState extends State<LoginPage> {
       });
       return;
     }
+
+    ProfilData.refresh(_auth.currentRole);
 
     if (widget.onLoginSuccess != null) {
       widget.onLoginSuccess!();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/utils/constants.dart';
+import '../shared/profil_data.dart';
 import 'models/user_profile.dart';
 import 'services/auth_service.dart';
 
@@ -16,8 +17,8 @@ class AuthController extends ChangeNotifier {
 
   UserRole get currentRole => _currentRole;
   bool get isLoggedIn => _isLoggedIn;
-  String get userIdentifier => _userIdentifier;
-  String get userName => _userName;
+  String get userIdentifier => _currentProfile?.identifier ?? _userIdentifier;
+  String get userName => _currentProfile?.fullName ?? _userName;
   UserProfile? get currentProfile => _currentProfile;
 
   void setRole(UserRole role) {
@@ -52,6 +53,29 @@ class AuthController extends ChangeNotifier {
     return result;
   }
 
+  /// Update profil pengguna (simpan ke Supabase dan memori lokal)
+  Future<void> updateProfile({
+    required String fullName,
+    required String email,
+    required String phone,
+  }) async {
+    if (_currentProfile != null) {
+      await AuthService.instance.updateProfile(
+        userId: _currentProfile!.id,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+      );
+      _currentProfile = _currentProfile!.copyWith(
+        fullName: fullName,
+        email: email,
+        phone: phone,
+      );
+      _userName = fullName;
+    }
+    notifyListeners();
+  }
+
   /// Sinkron login untuk kompatibilitas
   void login({required String identifier, required UserRole role}) {
     _isLoggedIn = true;
@@ -63,6 +87,7 @@ class AuthController extends ChangeNotifier {
     await AuthService.instance.logout();
     _isLoggedIn = false;
     _currentProfile = null;
+    ProfilData.resetAll();
     notifyListeners();
   }
 }

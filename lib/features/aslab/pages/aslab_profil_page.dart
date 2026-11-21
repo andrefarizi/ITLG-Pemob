@@ -119,7 +119,7 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
             _DataRow(
                 icon: 'card_account_details_outline',
                 label: 'NIM',
-                value: '211402017'),
+                value: _p.idValue),
             _DataRow(
                 icon: 'school_outline',
                 label: 'Program Studi',

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../shared/profil_data.dart';
+import '../../shared/ubah_profil_page.dart';
 import '../praktikan_nav.dart';
 
 /// Figma: "Profil-Praktikan".
@@ -20,6 +22,35 @@ class PraktikanProfilPage extends StatefulWidget {
 }
 
 class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
+  ProfilData get _p => ProfilData.praktikan;
+
+  void _onProfil() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _p.addListener(_onProfil);
+  }
+
+  @override
+  void dispose() {
+    _p.removeListener(_onProfil);
+    super.dispose();
+  }
+
+  void _openUbahProfil() {
+    labPush(
+      context,
+      UbahProfilPage(
+        data: _p,
+        roleLabel: 'Mahasiswa',
+        onLogoTap: widget.nav.home,
+      ),
+    );
+  }
+
   void _openChangePassword() => widget.nav.ubahKataSandi(context);
 
   @override
@@ -45,12 +76,12 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Nama Praktikan',
+                    Text(_p.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: labText(16, w: kBold, c: Colors.black)),
                     const SizedBox(height: 2),
-                    Text('NIM 231402033',
+                    Text('${_p.idLabel} ${_p.idValue}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: labText(12, c: ItlgColors.textSubtle)),
@@ -62,7 +93,7 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
               const SizedBox(width: 8),
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => labToast(context, 'Ubah profil belum tersedia'),
+                onTap: _openUbahProfil,
                 child: Container(
                   width: 40,
                   height: 40,
@@ -78,33 +109,33 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
             ],
           ),
         ),
-        const LabCard(
+        LabCard(
           children: [
-            Align(
+            const Align(
               alignment: Alignment.centerLeft,
               child: LabSectionTitle(icon: 'person', text: 'Data Diri'),
             ),
             _DataRow(
                 icon: 'card_account_details_outline',
                 label: 'NIM',
-                value: '231402033'),
-            _DataRow(
+                value: _p.idValue),
+            const _DataRow(
                 icon: 'school_outline',
                 label: 'Program Studi',
                 value: 'Teknologi Informasi'),
-            _DataRow(icon: 'calendar', label: 'Angkatan', value: '2023'),
-            _DataRow(
+            const _DataRow(icon: 'calendar', label: 'Angkatan', value: '2023'),
+            const _DataRow(
                 icon: 'people_group',
                 label: 'Kelas Praktikum',
                 value: 'TIF 3001 - Kelas C'),
             _DataRow(
                 icon: 'envelope',
                 label: 'Email',
-                value: 'praktikan@students.usu.ac.id'),
+                value: _p.email),
             _DataRow(
                 icon: 'phone_outline',
                 label: 'No. HP',
-                value: '0812-0000-0000'),
+                value: _p.phone),
           ],
         ),
         LabCard(

@@ -50,7 +50,7 @@ class _UbahProfilPageState extends State<UbahProfilPage> {
     return null;
   }
 
-  void _simpan() {
+  Future<void> _simpan() async {
     final name = _name.text.trim();
     final email = _email.text.trim();
     final phone = _phone.text.trim();
@@ -59,9 +59,15 @@ class _UbahProfilPageState extends State<UbahProfilPage> {
       labToast(context, error);
       return;
     }
-    widget.data.update(name: name, email: email, phone: phone);
-    Navigator.of(context).maybePop();
-    labToast(context, 'Profil berhasil diperbarui');
+    try {
+      await widget.data.update(name: name, email: email, phone: phone);
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+      labToast(context, 'Profil berhasil diperbarui');
+    } catch (e) {
+      if (!mounted) return;
+      labToast(context, 'Gagal menyimpan profil: $e');
+    }
   }
 
   @override

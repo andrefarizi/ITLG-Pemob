@@ -134,7 +134,7 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
             _DataRow(
                 icon: 'card_account_details_outline',
                 label: 'NIP',
-                value: '198703122015041002'),
+                value: _p.idValue),
             _DataRow(
                 icon: 'school_outline',
                 label: 'Unit Kerja',

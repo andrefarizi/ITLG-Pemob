@@ -69,8 +69,8 @@ class _ITLGAppState extends State<ITLGApp> {
               // Alur Figma: Splash -> tombol "Mulai" -> halaman Masuk
               // (melewati onboarding). Peran dipilih lewat chip di halaman
               // Masuk.
-              onStart: () {
-                _authController.logout();
+              onStart: () async {
+                await _authController.logout();
                 setState(() {
                   _showSplash = false;
                   _showOnboarding = false;

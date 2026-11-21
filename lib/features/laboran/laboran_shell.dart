@@ -129,7 +129,7 @@ class _LaboranShellState extends State<LaboranShell> {
       case LaboranShell.tabProfil:
         return LaboranProfilPage(
           store: _store,
-          onLogout: () => AuthController.instance.logout(),
+          onLogout: () async => await AuthController.instance.logout(),
         );
       default:
         return LaboranBerandaPage(

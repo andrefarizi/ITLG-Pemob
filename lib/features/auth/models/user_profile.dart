@@ -43,6 +43,23 @@ class UserProfile {
     };
   }
 
+  UserProfile copyWith({
+    String? fullName,
+    String? email,
+    String? phone,
+    String? avatarUrl,
+  }) {
+    return UserProfile(
+      id: id,
+      identifier: identifier,
+      fullName: fullName ?? this.fullName,
+      email: email ?? this.email,
+      role: role,
+      phone: phone ?? this.phone,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+    );
+  }
+
   static UserRole _parseRole(String? roleStr) {
     switch (roleStr?.toLowerCase()) {
       case 'aslab':
