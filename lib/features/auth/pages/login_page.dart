@@ -64,7 +64,7 @@ class _LoginPageState extends State<LoginPage> {
 
   String get _identifierHint =>
       _role == UserRole.praktikan || _role == UserRole.aslab
-          ? 'Contoh : 231402033'
+          ? 'Contoh : 241402105'
           : 'Contoh : 198501012010011001';
 
   void _selectRole(UserRole role) {

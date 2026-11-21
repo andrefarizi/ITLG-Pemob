@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/email_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../services/auth_service.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_2.dart';
 
@@ -43,26 +45,75 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
     });
     if (_nimError != null || _emailError != null) return;
 
-    // Simulasi pengiriman OTP (belum ada backend)
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() => _loading = false);
 
-    await showAuthResultDialog(
-      context,
-      icon: Icons.password_rounded,
-      title: 'Kode OTP Dikirim',
-      message: 'Kode OTP anda berhasil dikirim silahkan periksa email usu anda',
-      buttonLabel: 'Lanjutkan',
-      onPressed: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ForgotPasswordPage2(targetIdentifier: email),
+    try {
+      // 1. Cari email berdasarkan NIM di database
+      final registeredEmail = await AuthService.instance.findEmailByNimOrEmail(nim);
+
+      if (!mounted) return;
+
+      if (registeredEmail == null) {
+        setState(() {
+          _loading = false;
+          _nimError = 'NIM tidak ditemukan dalam sistem';
+        });
+        return;
+      }
+
+      // 2. Validasi email yang dimasukkan cocok dengan yang terdaftar
+      if (registeredEmail.toLowerCase() != email.toLowerCase()) {
+        setState(() {
+          _loading = false;
+          _emailError = 'Email tidak sesuai dengan NIM yang terdaftar';
+        });
+        return;
+      }
+
+      // 3. Kirim OTP via SMTP
+      final sent = await EmailService.instance.sendOtp(registeredEmail);
+
+      if (!mounted) return;
+      setState(() => _loading = false);
+
+      if (!sent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('Gagal mengirim email. Periksa koneksi internet Anda.'),
           ),
         );
-      },
-    );
+        return;
+      }
+
+      // 4. Tampilkan dialog sukses lalu lanjut ke halaman 2
+      await showAuthResultDialog(
+        context,
+        icon: Icons.password_rounded,
+        title: 'Kode OTP Dikirim',
+        message: 'Kode OTP anda berhasil dikirim silahkan periksa email usu anda',
+        buttonLabel: 'Lanjutkan',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ForgotPasswordPage2(
+                targetIdentifier: registeredEmail,
+                targetEmail: registeredEmail,
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Terjadi kesalahan: $e'),
+        ),
+      );
+    }
   }
 
   @override

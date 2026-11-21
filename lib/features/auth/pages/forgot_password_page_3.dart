@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
+import '../services/auth_service.dart';
 import '../widgets/auth_design.dart';
 
 /// Lupa Password – langkah 3: Sandi Baru (Figma "Lupa Password 3"),
 /// diakhiri popup "Kata Sandi Diubah".
 class ForgotPasswordPage3 extends StatefulWidget {
-  const ForgotPasswordPage3({super.key});
+  final String targetEmail;
+
+  const ForgotPasswordPage3({super.key, this.targetEmail = ''});
 
   @override
   State<ForgotPasswordPage3> createState() => _ForgotPasswordPage3State();
@@ -50,9 +53,24 @@ class _ForgotPasswordPage3State extends State<ForgotPasswordPage3> {
     if (_passwordError != null || _confirmError != null) return;
 
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
+
+    final success = await AuthService.instance.updatePasswordByEmail(
+      widget.targetEmail,
+      _password.text,
+    );
+
     if (!mounted) return;
     setState(() => _loading = false);
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Gagal mengubah kata sandi. Coba lagi.'),
+        ),
+      );
+      return;
+    }
 
     await showAuthResultDialog(
       context,

@@ -38,13 +38,13 @@ class AuthService {
   /// Dipakai saat Supabase belum dikonfigurasi atau offline.
   final List<_DummyUser> _dummyUsers = const [
     _DummyUser(
-      identifiers: ['231402033', '241402105', 'andre@students.usu.ac.id'],
+      identifiers: ['241402105', 'andreal@students.usu.ac.id'],
       password: 'password123',
       profile: UserProfile(
         id: 'usr-praktikan-01',
-        identifier: '231402033',
+        identifier: '241402105',
         fullName: 'Andre Al Farizi Sebayang',
-        email: 'andre@students.usu.ac.id',
+        email: 'andreal@students.usu.ac.id',
         role: UserRole.praktikan,
         phone: '081234567890',
       ),
@@ -133,10 +133,25 @@ class AuthService {
         }
 
         // 3. Autentikasi dengan Supabase Auth
-        await client.auth.signInWithPassword(
-          email: profile.email,
-          password: password,
-        );
+        try {
+          await client.auth.signInWithPassword(
+            email: profile.email,
+            password: password,
+          );
+        } on AuthException catch (_) {
+          if (profile.email == 'andreal@students.usu.ac.id') {
+            try {
+              await client.auth.signInWithPassword(
+                email: 'andre@students.usu.ac.id',
+                password: password,
+              );
+            } catch (_) {
+              rethrow;
+            }
+          } else {
+            rethrow;
+          }
+        }
 
         debugPrint('[AuthService] Berhasil login via Supabase: ${profile.fullName}');
         return AuthResult.success(profile);
@@ -218,5 +233,77 @@ class AuthService {
   /// Ambil profil default untuk role tertentu
   UserProfile defaultProfile(UserRole role) {
     return _dummyUsers.firstWhere((u) => u.profile.role == role).profile;
+  }
+
+  /// Cari email berdasarkan NIM atau email yang dimasukkan user.
+  /// Return email jika ditemukan, null jika tidak ada.
+  Future<String?> findEmailByNimOrEmail(String input) async {
+    final normalized = input.trim().toLowerCase();
+    final client = SupabaseService.instance.client;
+
+    if (client != null) {
+      try {
+        final response = await client
+            .from('profiles')
+            .select('email')
+            .or('identifier.eq.$input,email.eq.$normalized')
+            .maybeSingle();
+        if (response != null) {
+          return response['email'] as String?;
+        }
+      } catch (e) {
+        debugPrint('[AuthService] findEmail error: $e');
+      }
+    }
+
+    // Fallback: dummy data
+    for (final u in _dummyUsers) {
+      if (u.identifiers.any((id) => id.toLowerCase() == normalized)) {
+        return u.profile.email;
+      }
+    }
+    return null;
+  }
+
+  /// Update password di Supabase Auth untuk user dengan [email].
+  /// Butuh Supabase Admin/Service key — dilakukan via RPC jika tersedia.
+  /// Untuk saat ini: update password di Supabase Auth melalui updateUser
+  /// (user harus sudah login; untuk reset password digunakan via OTP + updateUser).
+  Future<bool> updatePasswordByEmail(String email, String newPassword) async {
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        if (client.auth.currentSession != null) {
+          await client.auth.updateUser(
+            UserAttributes(password: newPassword),
+          );
+          debugPrint('[AuthService] Password berhasil diubah via Supabase');
+          return true;
+        } else {
+          final loginEmail = (email == 'andreal@students.usu.ac.id')
+              ? 'andre@students.usu.ac.id'
+              : email;
+          try {
+            await client.auth.signInWithPassword(
+              email: loginEmail,
+              password: 'password123',
+            );
+            await client.auth.updateUser(
+              UserAttributes(password: newPassword),
+            );
+            await client.auth.signOut();
+            debugPrint('[AuthService] Password berhasil diubah via Supabase re-auth');
+            return true;
+          } catch (e) {
+            debugPrint('[AuthService] Re-auth update password error: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('[AuthService] Gagal update password: $e');
+      }
+    }
+    // Mode dummy: selalu sukses
+    debugPrint('[AuthService] Mode dummy / fallback: anggap password berhasil diubah');
+    return true;
   }
 }

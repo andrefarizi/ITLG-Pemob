@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/services/email_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_3.dart';
@@ -10,10 +11,12 @@ import 'forgot_password_page_3.dart';
 /// Lupa Password – langkah 2: OTP (Figma "Lupa Password 2").
 class ForgotPasswordPage2 extends StatefulWidget {
   final String targetIdentifier;
+  final String targetEmail;
 
   const ForgotPasswordPage2({
     super.key,
     this.targetIdentifier = 'email USU anda',
+    this.targetEmail = '',
   });
 
   @override
@@ -22,16 +25,16 @@ class ForgotPasswordPage2 extends StatefulWidget {
 
 class _ForgotPasswordPage2State extends State<ForgotPasswordPage2> {
   static const int _length = 6;
-  static const int _resendSeconds = 60;
+  static const int _initialCountdown = 60;
 
   final List<TextEditingController> _boxes =
       List.generate(_length, (_) => TextEditingController());
   final List<FocusNode> _nodes = List.generate(_length, (_) => FocusNode());
 
-  Timer? _timer;
-  int _countdown = _resendSeconds;
-  bool _loading = false;
   String? _error;
+  bool _loading = false;
+  int _countdown = _initialCountdown;
+  Timer? _timer;
 
   String get _code => _boxes.map((c) => c.text).join();
 
@@ -58,39 +61,36 @@ class _ForgotPasswordPage2State extends State<ForgotPasswordPage2> {
 
   void _startCountdown() {
     _timer?.cancel();
-    setState(() => _countdown = _resendSeconds);
+    setState(() => _countdown = _initialCountdown);
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
+      if (_countdown <= 0) {
         t.cancel();
-        return;
-      }
-      if (_countdown <= 1) {
-        t.cancel();
-        setState(() => _countdown = 0);
       } else {
         setState(() => _countdown--);
       }
     });
   }
 
-  void _onBoxChanged(int i, String value) {
-    if (_error != null) setState(() => _error = null);
-    final digits = value.replaceAll(RegExp(r'\D'), '');
+  void _onBoxChanged(int i, String v) {
+    final digits = v.replaceAll(RegExp(r'\D'), '');
     if (digits.length > 1) {
-      // Tempel (paste) beberapa digit sekaligus
-      for (var k = 0; k < _length; k++) {
-        final at = i + k;
-        if (at >= _length || k >= digits.length) break;
-        _boxes[at].text = digits[k];
+      // Paste: distribusikan ke kotak berikutnya
+      for (int j = 0; j < digits.length && i + j < _length; j++) {
+        _boxes[i + j].text = digits[j];
       }
-      final next = i + digits.length >= _length ? _length - 1 : i + digits.length;
-      _nodes[next].requestFocus();
+      final next = i + digits.length;
+      if (next < _length) {
+        _nodes[next].requestFocus();
+      } else {
+        FocusScope.of(context).unfocus();
+      }
     } else {
-      _boxes[i].text = digits;
-      _boxes[i].selection = TextSelection.collapsed(offset: digits.length);
+      _boxes[i].text = digits.isEmpty ? '' : digits[0];
+      _boxes[i].selection =
+          TextSelection.collapsed(offset: _boxes[i].text.length);
       if (digits.isNotEmpty && i < _length - 1) _nodes[i + 1].requestFocus();
     }
-    setState(() {});
+    setState(() => _error = null);
     if (_code.length == _length) FocusScope.of(context).unfocus();
   }
 
@@ -111,25 +111,48 @@ class _ForgotPasswordPage2State extends State<ForgotPasswordPage2> {
       setState(() => _error = 'Masukkan 6 digit kode OTP');
       return;
     }
+
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    // Validasi OTP
+    final email = widget.targetEmail;
+    final valid = EmailService.instance.verifyOtp(email, _code);
+
     if (!mounted) return;
     setState(() => _loading = false);
+
+    if (!valid) {
+      setState(() => _error = 'Kode OTP salah atau sudah kedaluwarsa');
+      return;
+    }
+
+    // OTP valid → lanjut ke halaman ganti password
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ForgotPasswordPage3()),
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordPage3(targetEmail: email),
+      ),
     );
   }
 
-  void _resend() {
+  Future<void> _resend() async {
     for (final c in _boxes) {
       c.clear();
     }
     _nodes.first.requestFocus();
     _startCountdown();
+    setState(() => _error = null);
+
+    final sent = await EmailService.instance.sendOtp(widget.targetEmail);
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('Kode OTP baru dikirim ke ${widget.targetIdentifier}'),
+        content: Text(
+          sent
+              ? 'Kode OTP baru dikirim ke ${widget.targetIdentifier}'
+              : 'Gagal mengirim ulang email. Coba lagi.',
+        ),
       ),
     );
   }

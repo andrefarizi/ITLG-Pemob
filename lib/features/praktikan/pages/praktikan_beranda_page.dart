@@ -110,7 +110,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
-                        'NIM 231402033 • Ganjil 2026',
+                        'NIM 241402105 • Ganjil 2026',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: labText(12, c: ItlgColors.textSubtle),
