@@ -1,3 +1,6 @@
 {
-    "cmake.sourceDirectory": "C:/Project_Pemob/itlg_mobile/linux"
+    "cmake.sourceDirectory": "C:/Project_Pemob/itlg_mobile/linux",
+    "emulator.emulatorPath": "D:\\AndroidSDK\\Sdk\\emulator",
+    "emulator.emulatorPathWindows": "D:\\AndroidSDK\\Sdk\\emulator",
+    "dart.flutterSdkPath": "C:\\flutter"
 }

@@ -10,6 +10,11 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  errors:
+    deprecated_member_use: ignore
+    unnecessary_underscores: ignore
+    use_null_aware_elements: ignore
+    dangling_library_doc_comments: ignore
   exclude:
     - build/**
     - android/**

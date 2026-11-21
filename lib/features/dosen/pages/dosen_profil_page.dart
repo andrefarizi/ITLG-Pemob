@@ -243,7 +243,6 @@ class _SettingItem extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget trailing;
-  final double minHeight;
   final VoidCallback onTap;
 
   const _SettingItem({
@@ -252,7 +251,6 @@ class _SettingItem extends StatelessWidget {
     required this.subtitle,
     required this.trailing,
     required this.onTap,
-    this.minHeight = 58,
   });
 
   @override
@@ -261,7 +259,7 @@ class _SettingItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        constraints: BoxConstraints(minHeight: minHeight),
+        constraints: const BoxConstraints(minHeight: 58),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: Colors.white,
