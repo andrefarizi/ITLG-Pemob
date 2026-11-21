@@ -751,6 +751,8 @@ class PrakInput extends StatefulWidget {
   final String hint;
   final FocusNode? focusNode;
   final TextInputType? keyboardType;
+  final bool obscure;
+  final bool showObscureToggle;
 
   const PrakInput({
     super.key,
@@ -760,6 +762,8 @@ class PrakInput extends StatefulWidget {
     this.hint = '',
     this.focusNode,
     this.keyboardType,
+    this.obscure = false,
+    this.showObscureToggle = true,
   });
 
   @override
@@ -769,6 +773,7 @@ class PrakInput extends StatefulWidget {
 class _PrakInputState extends State<PrakInput> {
   late FocusNode _focusNode;
   bool _isFocused = false;
+  late bool _hidden = widget.obscure;
 
   @override
   void initState() {
@@ -848,6 +853,7 @@ class _PrakInputState extends State<PrakInput> {
                   child: TextField(
                     controller: widget.controller,
                     focusNode: _focusNode,
+                    obscureText: _hidden,
                     keyboardType: widget.keyboardType,
                     cursorColor: ItlgColors.primary,
                     cursorWidth: 2.0,
@@ -868,6 +874,26 @@ class _PrakInputState extends State<PrakInput> {
                     ),
                   ),
                 ),
+                if (widget.obscure && widget.showObscureToggle)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _hidden = !_hidden),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 8),
+                      child: Icon(
+                        _hidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: _isFocused
+                            ? ItlgColors.primary
+                            : ItlgColors.textMuted,
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 4),
               ],
             ),
           ),

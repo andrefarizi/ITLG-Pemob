@@ -12,11 +12,14 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
+import 'core/services/supabase_service.dart';
 import 'features/dosen/dosen_shell.dart';
 import 'features/praktikan/praktikan_shell.dart';
 import 'features/aslab/aslab_shell.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseService.instance.initialize();
   runApp(const ITLGApp());
 }
 
