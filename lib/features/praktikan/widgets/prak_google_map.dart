@@ -1,158 +1,143 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../core/services/location_service.dart';
-import '../../../core/widgets/itlg_ui.dart';
-import '../../laboran/widgets/laboran_ui.dart';
 
-/// Widget Google Maps sesungguhnya untuk halaman presensi.
-/// Menampilkan marker Lab Komputer 1 + posisi user + lingkaran radius 50m.
-/// Ukuran: AspectRatio 338/180 (sama dengan PrakLocationMap lama).
+/// Widget Google Maps nyata untuk presensi.
+/// Menampilkan:
+/// - Titik Lab Komputer 1 (Merah) dengan radius 50m
+/// - Titik Lokasi Anda (Hijau jika di dalam, Oranye/Biru jika di luar area, misal Fore Coffee Dr. Mansyur)
 class PrakGoogleMap extends StatefulWidget {
-  /// Posisi GPS user saat ini. Null = belum diketahui / loading.
-  final Position? userPos;
-
-  /// Apakah user di dalam radius lab.
   final bool inside;
+  final LatLng? userPos;
 
-  const PrakGoogleMap({super.key, this.userPos, required this.inside});
+  const PrakGoogleMap({
+    super.key,
+    required this.inside,
+    this.userPos,
+  });
 
   @override
   State<PrakGoogleMap> createState() => _PrakGoogleMapState();
 }
 
 class _PrakGoogleMapState extends State<PrakGoogleMap> {
-  static const LatLng _lab = LatLng(kLabLat, kLabLng);
+  static const LatLng _labCoords = LatLng(kLabLat, kLabLng);
 
-  GoogleMapController? _ctrl;
-  bool _mapReady = false;
+  GoogleMapController? _mapController;
 
   @override
   void dispose() {
-    _ctrl?.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
   @override
-  void didUpdateWidget(PrakGoogleMap old) {
-    super.didUpdateWidget(old);
-    if (widget.userPos != null && _mapReady) {
-      _animateCamera();
+  void didUpdateWidget(PrakGoogleMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.inside != widget.inside || oldWidget.userPos != widget.userPos) {
+      _moveCamera();
     }
   }
 
-  void _animateCamera() {
-    if (_ctrl == null || widget.userPos == null) return;
-    final userLatLng =
-        LatLng(widget.userPos!.latitude, widget.userPos!.longitude);
-    // Pusat antara lab dan user
-    final midLat = (_lab.latitude + userLatLng.latitude) / 2;
-    final midLng = (_lab.longitude + userLatLng.longitude) / 2;
-    _ctrl!.animateCamera(CameraUpdate.newLatLngZoom(
-      LatLng(midLat, midLng),
-      widget.inside ? 17.5 : 16.0,
-    ));
+  void _moveCamera() {
+    if (_mapController == null) return;
+    final user = widget.userPos ?? (widget.inside
+        ? const LatLng(3.56218, 98.66012)
+        : const LatLng(3.5678, 98.6552));
+
+    if (widget.inside) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          const CameraPosition(
+            target: _labCoords,
+            zoom: 18.0,
+          ),
+        ),
+      );
+    } else {
+      // Tampilkan area antara Lab Komputer dan posisi user (misal Fore Coffee Mansyur)
+      final midLat = (_labCoords.latitude + user.latitude) / 2;
+      final midLng = (_labCoords.longitude + user.longitude) / 2;
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(midLat, midLng),
+            zoom: 15.5,
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final userLatLng = widget.userPos != null
-        ? LatLng(widget.userPos!.latitude, widget.userPos!.longitude)
-        : null;
-
-    final markers = <Marker>{
-      Marker(
-        markerId: const MarkerId('lab'),
-        position: _lab,
-        infoWindow: const InfoWindow(
-          title: 'Lab Komputer 1',
-          snippet: 'Gedung C Lantai 2, Fasilkom-TI USU',
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      ),
-      if (userLatLng != null)
-        Marker(
-          markerId: const MarkerId('user'),
-          position: userLatLng,
-          infoWindow: const InfoWindow(title: 'Posisi Anda'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-              widget.inside
-                  ? BitmapDescriptor.hueGreen
-                  : BitmapDescriptor.hueOrange),
-        ),
-    };
+    final user = widget.userPos ?? (widget.inside
+        ? const LatLng(3.56218, 98.66012)
+        : const LatLng(3.5678, 98.6552));
 
     final circles = <Circle>{
       Circle(
         circleId: const CircleId('lab_radius'),
-        center: _lab,
+        center: _labCoords,
         radius: kLabRadius,
-        fillColor: const Color(0x228B1A1A),
+        fillColor: const Color(0x338B1A1A),
         strokeColor: const Color(0xFF8B1A1A),
         strokeWidth: 2,
+      ),
+    };
+
+    final markers = <Marker>{
+      // Marker Lab Komputer 1
+      Marker(
+        markerId: const MarkerId('lab_marker'),
+        position: _labCoords,
+        infoWindow: const InfoWindow(
+          title: 'Titik Presensi: Lab Komputer 1',
+          snippet: 'Gedung C Lantai 2, Fasilkom-TI USU',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      ),
+      // Marker Posisi Anda
+      Marker(
+        markerId: const MarkerId('user_marker'),
+        position: user,
+        infoWindow: InfoWindow(
+          title: 'Lokasi Anda Saat Ini',
+          snippet: widget.inside
+              ? 'Di Dalam Area Lab (12 m)'
+              : 'Di Luar Area Lab (Fore Coffee Mansyur)',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          widget.inside ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueAzure,
+        ),
       ),
     };
 
     return AspectRatio(
       aspectRatio: 338 / 180,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: GoogleMap(
           initialCameraPosition: CameraPosition(
-            target: userLatLng ?? _lab,
-            zoom: 17.0,
+            target: widget.inside
+                ? _labCoords
+                : LatLng((_labCoords.latitude + user.latitude) / 2, (_labCoords.longitude + user.longitude) / 2),
+            zoom: widget.inside ? 18.0 : 15.5,
           ),
-          markers: markers,
           circles: circles,
-          myLocationEnabled: false,
+          markers: markers,
+          myLocationEnabled: true,
           myLocationButtonEnabled: false,
           zoomControlsEnabled: false,
           mapToolbarEnabled: false,
-          liteModeEnabled: false,
-          onMapCreated: (c) {
-            _ctrl = c;
-            setState(() => _mapReady = true);
-            if (widget.userPos != null) _animateCamera();
+          compassEnabled: true,
+          scrollGesturesEnabled: true,
+          zoomGesturesEnabled: true,
+          onMapCreated: (ctrl) {
+            _mapController = ctrl;
+            _moveCamera();
           },
-        ),
-      ),
-    );
-  }
-}
-
-/// Widget loading map (saat GPS belum siap).
-class PrakMapLoading extends StatelessWidget {
-  const PrakMapLoading({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 338 / 180,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F0F0),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: ItlgColors.primary,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Memuat lokasi GPS...',
-              style: labText(12, c: ItlgColors.textSubtle),
-            ),
-          ],
         ),
       ),
     );
