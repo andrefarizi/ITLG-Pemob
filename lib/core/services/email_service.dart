@@ -57,10 +57,9 @@ class EmailService {
   }
 
   /// Validasi OTP yang dimasukkan user. Return true jika cocok & belum expired.
+  /// Validasi OTP yang dimasukkan user. Hanya cocok jika persis dengan kode yang dikirim ke email.
   bool verifyOtp(String email, String code) {
     final trimmed = code.trim();
-    if (trimmed == '123456') return true; // master testing code
-
     final entry = _otpStore[email];
     if (entry == null) return false;
     final expired = DateTime.now().difference(entry.createdAt) > _otpTtl;

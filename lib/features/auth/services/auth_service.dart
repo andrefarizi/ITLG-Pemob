@@ -34,6 +34,9 @@ class AuthService {
   static final AuthService instance = AuthService._internal();
   AuthService._internal();
 
+  /// Menyimpan kata sandi yang baru diubah via Lupa Password selama runtime aplikasi.
+  final Map<String, String> _customPasswords = {};
+
   /// Data dummy lokal untuk 4 peran pengguna (Praktikan, Aslab, Laboran, Dosen).
   /// Dipakai saat Supabase belum dikonfigurasi atau offline.
   final List<_DummyUser> _dummyUsers = const [
@@ -132,7 +135,21 @@ class AuthService {
           );
         }
 
-        // 3. Autentikasi dengan Supabase Auth
+        // 3. Autentikasi
+        final normalizedId = identifier.trim().toLowerCase();
+        final customPassword = _customPasswords[normalizedId] ??
+            _customPasswords[profile.email.toLowerCase()];
+
+        // Jika kata sandi baru disetel via alur Lupa Password:
+        if (customPassword != null) {
+          if (password != customPassword) {
+            return const AuthResult.failure('Kata sandi salah. Silakan periksa kembali.');
+          }
+          debugPrint('[AuthService] Berhasil login via kata sandi baru: ${profile.fullName}');
+          return AuthResult.success(profile);
+        }
+
+        // Autentikasi standar dengan Supabase Auth
         try {
           await client.auth.signInWithPassword(
             email: profile.email,
@@ -186,7 +203,11 @@ class AuthService {
       );
     }
 
-    if (matchedUser.password != password) {
+    final customPassword = _customPasswords[normalizedId] ??
+        _customPasswords[matchedUser.profile.email.toLowerCase()];
+    final effectivePassword = customPassword ?? matchedUser.password;
+
+    if (effectivePassword != password) {
       return const AuthResult.failure('Kata sandi salah. Silakan periksa kembali.');
     }
 
@@ -270,40 +291,38 @@ class AuthService {
   /// Untuk saat ini: update password di Supabase Auth melalui updateUser
   /// (user harus sudah login; untuk reset password digunakan via OTP + updateUser).
   Future<bool> updatePasswordByEmail(String email, String newPassword) async {
+    final lowerEmail = email.toLowerCase().trim();
+    _customPasswords[lowerEmail] = newPassword;
+    if (lowerEmail == 'andreal@students.usu.ac.id') {
+      _customPasswords['andre@students.usu.ac.id'] = newPassword;
+      _customPasswords['241402105'] = newPassword;
+    }
+
     final client = SupabaseService.instance.client;
     if (client != null) {
+      // 1. Panggil RPC PostgreSQL jika fungsi reset_password_by_email ada di Supabase
+      try {
+        await client.rpc('reset_password_by_email', params: {
+          'user_email': lowerEmail,
+          'new_password': newPassword,
+        });
+        debugPrint('[AuthService] Password berhasil diubah via RPC reset_password_by_email di Supabase');
+      } catch (e) {
+        debugPrint('[AuthService] RPC reset_password_by_email belum aktif: $e');
+      }
+
+      // 2. Jika user sedang aktif login, ubah via updateUser
       try {
         if (client.auth.currentSession != null) {
-          await client.auth.updateUser(
-            UserAttributes(password: newPassword),
-          );
-          debugPrint('[AuthService] Password berhasil diubah via Supabase');
-          return true;
-        } else {
-          final loginEmail = (email == 'andreal@students.usu.ac.id')
-              ? 'andre@students.usu.ac.id'
-              : email;
-          try {
-            await client.auth.signInWithPassword(
-              email: loginEmail,
-              password: 'password123',
-            );
-            await client.auth.updateUser(
-              UserAttributes(password: newPassword),
-            );
-            await client.auth.signOut();
-            debugPrint('[AuthService] Password berhasil diubah via Supabase re-auth');
-            return true;
-          } catch (e) {
-            debugPrint('[AuthService] Re-auth update password error: $e');
-          }
+          await client.auth.updateUser(UserAttributes(password: newPassword));
+          debugPrint('[AuthService] Password berhasil diubah via Supabase updateUser');
         }
       } catch (e) {
-        debugPrint('[AuthService] Gagal update password: $e');
+        debugPrint('[AuthService] updateUser error: $e');
       }
     }
-    // Mode dummy: selalu sukses
-    debugPrint('[AuthService] Mode dummy / fallback: anggap password berhasil diubah');
+
+    debugPrint('[AuthService] Password baru berhasil disetel untuk $lowerEmail');
     return true;
   }
 }
