@@ -85,11 +85,27 @@ class _LoginPageState extends State<LoginPage> {
     if (_identifierError != null || _passwordError != null) return;
 
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    final result = await _auth.loginWithCredentials(
+      identifier: id,
+      password: pass,
+      role: _role,
+    );
     if (!mounted) return;
     setState(() => _loading = false);
 
-    _auth.login(identifier: id, role: _role);
+    if (!result.success) {
+      final msg =
+          result.errorMessage ?? 'Gagal masuk. Periksa kembali data Anda.';
+      setState(() {
+        if (msg.contains('Nomor Induk') || msg.contains('tidak terdaftar')) {
+          _identifierError = msg;
+        } else {
+          _passwordError = msg;
+        }
+      });
+      return;
+    }
+
     if (widget.onLoginSuccess != null) {
       widget.onLoginSuccess!();
     } else {
@@ -227,7 +243,7 @@ class _LoginPageState extends State<LoginPage> {
             hint: '************',
             icon: Icons.lock_outline_rounded,
             iconAsset: 'assets/ic_login_lock.png',
-            showObscureToggle: false,
+            showObscureToggle: true,
             controller: _password,
             obscure: true,
             textInputAction: TextInputAction.done,

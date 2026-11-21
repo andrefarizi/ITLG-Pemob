@@ -37,6 +37,7 @@ dependencies:
 
   # Menampilkan maskot 3D Gyro (three.js) di halaman Tanya Gyro
   webview_flutter: ^4.10.0
+  supabase_flutter: ^2.18.3
 
 dev_dependencies:
   flutter_test:
