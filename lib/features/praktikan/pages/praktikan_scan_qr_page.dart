@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -27,10 +27,67 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
   @override
   void dispose() {
     _scan.dispose();
+    _camera.dispose();
     super.dispose();
   }
 
+  final MobileScannerController _camera = MobileScannerController(
+    detectionSpeed: DetectionSpeed.normal,
+    formats: const [BarcodeFormat.qrCode],
+    cameraResolution: const Size(1280, 720),
+  );
+  bool _handled = false;
+  DateTime? _lastInvalidToast;
+
   void _verified() => widget.nav.tandaTangan(context);
+
+  /// Validasi QR dinamis sesi ITLG:
+  /// Format: ITLG-{sesi}-GEN{n}-{detik epoch}; berlaku <= 60 detik.
+  String? _validateQr(String raw) {
+    final m = RegExp(r'^ITLG-[A-Z0-9_-]+-GEN\d+-(\d+)$').firstMatch(raw.trim());
+    if (m == null) {
+      return 'QR tidak valid untuk sesi presensi ITLG';
+    }
+    final ts = int.tryParse(m.group(1)!) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if ((now - ts).abs() > 60) {
+      return 'QR sudah kedaluwarsa, arahkan ke QR terbaru';
+    }
+    return null;
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_handled || !mounted) return;
+    for (final b in capture.barcodes) {
+      final raw = b.rawValue;
+      if (raw == null || raw.isEmpty) continue;
+      final err = _validateQr(raw);
+      if (err == null) {
+        _handled = true;
+        _camera.stop();
+        _verified();
+      } else {
+        final now = DateTime.now();
+        if (_lastInvalidToast == null ||
+            now.difference(_lastInvalidToast!) > const Duration(seconds: 2)) {
+          _lastInvalidToast = now;
+          labToast(context, err);
+        }
+      }
+      break;
+    }
+  }
+
+  Future<void> _rescan() async {
+    _handled = false;
+    _lastInvalidToast = null;
+    try {
+      await _camera.stop();
+    } catch (_) {}
+    try {
+      await _camera.start();
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,59 +101,93 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
           subtitle:
               'Pindai QR Code dinamis yang ditampilkan asisten di layar lab',
         ),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _verified,
-          child: Container(
-            height: 400,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: PrakColors.camera,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: ItlgShadows.outline,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Container(
+          height: 400,
+          decoration: BoxDecoration(
+            color: PrakColors.camera,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: ItlgShadows.outline,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                const LabChip.live('Kamera Aktif'),
-                SizedBox(
-                  width: 200,
-                  height: 200,
-                  child: Stack(
-                    children: [
-                      // Garis 6 px di luar vektor 192 px -> gambar 198 px.
-                      Positioned(
-                        left: 1,
-                        top: 1,
-                        width: 198,
-                        height: 198,
-                        child: Image.asset('assets/praktikan_viewfinder.png',
-                            fit: BoxFit.fill),
-                      ),
-                      AnimatedBuilder(
-                        animation: _scan,
-                        builder: (_, __) => Positioned(
-                          left: 24,
-                          width: 152,
-                          // Figma: komponen "Garis Scan QR (Animasi)", pusat
-                          // garis bergerak y 30 <-> 170, Ease In and Out 1,6 s.
-                          top: 28.5 +
-                              140 * Curves.easeInOut.transform(_scan.value),
-                          child: Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: LabColors.green,
-                              borderRadius: BorderRadius.circular(1.5),
-                            ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final size = constraints.biggest;
+                    final scanWindow = Rect.fromCenter(
+                      center: size.center(Offset.zero),
+                      width: 200,
+                      height: 200,
+                    );
+                    return MobileScanner(
+                      controller: _camera,
+                      fit: BoxFit.cover,
+                      scanWindow: scanWindow,
+                      onDetect: _onDetect,
+                      errorBuilder: (context, error) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Kamera tidak dapat diakses. Izinkan akses kamera '
+                            'di pengaturan perangkat.',
+                            textAlign: TextAlign.center,
+                            style: labText(12, c: Colors.white),
                           ),
                         ),
                       ),
+                    );
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const LabChip.live('Kamera Aktif'),
+                      SizedBox(
+                        width: 200,
+                        height: 200,
+                        child: Stack(
+                          children: [
+                            // Garis 6 px di luar vektor 192 px -> gambar 198 px.
+                            Positioned(
+                              left: 1,
+                              top: 1,
+                              width: 198,
+                              height: 198,
+                              child: Image.asset(
+                                  'assets/praktikan_viewfinder.png',
+                                  fit: BoxFit.fill),
+                            ),
+                            AnimatedBuilder(
+                              animation: _scan,
+                              builder: (_, __) => Positioned(
+                                left: 24,
+                                width: 152,
+                                top: 28.5 +
+                                    140 *
+                                        Curves.easeInOut
+                                            .transform(_scan.value),
+                                child: Container(
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    color: LabColors.green,
+                                    borderRadius: BorderRadius.circular(1.5),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text('Arahkan kamera ke QR Code di layar asisten',
+                          textAlign: TextAlign.center,
+                          style: labText(12, c: Colors.white)),
                     ],
                   ),
                 ),
-                Text('Arahkan kamera ke QR Code di layar asisten',
-                    textAlign: TextAlign.center,
-                    style: labText(12, c: Colors.white)),
               ],
             ),
           ),
@@ -139,7 +230,7 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
           icon: 'arrow_cycle',
           label: 'Pindai Ulang',
           large: true,
-          onTap: _verified,
+          onTap: _rescan,
         ),
         PrakLink(
           'Tidak bisa memindai? Gunakan Tombol Hadir',
