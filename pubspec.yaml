@@ -39,6 +39,9 @@ dependencies:
   webview_flutter: ^4.10.0
   supabase_flutter: ^2.18.3
   mailer: ^6.2.0
+  google_maps_flutter: ^2.9.0
+  geolocator: ^13.0.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

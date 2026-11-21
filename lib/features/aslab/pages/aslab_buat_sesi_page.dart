@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../praktikan/widgets/prak_google_map.dart';
 import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
@@ -57,7 +58,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
     labShowInfoSheet(
       context,
       title: 'Titik Lokasi di Peta',
-      header: const PrakLocationMap(inside: true),
+      header: const PrakGoogleMap(inside: true),
       rows: [
         ('location', 'Titik', _titik[_tt]),
         ('crosshairs_gps', 'Koordinat', _koordinat[_tt]),

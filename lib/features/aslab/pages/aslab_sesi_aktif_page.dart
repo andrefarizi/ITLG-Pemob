@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -23,6 +24,11 @@ class AslabSesiAktifPage extends StatefulWidget {
 
 class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
   Timer? _timer;
+
+  /// Kode QR session saat ini — berubah tiap [_left] habis.
+  /// Format: ITLG-{sessionId}-{generation}-{timestamp}
+  String get _qrData =>
+      'ITLG-PEMOB-PERTEMUAN5-GEN$_generation-${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
 
   /// Figma: 12 detik tersisa.
   int _left = 12;
@@ -105,13 +111,20 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
                 children: [
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    child: Transform(
+                    child: QrImageView(
                       key: ValueKey<int>(_generation),
-                      alignment: Alignment.center,
-                      transform: Matrix4.diagonal3Values(
-                          _generation.isOdd ? -1 : 1, 1, 1),
-                      child: Image.asset('assets/aslab_qr.png',
-                          width: 220, height: 220),
+                      data: _qrData,
+                      version: QrVersions.auto,
+                      size: 220,
+                      eyeStyle: const QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: Color(0xFF8B1A1A),
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                      backgroundColor: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 16),

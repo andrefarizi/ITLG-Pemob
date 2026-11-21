@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../praktikan/widgets/prak_google_map.dart';
 import '../aslab_nav.dart';
 
 /// Figma: "Bukti Presensi-Aslab".
@@ -48,7 +49,7 @@ class AslabBuktiPresensiPage extends StatelessWidget {
               left: LabSectionTitle(icon: 'location', text: 'Lokasi Presensi'),
               right: LabChip.live('Di Dalam Area'),
             ),
-            const PrakLocationMap(inside: true),
+            const PrakGoogleMap(inside: true),
             LabInsetBox(
               child: LabColumn(
                 gap: 10,
