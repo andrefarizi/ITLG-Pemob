@@ -13,6 +13,7 @@ import 'features/splash/splash_screen.dart';
 import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
 import 'core/services/lab_desk_sync_service.dart';
+import 'core/services/praktikum_sync_service.dart';
 import 'core/services/supabase_service.dart';
 import 'features/dosen/dosen_shell.dart';
 import 'features/praktikan/praktikan_shell.dart';
@@ -22,6 +23,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.instance.initialize();
   LabDeskSyncService.instance.initialize();
+  PraktikumSyncService.instance.initialize();
   runApp(const ITLGApp());
 }
 

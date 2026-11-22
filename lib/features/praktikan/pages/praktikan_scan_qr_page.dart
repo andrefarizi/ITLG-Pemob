@@ -34,7 +34,6 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
   final MobileScannerController _camera = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
     formats: const [BarcodeFormat.qrCode],
-    cameraResolution: const Size(1280, 720),
   );
   bool _handled = false;
   DateTime? _lastInvalidToast;
@@ -42,9 +41,14 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
   void _verified() => widget.nav.tandaTangan(context);
 
   /// Validasi QR dinamis sesi ITLG:
-  /// Format: ITLG-{sesi}-GEN{n}-{detik epoch}; berlaku <= 60 detik.
+  /// - Format dinamis: ITLG-{sesi}-GEN{n}-{detik epoch}; berlaku <= 60 detik.
+  /// - Format dummy uji coba: ITLG-PEMOB-PERTEMUAN5-TEST.
   String? _validateQr(String raw) {
-    final m = RegExp(r'^ITLG-[A-Z0-9_-]+-GEN\d+-(\d+)$').firstMatch(raw.trim());
+    final code = raw.trim();
+    if (code == 'ITLG-PEMOB-PERTEMUAN5-TEST') {
+      return null;
+    }
+    final m = RegExp(r'^ITLG-[A-Z0-9_-]+-GEN\d+-(\d+)$').firstMatch(code);
     if (m == null) {
       return 'QR tidak valid untuk sesi presensi ITLG';
     }
@@ -113,32 +117,20 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size = constraints.biggest;
-                    final scanWindow = Rect.fromCenter(
-                      center: size.center(Offset.zero),
-                      width: 200,
-                      height: 200,
-                    );
-                    return MobileScanner(
-                      controller: _camera,
-                      fit: BoxFit.cover,
-                      scanWindow: scanWindow,
-                      onDetect: _onDetect,
-                      errorBuilder: (context, error) => Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Kamera tidak dapat diakses. Izinkan akses kamera '
-                            'di pengaturan perangkat.',
-                            textAlign: TextAlign.center,
-                            style: labText(12, c: Colors.white),
-                          ),
-                        ),
+                MobileScanner(
+                  controller: _camera,
+                  onDetect: _onDetect,
+                  errorBuilder: (context, error) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Kamera tidak dapat diakses. Izinkan akses kamera '
+                        'di pengaturan perangkat.',
+                        textAlign: TextAlign.center,
+                        style: labText(12, c: Colors.white),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(20),

@@ -97,17 +97,51 @@ class PraktikanNav {
         false,
       );
 
-  Future<void> detailMateri(BuildContext c, {bool replace = false}) =>
-      _open(c, PraktikanDetailMateriPage(nav: this), replace);
+  Future<void> detailMateri(
+    BuildContext c, {
+    PrakCourse? course,
+    PrakMeeting? meeting,
+    bool replace = false,
+  }) =>
+      _open(
+        c,
+        PraktikanDetailMateriPage(nav: this, course: course, meeting: meeting),
+        replace,
+      );
 
-  Future<void> editTugas(BuildContext c) =>
-      _open(c, PraktikanEditTugasPage(nav: this), false);
+  Future<void> editTugas(
+    BuildContext c, {
+    PrakCourse? course,
+    PrakMeeting? meeting,
+  }) =>
+      _open(
+        c,
+        PraktikanEditTugasPage(nav: this, course: course, meeting: meeting),
+        false,
+      );
 
-  Future<void> kuis(BuildContext c) =>
-      _open(c, PraktikanKuisPage(nav: this), false);
+  Future<void> kuis(
+    BuildContext c, {
+    PrakCourse? course,
+    PrakMeeting? meeting,
+  }) =>
+      _open(
+        c,
+        PraktikanKuisPage(nav: this, course: course, meeting: meeting),
+        false,
+      );
 
-  Future<void> hasilKuis(BuildContext c, {bool replace = false}) =>
-      _open(c, PraktikanHasilKuisPage(nav: this), replace);
+  Future<void> hasilKuis(
+    BuildContext c, {
+    PrakCourse? course,
+    PrakMeeting? meeting,
+    bool replace = false,
+  }) =>
+      _open(
+        c,
+        PraktikanHasilKuisPage(nav: this, course: course, meeting: meeting),
+        replace,
+      );
 
   Future<void> penilaianAsisten(
     BuildContext c,

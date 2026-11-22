@@ -1,4 +1,4 @@
-﻿# Sinkronisasi otomatis lokasi nyata laptop Windows (Windows Location Service)
+# Sinkronisasi otomatis lokasi nyata laptop Windows (Windows Location Service)
 # ke Android Emulator agar GPS emulator selalu mengikuti perpindahan lokasi laptop.
 param(
     [string]$AdbPath = "C:\src\Android\Sdk\platform-tools\adb.exe",

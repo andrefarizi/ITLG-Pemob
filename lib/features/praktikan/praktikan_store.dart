@@ -1,7 +1,6 @@
-/// Data contoh & status tampilan peran Praktikan (tanpa backend).
-///
-/// Semua teks diambil dari Figma (section "01 Praktikan"). Data yang tidak
-/// ada di Figma (misalnya isi praktikum kedua) dibuat mengikuti pola yang sama.
+import '../../core/services/praktikum_sync_service.dart';
+
+/// Data & status tampilan peran Praktikan (tersinkron ke PraktikumSyncService).
 
 enum PrakAttend { upcoming, hadir, izin, pending }
 
@@ -18,6 +17,14 @@ class PrakMeeting {
   /// Lampiran izin yang sudah disetujui.
   final String? izinFile;
 
+  /// Metadata konten pertemuan dari backend (opsional).
+  final String description;
+  final String materiTitle;
+  final String materiFile;
+  final String tugasTitle;
+  final String tugasDeadline;
+  final String kuisTitle;
+
   PrakMeeting({
     required this.number,
     required this.module,
@@ -26,6 +33,12 @@ class PrakMeeting {
     this.noteIcon,
     this.note,
     this.izinFile,
+    this.description = '',
+    this.materiTitle = '',
+    this.materiFile = '',
+    this.tugasTitle = '',
+    this.tugasDeadline = '',
+    this.kuisTitle = '',
   });
 }
 
@@ -52,6 +65,7 @@ class PrakGrade {
 }
 
 class PrakCourse {
+  final String id;
   final String name;
   final String asisten;
   final String asistenInitials;
@@ -70,7 +84,9 @@ class PrakCourse {
   final String modulTitle;
   final String modulDesc;
   final String materiTitle;
+  final String materiFile;
   final String tugasTitle;
+  final String tugasDeadline;
   final String preTest;
   final String postTest;
 
@@ -86,6 +102,7 @@ class PrakCourse {
   final List<PrakGrade> grades;
 
   PrakCourse({
+    this.id = '',
     required this.name,
     required this.asisten,
     required this.asistenInitials,
@@ -98,7 +115,9 @@ class PrakCourse {
     required this.modulTitle,
     required this.modulDesc,
     required this.materiTitle,
+    this.materiFile = '',
     required this.tugasTitle,
+    this.tugasDeadline = 'Batas 10:30 WIB, 29 Sep 2026',
     required this.preTest,
     required this.postTest,
     required this.hadir,
@@ -414,7 +433,7 @@ class PraktikanStore {
     ],
   );
 
-  List<PrakCourse> get courses => [mobile, desain];
+  List<PrakCourse> get courses => PraktikumSyncService.instance.courses;
 
   // ---------------------------------------------------------------------------
   // Pengumuman & notifikasi
