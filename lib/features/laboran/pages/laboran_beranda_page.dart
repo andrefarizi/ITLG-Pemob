@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
@@ -135,12 +136,21 @@ class LaboranBerandaPage extends StatelessWidget {
             _MenuRow(
               children: [
                 Expanded(
-                  child: _MenuCard(
-                    icon: 'calendar',
-                    badge: '2',
-                    title: 'Approval Ruangan',
-                    subtitle: '2 menunggu persetujuan',
-                    onTap: () => onOpenTab(LaboranShell.tabRuangan),
+                  child: ListenableBuilder(
+                    listenable: JadwalSyncService.instance,
+                    builder: (_, __) {
+                      final waiting =
+                          JadwalSyncService.instance.pendingRoomRequestCount;
+                      return _MenuCard(
+                        icon: 'calendar',
+                        badge: waiting > 0 ? '$waiting' : null,
+                        title: 'Approval Ruangan',
+                        subtitle: waiting > 0
+                            ? '$waiting menunggu persetujuan'
+                            : 'Semua ruangan diproses',
+                        onTap: () => onOpenTab(LaboranShell.tabRuangan),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 14),

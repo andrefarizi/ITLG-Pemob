@@ -45,17 +45,35 @@ CREATE TABLE IF NOT EXISTS public.announcements (
 
 CREATE INDEX IF NOT EXISTS idx_announcements_created ON public.announcements(created_at DESC);
 
+-- 3. Tabel Permintaan & Approval Peminjaman Ruangan Lab (public.room_booking_requests)
+CREATE TABLE IF NOT EXISTS public.room_booking_requests (
+    id TEXT PRIMARY KEY,
+    tag TEXT NOT NULL DEFAULT 'Praktikum Pengganti',
+    lab_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    date_label TEXT NOT NULL,
+    time_range TEXT NOT NULL,
+    requester_initials TEXT NOT NULL DEFAULT 'AS',
+    requester_name TEXT NOT NULL,
+    requester_role TEXT NOT NULL DEFAULT 'Asisten Lab',
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'menunggu' CHECK (status IN ('menunggu', 'disetujui', 'ditolak')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- =============================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- =============================================================================
 ALTER TABLE public.praktikum_schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.room_booking_requests ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
     tbl TEXT;
 BEGIN
-    FOREACH tbl IN ARRAY ARRAY['praktikum_schedules', 'announcements'] LOOP
+    FOREACH tbl IN ARRAY ARRAY['praktikum_schedules', 'announcements', 'room_booking_requests'] LOOP
         EXECUTE format('DROP POLICY IF EXISTS "%s_select_all" ON public.%I', tbl, tbl);
         EXECUTE format('CREATE POLICY "%s_select_all" ON public.%I FOR SELECT USING (true)', tbl, tbl);
         EXECUTE format('DROP POLICY IF EXISTS "%s_insert_all" ON public.%I', tbl, tbl);
@@ -72,7 +90,7 @@ DO $$
 DECLARE
     tbl TEXT;
 BEGIN
-    FOREACH tbl IN ARRAY ARRAY['praktikum_schedules', 'announcements'] LOOP
+    FOREACH tbl IN ARRAY ARRAY['praktikum_schedules', 'announcements', 'room_booking_requests'] LOOP
         BEGIN
             EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
         EXCEPTION WHEN duplicate_object THEN NULL;
@@ -120,3 +138,21 @@ INSERT INTO public.announcements (
     NULL, NULL, NULL
 )
 ON CONFLICT DO NOTHING;
+
+INSERT INTO public.room_booking_requests (
+    id, tag, lab_name, title, date_label, time_range,
+    requester_initials, requester_name, requester_role, reason, status
+) VALUES
+(
+    'room-req-1', 'Praktikum Pengganti', 'Lab Komputer 1',
+    'Praktikum Basis Data • Kelas B', 'Kam, 01 Okt 2026', '13:00–14:40',
+    'SM', 'Sinta Marpaung', 'Asisten Lab',
+    'Pengganti pertemuan 3 yang bertepatan dengan libur nasional.', 'menunggu'
+),
+(
+    'room-req-2', 'Kelas Pengganti', 'Lab Multimedia',
+    'Pemrograman Mobile • Kelas A', 'Jum, 02 Okt 2026', '10:00–11:40',
+    'AR', 'Abbil Rizki', 'Asisten Lab',
+    'Kelas pengganti karena perbaikan proyektor di Lab Komputer 1.', 'menunggu'
+)
+ON CONFLICT (id) DO NOTHING;

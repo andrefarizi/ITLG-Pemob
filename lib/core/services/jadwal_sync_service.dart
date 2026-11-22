@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/laboran/laboran_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
 import 'device_calendar_service.dart';
 import 'notification_sync_service.dart';
@@ -161,6 +162,93 @@ class AnnouncementRecord {
   }
 }
 
+/// Data permintaan & persetujuan peminjaman ruangan lab (Aslab ↔ Laboran).
+class RoomBookingRecord {
+  final String id;
+  final String tag;
+  final String labName;
+  final String title;
+  final String dateLabel;
+  final String timeRange;
+  final String initials;
+  final String requesterName;
+  final String requesterRole;
+  final String reason;
+  RoomStatus status;
+  final DateTime createdAt;
+
+  RoomBookingRecord({
+    required this.id,
+    required this.tag,
+    required this.labName,
+    required this.title,
+    required this.dateLabel,
+    required this.timeRange,
+    required this.initials,
+    required this.requesterName,
+    this.requesterRole = 'Asisten Lab',
+    required this.reason,
+    this.status = RoomStatus.menunggu,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  RoomRequest toRoomRequest() => RoomRequest(
+        tag: tag,
+        lab: labName,
+        title: title,
+        date: dateLabel,
+        time: timeRange,
+        initials: initials,
+        name: requesterName,
+        role: requesterRole,
+        reason: reason,
+        status: status,
+      );
+
+  static RoomStatus parseStatus(String? raw) {
+    switch ((raw ?? '').toLowerCase()) {
+      case 'disetujui':
+      case 'approved':
+        return RoomStatus.disetujui;
+      case 'ditolak':
+      case 'rejected':
+        return RoomStatus.ditolak;
+      default:
+        return RoomStatus.menunggu;
+    }
+  }
+
+  static String serializeStatus(RoomStatus st) {
+    switch (st) {
+      case RoomStatus.disetujui:
+        return 'disetujui';
+      case RoomStatus.ditolak:
+        return 'ditolak';
+      case RoomStatus.menunggu:
+        return 'menunggu';
+    }
+  }
+
+  factory RoomBookingRecord.fromJson(Map<String, dynamic> json) {
+    return RoomBookingRecord(
+      id: (json['id'] ?? '').toString(),
+      tag: (json['tag'] ?? 'Praktikum Pengganti').toString(),
+      labName: (json['lab_name'] ?? 'Lab Komputer 1').toString(),
+      title: (json['title'] ?? 'Praktikum Pengganti').toString(),
+      dateLabel: (json['date_label'] ?? 'Kam, 01 Okt 2026').toString(),
+      timeRange: (json['time_range'] ?? '13:00–14:40').toString(),
+      initials: (json['requester_initials'] ?? 'AS').toString(),
+      requesterName: (json['requester_name'] ?? 'Asisten Lab').toString(),
+      requesterRole: (json['requester_role'] ?? 'Asisten Lab').toString(),
+      reason: (json['reason'] ?? '').toString(),
+      status: parseStatus(json['status'] as String?),
+      createdAt: json['created_at'] != null
+          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+    );
+  }
+}
+
 /// Service pusat sinkronisasi Jadwal Praktikum & Pengumuman Perubahan Jadwal
 /// ke Supabase + Realtime serta otomatis ke Kalender perangkat pengguna.
 class JadwalSyncService extends ChangeNotifier {
@@ -171,6 +259,7 @@ class JadwalSyncService extends ChangeNotifier {
 
   final List<PraktikumScheduleRecord> _schedules = [];
   final List<AnnouncementRecord> _announcements = [];
+  final List<RoomBookingRecord> _roomRequests = [];
 
   RealtimeChannel? _channel;
   bool _initialized = false;
@@ -180,6 +269,10 @@ class JadwalSyncService extends ChangeNotifier {
   List<PraktikumScheduleRecord> get schedules => List.unmodifiable(_schedules);
   List<AnnouncementRecord> get announcements =>
       List.unmodifiable(_announcements);
+  List<RoomBookingRecord> get roomRequests => List.unmodifiable(_roomRequests);
+
+  int get pendingRoomRequestCount =>
+      _roomRequests.where((r) => r.status == RoomStatus.menunggu).length;
 
   List<PraktikumScheduleRecord> schedulesForDay(int dayIndex) {
     return _schedules.where((s) => s.dayIndex == dayIndex).toList()
@@ -287,6 +380,37 @@ class JadwalSyncService extends ChangeNotifier {
           createdAt: now.subtract(const Duration(days: 1)),
         ),
       ]);
+
+    _roomRequests
+      ..clear()
+      ..addAll([
+        RoomBookingRecord(
+          id: 'room-req-1',
+          tag: 'Praktikum Pengganti',
+          labName: 'Lab Komputer 1',
+          title: 'Praktikum Basis Data • Kelas B',
+          dateLabel: 'Kam, 01 Okt 2026',
+          timeRange: '13:00–14:40',
+          initials: 'SM',
+          requesterName: 'Sinta Marpaung',
+          requesterRole: 'Asisten Lab',
+          reason:
+              'Pengganti pertemuan 3 yang bertepatan dengan libur nasional.',
+        ),
+        RoomBookingRecord(
+          id: 'room-req-2',
+          tag: 'Kelas Pengganti',
+          labName: 'Lab Multimedia',
+          title: 'Pemrograman Mobile • Kelas A',
+          dateLabel: 'Jum, 02 Okt 2026',
+          timeRange: '10:00–11:40',
+          initials: 'AR',
+          requesterName: 'Abbil Rizki',
+          requesterRole: 'Asisten Lab',
+          reason:
+              'Kelas pengganti karena perbaikan proyektor di Lab Komputer 1.',
+        ),
+      ]);
   }
 
   Future<void> initialize() async {
@@ -327,6 +451,21 @@ class JadwalSyncService extends ChangeNotifier {
               (r) => AnnouncementRecord.fromJson(Map<String, dynamic>.from(r))));
       }
 
+      try {
+        final roomRows = await client
+            .from('room_booking_requests')
+            .select()
+            .order('created_at', ascending: false);
+        if (roomRows.isNotEmpty) {
+          _roomRequests
+            ..clear()
+            ..addAll(roomRows.map((r) =>
+                RoomBookingRecord.fromJson(Map<String, dynamic>.from(r))));
+        }
+      } catch (e) {
+        debugPrint('[JadwalSync] Load room_booking_requests dilewati: $e');
+      }
+
       _backendAvailable = true;
       notifyListeners();
       debugPrint(
@@ -361,6 +500,12 @@ class JadwalSyncService extends ChangeNotifier {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'announcements',
+            callback: (_) => refreshFromBackend(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'room_booking_requests',
             callback: (_) => refreshFromBackend(),
           )
           .subscribe();
@@ -461,11 +606,60 @@ class JadwalSyncService extends ChangeNotifier {
       important: categoryIndex != 1,
     );
     if (categoryIndex == 0 && newRoom != null) {
+      final parts = author.trim().split(RegExp(r'\s+'));
+      final initials = parts.length >= 2
+          ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+          : (author.isNotEmpty ? author.substring(0, 1).toUpperCase() : 'AS');
+      final schedParts = (newScheduleLabel ?? 'Kam, 01 Okt 2026 • 13:00–14:40')
+          .split('•');
+      final dateLbl = schedParts.first.trim();
+      final timeLbl =
+          schedParts.length > 1 ? schedParts.last.trim() : '13:00–14:40';
+      final roomReq = RoomBookingRecord(
+        id: 'room-req-${now.millisecondsSinceEpoch}',
+        tag: 'Praktikum Pengganti',
+        labName: newRoom,
+        title: title,
+        dateLabel: dateLbl,
+        timeRange: timeLbl,
+        initials: initials,
+        requesterName: author,
+        requesterRole: 'Asisten Lab',
+        reason: body.isNotEmpty
+            ? body
+            : 'Perubahan jadwal praktikum oleh asisten.',
+      );
+      _roomRequests.insert(0, roomReq);
+      notifyListeners();
+
+      final client = SupabaseService.instance.client;
+      if (client != null) {
+        try {
+          await client.from('room_booking_requests').insert({
+            'id': roomReq.id,
+            'tag': roomReq.tag,
+            'lab_name': roomReq.labName,
+            'title': roomReq.title,
+            'date_label': roomReq.dateLabel,
+            'time_range': roomReq.timeRange,
+            'requester_initials': roomReq.initials,
+            'requester_name': roomReq.requesterName,
+            'requester_role': roomReq.requesterRole,
+            'reason': roomReq.reason,
+            'status': 'menunggu',
+            'created_at': now.toIso8601String(),
+            'updated_at': now.toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('[JadwalSync] insert room request fallback lokal: $e');
+        }
+      }
+
       NotificationSyncService.instance.push(
         role: 'laboran',
         icon: 'calendar',
-        title: 'Perubahan Jadwal Ruangan',
-        body: '$title • $newRoom (${newScheduleLabel ?? ''})',
+        title: 'Permintaan Peminjaman Ruangan',
+        body: '$author • $newRoom ($dateLbl, $timeLbl)',
         targetKey: 'ruangan',
         important: true,
       );
@@ -498,6 +692,49 @@ class JadwalSyncService extends ChangeNotifier {
         await DeviceCalendarService.instance.hasPermission()) {
       await DeviceCalendarService.instance
           .syncSchedules(_schedules, askPermission: false);
+    }
+  }
+
+  /// Setujui / tolak permintaan peminjaman ruangan oleh Laboran dan sinkronkan
+  /// ke Supabase (`public.room_booking_requests`) + notifikasi ke Aslab.
+  Future<void> decideRoomRequest({
+    required String requestId,
+    required RoomStatus status,
+  }) async {
+    RoomBookingRecord? target;
+    for (final r in _roomRequests) {
+      if (r.id == requestId) {
+        target = r;
+        break;
+      }
+    }
+    if (target == null) return;
+
+    target.status = status;
+    notifyListeners();
+
+    final approved = status == RoomStatus.disetujui;
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: approved ? 'circle_check' : 'cross',
+      title:
+          'Peminjaman ${target.labName} ${approved ? 'Disetujui' : 'Ditolak'}',
+      body: '${target.title} • ${target.dateLabel} (${target.timeRange})',
+      targetKey: 'shiftJaga',
+      important: true,
+    );
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('room_booking_requests').update({
+          'status': RoomBookingRecord.serializeStatus(status),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', requestId);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[JadwalSync] decideRoomRequest fallback lokal: $e');
+      }
     }
   }
 }

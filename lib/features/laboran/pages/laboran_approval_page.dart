@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
@@ -14,6 +15,7 @@ class LaboranApprovalPage extends StatefulWidget {
 }
 
 class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
+  final JadwalSyncService _sync = JadwalSyncService.instance;
   int _tab = 0;
 
   static const List<RoomStatus> _order = [
@@ -22,51 +24,63 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
     RoomStatus.ditolak,
   ];
 
-  void _decide(RoomRequest request, RoomStatus status) {
-    setState(() => request.status = status);
+  @override
+  void initState() {
+    super.initState();
+    _sync.refreshFromBackend();
+  }
+
+  Future<void> _decide(RoomBookingRecord request, RoomStatus status) async {
+    await _sync.decideRoomRequest(requestId: request.id, status: status);
+    if (!mounted) return;
     labToast(
       context,
       status == RoomStatus.disetujui
-          ? 'Peminjaman ${request.lab} disetujui'
-          : 'Peminjaman ${request.lab} ditolak',
+          ? 'Peminjaman ${request.labName} disetujui & disinkronkan ke BE'
+          : 'Peminjaman ${request.labName} ditolak',
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final all = widget.store.requests;
-    final waiting =
-        all.where((r) => r.status == RoomStatus.menunggu).length;
-    final shown = all.where((r) => r.status == _order[_tab]).toList();
-    return LabTabBody(
-      children: [
-        const LabTitle(
-          title: 'Approval Ruangan',
-          subtitle:
-              'Permintaan peminjaman ruangan untuk kelas dan praktikum '
-              'pengganti',
-        ),
-        LabTabs(
-          labels: ['Menunggu ($waiting)', 'Disetujui', 'Ditolak'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        for (final r in shown)
-          _RequestCard(
-            request: r,
-            onReject: () => _decide(r, RoomStatus.ditolak),
-            onApprove: () => _decide(r, RoomStatus.disetujui),
-          ),
-        if (shown.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text(
-              'Tidak ada permintaan pada status ini.',
-              textAlign: TextAlign.center,
-              style: labText(12, c: ItlgColors.textSubtle),
+    return ListenableBuilder(
+      listenable: _sync,
+      builder: (context, _) {
+        final all = _sync.roomRequests;
+        final waiting =
+            all.where((r) => r.status == RoomStatus.menunggu).length;
+        final shown = all.where((r) => r.status == _order[_tab]).toList();
+        return LabTabBody(
+          children: [
+            const LabTitle(
+              title: 'Approval Ruangan',
+              subtitle:
+                  'Permintaan peminjaman ruangan untuk kelas dan praktikum '
+                  'pengganti',
             ),
-          ),
-      ],
+            LabTabs(
+              labels: ['Menunggu ($waiting)', 'Disetujui', 'Ditolak'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            for (final r in shown)
+              _RequestCard(
+                request: r.toRoomRequest(),
+                onReject: () => _decide(r, RoomStatus.ditolak),
+                onApprove: () => _decide(r, RoomStatus.disetujui),
+              ),
+            if (shown.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'Tidak ada permintaan pada status ini.',
+                  textAlign: TextAlign.center,
+                  style: labText(12, c: ItlgColors.textSubtle),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
