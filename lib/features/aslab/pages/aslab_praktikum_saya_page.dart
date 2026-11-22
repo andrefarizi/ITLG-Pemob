@@ -160,11 +160,15 @@ class _CourseCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                LabIconTile('book_open'),
-                LabTag.blue('Kelas C'),
+                const LabIconTile('book_open'),
+                LabTag.blue(
+                  course.kelas.contains(' - ')
+                      ? course.kelas.split(' - ').last
+                      : course.kelas,
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -182,10 +186,10 @@ class _CourseCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            const LabProgress(
+            LabProgress(
               label: 'Pertemuan',
-              value: '4 / 12',
-              fraction: 50 / 150,
+              value: '${course.meetings.length} / 12',
+              fraction: (course.meetings.length / 12).clamp(0.0, 1.0),
             ),
           ],
         ),

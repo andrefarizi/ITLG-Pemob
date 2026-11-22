@@ -174,6 +174,7 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
                         context,
                         student: st,
                         courseId: c.id,
+                        meetingNumber: rec.meetingNumber,
                       ),
                     );
                   },
