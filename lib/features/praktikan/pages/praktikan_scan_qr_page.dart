@@ -38,7 +38,7 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
   bool _handled = false;
   DateTime? _lastInvalidToast;
 
-  void _verified() => widget.nav.tandaTangan(context);
+  void _verified() => widget.nav.tandaTangan(context, method: 'qr');
 
   /// Validasi QR dinamis sesi ITLG:
   /// - Format dinamis: ITLG-{sesi}-GEN{n}-{detik epoch}; berlaku <= 60 detik.

@@ -2,20 +2,26 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
 /// Figma: "Kuis Pre-Test-Praktikan".
-///
-/// Dibuka di posisi yang sama dengan Figma (Soal 3, soal 1–2 terjawab, B
-/// dipilih). "Selanjutnya" pindah ke soal berikutnya; di soal terakhir
-/// membuka Hasil Kuis.
 class PraktikanKuisPage extends StatefulWidget {
   final PraktikanNav nav;
-  const PraktikanKuisPage({super.key, required this.nav});
+  final PrakCourse? course;
+  final PrakMeeting? meeting;
+
+  const PraktikanKuisPage({
+    super.key,
+    required this.nav,
+    this.course,
+    this.meeting,
+  });
 
   @override
   State<PraktikanKuisPage> createState() => _PraktikanKuisPageState();
@@ -23,15 +29,27 @@ class PraktikanKuisPage extends StatefulWidget {
 
 class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
   static const List<String> _letters = ['A', 'B', 'C', 'D'];
-  Timer? _timer;
+  static const int _initialSeconds = 10 * 60;
 
-  PraktikanStore get _s => widget.nav.store;
+  final PraktikumSyncService _sync = PraktikumSyncService.instance;
+  final Map<int, int> _answers = {};
+  final Map<int, int> _draft = {};
+  int _index = 0;
+  int _secondsLeft = _initialSeconds;
+  Timer? _timer;
+  bool _submitting = false;
+
+  PrakCourse get _course => widget.course ?? _sync.courses.first;
+  int get _meetingNumber => widget.meeting?.number ?? 4;
+  List<PrakQuestion> get _questions => _sync.questionsForCourse(_course.id);
 
   @override
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_s.quizSecondsLeft > 0) setState(() => _s.quizSecondsLeft--);
+      if (_secondsLeft > 0 && mounted) {
+        setState(() => _secondsLeft--);
+      }
     });
   }
 
@@ -41,44 +59,65 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
     super.dispose();
   }
 
-  int? get _selected =>
-      _s.quizDraft[_s.quizIndex] ?? _s.quizAnswers[_s.quizIndex];
+  int? get _selected => _draft[_index] ?? _answers[_index];
 
   void _commit() {
-    final d = _s.quizDraft.remove(_s.quizIndex);
-    if (d != null) _s.quizAnswers[_s.quizIndex] = d;
+    final d = _draft.remove(_index);
+    if (d != null) _answers[_index] = d;
   }
 
   void _go(int index) {
     setState(() {
       _commit();
-      _s.quizIndex = index;
+      _index = index;
     });
   }
 
   void _prev() {
-    if (_s.quizIndex == 0) {
+    if (_index == 0) {
       Navigator.of(context).maybePop();
       return;
     }
-    _go(_s.quizIndex - 1);
+    _go(_index - 1);
   }
 
-  void _next() {
-    if (_s.quizIndex < _s.questions.length - 1) {
-      _go(_s.quizIndex + 1);
+  Future<void> _next() async {
+    if (_index < _questions.length - 1) {
+      _go(_index + 1);
       return;
     }
-    setState(_commit);
-    widget.nav.hasilKuis(context, replace: true);
+    if (_submitting) return;
+    setState(() {
+      _commit();
+      _submitting = true;
+    });
+
+    final auth = AuthController.instance;
+    final elapsed = (_initialSeconds - _secondsLeft).clamp(1, _initialSeconds);
+    await _sync.submitKuisAttempt(
+      courseId: _course.id,
+      meetingNumber: _meetingNumber,
+      userIdentifier: auth.userIdentifier,
+      userName: auth.userName,
+      answers: _answers,
+      durationSeconds: elapsed,
+    );
+    if (!mounted) return;
+    widget.nav.hasilKuis(
+      context,
+      course: _course,
+      meeting: widget.meeting,
+      replace: true,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = _s.questions.length;
-    final i = _s.quizIndex;
-    final q = _s.questions[i];
-    final answered = _s.quizAnswers.length;
+    final questions = _questions;
+    final total = questions.length;
+    final i = _index;
+    final q = questions[i];
+    final answered = _answers.length;
     final percent = ((i + 1) * 100 / total).round();
 
     return LabSubPage(
@@ -91,11 +130,11 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
                 alignment: Alignment.centerLeft,
                 child: LabTag.blue('Pre-Test'),
               ),
-              right: PrakTimerPill(prakClock(_s.quizSecondsLeft)),
+              right: PrakTimerPill(prakClock(_secondsLeft)),
             ),
-            const LabOverline(
-              overline: 'Praktikum Pemrograman Mobile',
-              title: 'Kuis Modul 4 :\nState Management',
+            LabOverline(
+              overline: 'Praktikum ${_course.name}',
+              title: 'Kuis Modul $_meetingNumber :\n${_course.modulTitle}',
             ),
             LabProgress(
               label: 'Soal ${i + 1} dari $total',
@@ -118,7 +157,7 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
                     letter: _letters[o],
                     text: q.options[o],
                     selected: _selected == o,
-                    onTap: () => setState(() => _s.quizDraft[i] = o),
+                    onTap: () => setState(() => _draft[i] = o),
                   ),
               ],
             ),
@@ -139,7 +178,7 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
             Expanded(
               flex: 175,
               child: PrakTrailingButton(
-                label: 'Selanjutnya',
+                label: i == total - 1 ? 'Selesai' : 'Selanjutnya',
                 icon: 'arrow_right',
                 large: true,
                 onTap: _next,
@@ -162,7 +201,7 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
                   _NumberDot(
                     number: n + 1,
                     current: n == i,
-                    answered: _s.quizAnswers.containsKey(n),
+                    answered: _answers.containsKey(n),
                     onTap: () => _go(n),
                   ),
               ],

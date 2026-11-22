@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -63,8 +64,34 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _all.where(_match).toList();
-    return LabSubPage(
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final dynamicSubs = <_Submission>[];
+        for (final c in sync.courses) {
+          for (final rec in sync.submissionsForCourse(c.id, 4)) {
+            final parts = rec.userName.trim().split(RegExp(r'\s+'));
+            final initials = parts.length >= 2
+                ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+                : (rec.userName.isNotEmpty
+                    ? rec.userName.substring(0, 1).toUpperCase()
+                    : 'PR');
+            dynamicSubs.add(
+              _Submission(
+                AslabStudent(initials, rec.userName, rec.userIdentifier),
+                rec.status == 'graded',
+                [
+                  for (final f in rec.files) ('file', f.name),
+                  if (rec.repoUrl.isNotEmpty) ('link_chain', rec.repoUrl),
+                ],
+              ),
+            );
+          }
+        }
+        final combined = [...dynamicSubs, ..._all];
+        final items = combined.where(_match).toList();
+        return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
         const LabTitle(
@@ -125,6 +152,8 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
                 style: labText(12, c: ItlgColors.textSubtle)),
           ),
       ],
+    );
+      },
     );
   }
 }

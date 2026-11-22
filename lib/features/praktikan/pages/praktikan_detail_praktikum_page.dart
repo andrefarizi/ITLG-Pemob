@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -27,24 +29,48 @@ class PraktikanDetailPraktikumPage extends StatefulWidget {
 
 class _PraktikanDetailPraktikumPageState
     extends State<PraktikanDetailPraktikumPage> {
+  final PraktikumSyncService _sync = PraktikumSyncService.instance;
+
   /// 0 Semua Pertemuan, 1 Materi, 2 Tugas.
   int _tab = 0;
 
   static const List<String> _labels = ['Semua Pertemuan', 'Materi', 'Tugas'];
   static const List<double> _widths = [144, 86, 86];
 
+  @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _sync.removeListener(_onSyncChanged);
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  PrakCourse get _course => widget.course.id.isNotEmpty
+      ? _sync.courseById(widget.course.id)
+      : widget.course;
+
   /// Pertemuan yang sudah berjalan (1–4), terbaru di atas.
   List<PrakMeeting> get _meetings =>
-      widget.course.meetings.where((m) => m.number <= 4).toList();
+      _course.meetings.where((m) => m.number <= 4).toList();
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.course;
+    final c = _course;
     final nav = widget.nav;
+    final doneCount = _meetings.length;
     return LabSubPage(
       onLogoTap: nav.home,
       children: [
-        _header(c),
+        _header(c, doneCount),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
@@ -75,7 +101,7 @@ class _PraktikanDetailPraktikumPageState
                     style: labText(16, w: kBold),
                   ),
                 ),
-                Text('4 dari 12',
+                Text('$doneCount dari 12',
                     style: labText(12, w: kMedium, c: LabColors.textGrey)),
               ],
             ),
@@ -88,9 +114,9 @@ class _PraktikanDetailPraktikumPageState
         ),
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabSectionTitle(icon: 'star', text: 'Rating Asisten'),
-              right: LabTag.grey('4 / 12 pertemuan'),
+            PrakSpaceRow(
+              left: const LabSectionTitle(icon: 'star', text: 'Rating Asisten'),
+              right: LabTag.grey('$doneCount / 12 pertemuan'),
             ),
             Text(
               'Penilaian asisten dibuka setelah seluruh pertemuan praktikum '
@@ -117,35 +143,51 @@ class _PraktikanDetailPraktikumPageState
 
   Widget _row(PrakMeeting m) {
     final nav = widget.nav;
-    final c = widget.course;
+    final c = _course;
+    final userId = AuthController.instance.userIdentifier;
     final current = m.number == 4;
+    final sub = _sync.submissionFor(c.id, m.number, userId);
+    final taskDone = !current || (sub != null && sub.isSubmitted);
+    final pending = _sync.pendingItemsCount(c.id, m.number, userId);
+
     switch (_tab) {
       case 1:
+        final materiLabel = m.materiTitle.isNotEmpty
+            ? m.materiTitle
+            : (m.number == 4 ? c.materiTitle : 'Materi ${_title(m)}');
         return _MeetingRow(
           number: m.number,
-          title: m.number == 4 ? c.materiTitle : 'Materi ${_title(m)}',
+          title: materiLabel,
           subtitle: 'PDF • diunggah asisten',
           trailing: Text('Lihat',
               style: labText(13, w: kSemiBold, c: ItlgColors.primary)),
-          onTap: () => nav.detailMateri(context),
+          onTap: () => nav.detailMateri(context, course: c, meeting: m),
         );
       case 2:
+        final tugasLabel = m.tugasTitle.isNotEmpty
+            ? m.tugasTitle
+            : (m.number == 4
+                ? c.tugasTitle
+                : 'Tugas ${m.number} • ${_title(m)}');
+        final deadlineLabel = m.tugasDeadline.isNotEmpty
+            ? m.tugasDeadline
+            : (current ? c.tugasDeadline : _date(m));
         return _MeetingRow(
           number: m.number,
-          title: m.number == 4 ? c.tugasTitle : 'Tugas ${m.number} • ${_title(m)}',
-          subtitle: current ? 'Batas 10:30 WIB, 29 Sep 2026' : _date(m),
-          trailing: current
-              ? const PrakSoftChip.warn('Belum dikumpulkan')
-              : const PrakSoftChip.done('Selesai'),
-          onTap: () => nav.editTugas(context),
+          title: tugasLabel,
+          subtitle: deadlineLabel,
+          trailing: taskDone
+              ? const PrakSoftChip.done('Selesai')
+              : const PrakSoftChip.warn('Belum dikumpulkan'),
+          onTap: () => nav.editTugas(context, course: c, meeting: m),
         );
       default:
         return _MeetingRow(
           number: m.number,
           title: _title(m),
           subtitle: _date(m),
-          trailing: current
-              ? const PrakSoftChip.warn('2 belum selesai')
+          trailing: pending > 0
+              ? PrakSoftChip.warn('$pending belum selesai')
               : const PrakSoftChip.done('Selesai'),
           onTap: () => nav.detailPertemuan(context, c, m),
         );
@@ -153,7 +195,7 @@ class _PraktikanDetailPraktikumPageState
   }
 
   // Kartu judul (370 x 268).
-  Widget _header(PrakCourse c) {
+  Widget _header(PrakCourse c, int doneCount) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 23, 13, 28),
       decoration: BoxDecoration(
@@ -208,7 +250,7 @@ class _PraktikanDetailPraktikumPageState
                           style: labText(16,
                               w: kBold, c: ItlgColors.textSubtle)),
                     ),
-                    Text('4 / 12',
+                    Text('$doneCount / 12',
                         style: labText(16, w: kBold, c: PrakColors.ink)),
                   ],
                 ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -22,8 +24,7 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
     required this.meeting,
   });
 
-  /// Pertemuan yang sedang berjalan (tugas & kuis belum selesai).
-  bool get _current => meeting.number >= 4;
+  bool get _isCurrent => meeting.number >= 4;
 
   String get _title => meeting.module.replaceFirst(' • ', ' : ');
 
@@ -34,111 +35,145 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
   }
 
   String get _desc {
-    if (meeting.number == 4) {
-      return course == nav.store.desain
-          ? 'Pembahasan materi Figma secara mendalam: komponen, variant, '
-              'dan auto layout.'
-          : course.modulDesc;
-    }
+    if (meeting.description.isNotEmpty) return meeting.description;
+    if (meeting.number == 4) return course.modulDesc;
     return 'Materi, tugas, dan kuis untuk ${_title.toLowerCase()}.';
   }
 
   @override
   Widget build(BuildContext context) {
-    return LabSubPage(
-      onLogoTap: nav.home,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: LabColumn(
-            gap: 8,
-            children: [
-              Text(_meta,
-                  style: labText(12, w: kMedium, c: LabColors.textGrey)),
-              Text(_title, style: labText(22, w: kBold)),
-              Text(_desc,
-                  style: labText(14, c: LabColors.textGrey)
-                      .copyWith(height: 1.4)),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Materi',
-          child: _WhiteCard(
-            onTap: () => nav.detailMateri(context),
-            children: [
-              _ItemRow(
-                icon: 'book_open_solid',
-                iconColor: ItlgColors.secondary,
-                title: meeting.number == 4
-                    ? course.materiTitle
-                    : 'Materi ${_title.split(' : ').last}',
-                lines: [
-                  Text('PDF • diunggah asisten',
-                      style: labText(12, c: LabColors.textGrey)),
-                ],
-                trailing: Text('Lihat',
-                    style: labText(13, w: kSemiBold, c: ItlgColors.primary)),
-              ),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Tugas',
-          child: _WhiteCard(
-            children: [
-              _ItemRow(
-                icon: 'h_clipboard',
-                iconColor: ItlgColors.primaryDark,
-                title: meeting.number == 4
-                    ? course.tugasTitle
-                    : 'Tugas ${meeting.number} : ${_title.split(' : ').last}',
-                lines: [
-                  Text(
-                      _current
-                          ? 'Batas 10:30 WIB, 29 Sep 2026'
-                          : 'Sudah dinilai asisten',
-                      style: labText(12, c: LabColors.textGrey)),
-                  _current
-                      ? const PrakSoftChip.warn('Belum Dikumpulkan')
-                      : const PrakSoftChip.done('Sudah Dikumpulkan'),
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final userId = AuthController.instance.userIdentifier;
+        final sub = sync.submissionFor(course.id, meeting.number, userId);
+        final attempt = sync.quizAttemptFor(course.id, meeting.number, userId);
+
+        final taskSubmitted = !_isCurrent || (sub != null && sub.isSubmitted);
+        final quizDone = !_isCurrent || attempt != null;
+
+        final materiLabel = meeting.materiTitle.isNotEmpty
+            ? meeting.materiTitle
+            : (meeting.number == 4
+                ? course.materiTitle
+                : 'Materi ${_title.split(' : ').last}');
+
+        final tugasLabel = meeting.tugasTitle.isNotEmpty
+            ? meeting.tugasTitle
+            : (meeting.number == 4
+                ? course.tugasTitle
+                : 'Tugas ${meeting.number} : ${_title.split(' : ').last}');
+
+        final tugasSub = _isCurrent
+            ? (meeting.tugasDeadline.isNotEmpty
+                ? meeting.tugasDeadline
+                : course.tugasDeadline)
+            : 'Sudah dinilai asisten';
+
+        final kuisLabel = meeting.kuisTitle.isNotEmpty
+            ? meeting.kuisTitle
+            : (_isCurrent
+                ? course.preTest
+                : 'Pre-Test Modul ${meeting.number}');
+
+        final kuisSub = attempt != null
+            ? '10 soal • Nilai ${attempt.score} / 100'
+            : (_isCurrent ? '10 soal • 10 menit' : '10 soal • Nilai 80 / 100');
+
+        return LabSubPage(
+          onLogoTap: nav.home,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: LabColumn(
+                gap: 8,
+                children: [
+                  Text(_meta,
+                      style: labText(12, w: kMedium, c: LabColors.textGrey)),
+                  Text(_title, style: labText(22, w: kBold)),
+                  Text(_desc,
+                      style: labText(14, c: LabColors.textGrey)
+                          .copyWith(height: 1.4)),
                 ],
               ),
-              _current
-                  ? _Button.primary('Kumpulkan Tugas',
-                      onTap: () => nav.editTugas(context))
-                  : _Button.outline('Lihat Pengumpulan',
-                      onTap: () => nav.editTugas(context)),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Kuis',
-          child: _WhiteCard(
-            children: [
-              _ItemRow(
-                icon: 'question',
-                iconColor: ItlgColors.primary,
-                title: _current
-                    ? course.preTest
-                    : 'Pre-Test Modul ${meeting.number}',
-                lines: [
-                  Text(_current ? '10 soal • 10 menit' : '10 soal • Nilai 80 / 100',
-                      style: labText(12, c: LabColors.textGrey)),
-                  _current
-                      ? const PrakSoftChip.warn('Belum Dikerjakan')
-                      : const PrakSoftChip.done('Sudah Dikerjakan'),
+            ),
+            _Section(
+              title: 'Materi',
+              child: _WhiteCard(
+                onTap: () =>
+                    nav.detailMateri(context, course: course, meeting: meeting),
+                children: [
+                  _ItemRow(
+                    icon: 'book_open_solid',
+                    iconColor: ItlgColors.secondary,
+                    title: materiLabel,
+                    lines: [
+                      Text('PDF • diunggah asisten',
+                          style: labText(12, c: LabColors.textGrey)),
+                    ],
+                    trailing: Text('Lihat',
+                        style: labText(13,
+                            w: kSemiBold, c: ItlgColors.primary)),
+                  ),
                 ],
               ),
-              _current
-                  ? _Button.primary('Kerjakan Kuis',
-                      onTap: () => nav.kuis(context))
-                  : _Button.outline('Lihat Hasil Kuis',
-                      onTap: () => nav.hasilKuis(context)),
-            ],
-          ),
-        ),
-      ],
+            ),
+            _Section(
+              title: 'Tugas',
+              child: _WhiteCard(
+                children: [
+                  _ItemRow(
+                    icon: 'h_clipboard',
+                    iconColor: ItlgColors.primaryDark,
+                    title: tugasLabel,
+                    lines: [
+                      Text(tugasSub,
+                          style: labText(12, c: LabColors.textGrey)),
+                      taskSubmitted
+                          ? const PrakSoftChip.done('Sudah Dikumpulkan')
+                          : const PrakSoftChip.warn('Belum Dikumpulkan'),
+                    ],
+                  ),
+                  taskSubmitted
+                      ? _Button.outline('Lihat Pengumpulan',
+                          onTap: () => nav.editTugas(context,
+                              course: course, meeting: meeting))
+                      : _Button.primary('Kumpulkan Tugas',
+                          onTap: () => nav.editTugas(context,
+                              course: course, meeting: meeting)),
+                ],
+              ),
+            ),
+            _Section(
+              title: 'Kuis',
+              child: _WhiteCard(
+                children: [
+                  _ItemRow(
+                    icon: 'question',
+                    iconColor: ItlgColors.primary,
+                    title: kuisLabel,
+                    lines: [
+                      Text(kuisSub,
+                          style: labText(12, c: LabColors.textGrey)),
+                      quizDone
+                          ? const PrakSoftChip.done('Sudah Dikerjakan')
+                          : const PrakSoftChip.warn('Belum Dikerjakan'),
+                    ],
+                  ),
+                  quizDone
+                      ? _Button.outline('Lihat Hasil Kuis',
+                          onTap: () => nav.hasilKuis(context,
+                              course: course, meeting: meeting))
+                      : _Button.primary('Kerjakan Kuis',
+                          onTap: () => nav.kuis(context,
+                              course: course, meeting: meeting)),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -259,4 +294,3 @@ class _Button extends StatelessWidget {
     );
   }
 }
-

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -13,69 +14,96 @@ class PraktikanNilaiPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final store = nav.store;
-    return LabTabBody(
-      children: [
-        const LabTitle(
-          title: 'Nilai',
-          subtitle: 'Ringkasan nilai praktikum Semester Ganjil 2026/2027',
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
-          decoration: BoxDecoration(
-            color: ItlgColors.surfaceDark,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: ItlgShadows.outline,
-          ),
-          child: Column(
-            children: [
-              const PrakIconWell('trophy'),
-              const SizedBox(height: 13),
-              Text('Nilai Rata-rata Anda',
-                  style: labText(14, c: ItlgColors.textMuted)),
-              const SizedBox(height: 2),
-              const PrakBigScore('86,4'),
-              const SizedBox(height: 13),
-              const LabStatRow(
-                stats: [
-                  LabStat(icon: 'book_open', label: 'Praktikum', value: '2'),
-                  LabStat(icon: 'clipboard', label: 'Dinilai', value: '6'),
-                  LabStat(icon: 'clock', label: 'Menunggu', value: '2'),
-                ],
-              ),
-            ],
-          ),
-        ),
-        LabColumn(
-          gap: 12,
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final courses = sync.courses;
+        final graded = courses.fold<int>(
+            0, (s, c) => s + c.grades.where((g) => g.score != null).length);
+        final pending = courses.fold<int>(
+            0, (s, c) => s + c.grades.where((g) => g.score == null).length);
+        final avgSum = courses.fold<double>(
+            0,
+            (s, c) =>
+                s + (double.tryParse(c.nilaiRata.replaceAll(',', '.')) ?? 0));
+        final avgText = courses.isEmpty
+            ? '0,0'
+            : (avgSum / courses.length).toStringAsFixed(1).replaceAll('.', ',');
+
+        return LabTabBody(
           children: [
-            const PrakSpaceRow(
-              left: LabHeading(icon: 'book_open', text: 'Nilai per Praktikum'),
-              right: PrakSideLink('2 Praktikum'),
+            const LabTitle(
+              title: 'Nilai',
+              subtitle: 'Ringkasan nilai praktikum Semester Ganjil 2026/2027',
             ),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+              decoration: BoxDecoration(
+                color: ItlgColors.surfaceDark,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: ItlgShadows.outline,
+              ),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _GradeCard(
-                      course: store.mobile,
-                      onTap: () => nav.detailNilai(context, store.mobile),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _GradeCard(
-                      course: store.desain,
-                      onTap: () => nav.detailNilai(context, store.desain),
-                    ),
+                  const PrakIconWell('trophy'),
+                  const SizedBox(height: 13),
+                  Text('Nilai Rata-rata Anda',
+                      style: labText(14, c: ItlgColors.textMuted)),
+                  const SizedBox(height: 2),
+                  PrakBigScore(avgText),
+                  const SizedBox(height: 13),
+                  LabStatRow(
+                    stats: [
+                      LabStat(
+                          icon: 'book_open',
+                          label: 'Praktikum',
+                          value: '${courses.length}'),
+                      LabStat(
+                          icon: 'clipboard',
+                          label: 'Dinilai',
+                          value: '$graded'),
+                      LabStat(
+                          icon: 'clock', label: 'Menunggu', value: '$pending'),
+                    ],
                   ),
                 ],
               ),
+            ),
+            LabColumn(
+              gap: 12,
+              children: [
+                PrakSpaceRow(
+                  left: const LabHeading(
+                      icon: 'book_open', text: 'Nilai per Praktikum'),
+                  right: PrakSideLink('${courses.length} Praktikum'),
+                ),
+                for (var row = 0; row < courses.length; row += 2) ...[
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var col = 0; col < 2; col++) ...[
+                          if (col > 0) const SizedBox(width: 14),
+                          Expanded(
+                            child: (row + col) < courses.length
+                                ? _GradeCard(
+                                    course: courses[row + col],
+                                    onTap: () => nav.detailNilai(
+                                        context, courses[row + col]),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

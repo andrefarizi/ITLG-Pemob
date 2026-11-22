@@ -1,41 +1,67 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
-import '../praktikan_nav.dart';
-import '../widgets/praktikan_ui.dart';
 import '../../shared/lab_actions.dart';
+import '../praktikan_nav.dart';
+import '../praktikan_store.dart';
+import '../widgets/praktikan_ui.dart';
 
 /// Figma: "Detail Materi-Praktikan".
 class PraktikanDetailMateriPage extends StatelessWidget {
   final PraktikanNav nav;
-  const PraktikanDetailMateriPage({super.key, required this.nav});
+  final PrakCourse? course;
+  final PrakMeeting? meeting;
+
+  const PraktikanDetailMateriPage({
+    super.key,
+    required this.nav,
+    this.course,
+    this.meeting,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final c = course ?? PraktikumSyncService.instance.courses.first;
+    final m = meeting ??
+        c.meetings.firstWhere(
+          (e) => e.number == 4,
+          orElse: () => c.meetings.first,
+        );
+    final modTitle = m.module.replaceFirst(' • ', ' :\n');
+    final dateText = m.date.split(' • ').first;
+    final desc = m.description.isNotEmpty ? m.description : c.modulDesc;
+    final pdfName = m.materiFile.isNotEmpty
+        ? m.materiFile
+        : (c.materiFile.isNotEmpty
+            ? c.materiFile
+            : '${c.materiTitle}.pdf');
+    final tugasTitle = m.tugasTitle.isNotEmpty ? m.tugasTitle : c.tugasTitle;
+    final deadline =
+        m.tugasDeadline.isNotEmpty ? m.tugasDeadline : c.tugasDeadline;
+
     return LabSubPage(
       onLogoTap: nav.home,
       children: [
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabTag.blue('Materi'),
-              right:
-                  LabMeta(icon: 'calendar', text: 'Sen, 28 September 2026'),
+            PrakSpaceRow(
+              left: const LabTag.blue('Materi'),
+              right: LabMeta(icon: 'calendar', text: dateText),
             ),
-            const LabOverline(
-              overline: 'Praktikum Desain Interaksi',
-              title: 'Modul 4 :\nFigma Management',
+            LabOverline(
+              overline: 'Praktikum ${c.name}',
+              title: modTitle,
             ),
             Text(
-              'Pembahasan pengelolaan file Figma: struktur page, komponen, '
-              'variant, auto layout, serta style warna dan tipografi.',
+              desc,
               style: labText(12, c: ItlgColors.textMuted),
             ),
-            const LabPerson(
-              initials: 'FG',
-              name: 'Feri Gunawan',
-              caption: 'Asisten Lab • Diunggah 27 Sep 2026, 19:40',
+            LabPerson(
+              initials: c.asistenInitials,
+              name: c.asisten,
+              caption: 'Asisten Lab • Diunggah sebelum pertemuan',
             ),
           ],
         ),
@@ -64,7 +90,7 @@ class PraktikanDetailMateriPage extends StatelessWidget {
                         size: 32, color: ItlgColors.primary),
                   ),
                   const SizedBox(height: 8),
-                  Text('Panduan Penggunaan Figma.pdf',
+                  Text(pdfName,
                       textAlign: TextAlign.center,
                       style: labText(12, w: kBold)),
                   const SizedBox(height: 8),
@@ -81,9 +107,9 @@ class PraktikanDetailMateriPage extends StatelessWidget {
                 label: 'Lihat Materi',
                 onTap: () => labShowFilePreview(
                   context,
-                  name: 'Panduan Penggunaan Figma.pdf',
-                  size: '3,1 MB',
-                  source: 'Materi Pertemuan 4',
+                  name: pdfName,
+                  size: '3,2 MB',
+                  source: 'Materi Pertemuan ${m.number}',
                 ),
               ),
               right: LabPrimaryButton(
@@ -112,18 +138,18 @@ class PraktikanDetailMateriPage extends StatelessWidget {
               gap: 8,
               children: [
                 PrakFileItem(
-                  name: 'Starter_File_Modul4.fig',
-                  meta: 'Figma • 1,8 MB',
+                  name: 'Starter_Modul_${m.number}_${c.id}.zip',
+                  meta: 'ZIP • 1,8 MB',
                   action: 'download',
-                  onAction: () =>
-                      labToast(context, 'Starter_File_Modul4.fig diunduh'),
+                  onAction: () => labToast(
+                      context, 'Starter_Modul_${m.number}_${c.id}.zip diunduh'),
                 ),
                 PrakFileItem(
-                  name: 'Contoh_Prototype.mp4',
+                  name: 'Contoh_Praktikum_M${m.number}.mp4',
                   meta: 'Video • 12 MB',
                   action: 'download',
-                  onAction: () =>
-                      labToast(context, 'Contoh_Prototype.mp4 diunduh'),
+                  onAction: () => labToast(
+                      context, 'Contoh_Praktikum_M${m.number}.mp4 diunduh'),
                 ),
               ],
             ),
@@ -137,12 +163,12 @@ class PraktikanDetailMateriPage extends StatelessWidget {
             ),
             LabListItem(
               leading: const LabIconTile('clipboard'),
-              title: 'Tugas 4 : Pembuatan Prototype Figma',
-              subtitle: 'Deadline 29 Sep 2026, 10:30 WIB',
+              title: tugasTitle,
+              subtitle: deadline,
               titleSize: 12,
               trailing: const LabIcon('chevron_right',
                   size: 16, color: ItlgColors.primary),
-              onTap: () => nav.editTugas(context),
+              onTap: () => nav.editTugas(context, course: c, meeting: m),
             ),
           ],
         ),

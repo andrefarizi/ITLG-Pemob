@@ -2,7 +2,7 @@ import '../../core/services/praktikum_sync_service.dart';
 
 /// Data & status tampilan peran Praktikan (tersinkron ke PraktikumSyncService).
 
-enum PrakAttend { upcoming, hadir, izin, pending }
+enum PrakAttend { upcoming, hadir, izin, pending, alpa }
 
 class PrakMeeting {
   final int number;

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -36,7 +38,9 @@ class _PraktikanPenilaianAsistenPageState
     'Kesigapan Membantu',
   ];
 
-  List<int> get _ratings => widget.nav.store.ratings;
+  late final List<int> _ratings = List<int>.from(
+    PraktikumSyncService.instance.ratingsForCourse(widget.course.id),
+  );
 
   @override
   void dispose() {
@@ -44,7 +48,15 @@ class _PraktikanPenilaianAsistenPageState
     super.dispose();
   }
 
-  void _kirim() {
+  Future<void> _kirim() async {
+    await PraktikumSyncService.instance.submitAsistenRating(
+      courseId: widget.course.id,
+      asistenName: widget.course.asisten,
+      userIdentifier: AuthController.instance.userIdentifier,
+      ratings: _ratings,
+      comment: _saran.text.trim(),
+    );
+    if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(context, 'Penilaian asisten terkirim');
   }

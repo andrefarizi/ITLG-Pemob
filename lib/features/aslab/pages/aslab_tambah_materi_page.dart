@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -83,7 +84,26 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     setState(() => _files.add(names[_kind]));
   }
 
-  void _save() {
+  Future<void> _save() async {
+    final meetingNum = 5 + _pt;
+    final title = _nama.text.trim().isNotEmpty
+        ? _nama.text.trim()
+        : const [
+            'Navigasi & Routing',
+            'Tugas 5 : Aplikasi Multi Halaman',
+            'Pre-Test Modul 5',
+          ][_kind];
+    await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
+      courseId: 'pemob',
+      meetingNumber: meetingNum,
+      dateLabel: _pertemuan[_pt],
+      kind: _kind,
+      title: title,
+      description: _desk.text.trim(),
+      fileName: _files.isNotEmpty ? _files.first : null,
+      deadline: _kind == 1 ? _deadline[_dl] : null,
+    );
+    if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(
       context,

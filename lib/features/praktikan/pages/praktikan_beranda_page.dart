@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -55,14 +56,40 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
               _TodayItem(
                 start: '08:00',
                 end: '09:40',
-                course: _store.mobile,
-                onTap: () => _nav.detailPraktikum(context, _store.mobile),
+                course: PraktikumSyncService.instance.courseById('pemob'),
+                onTap: () => _nav.detailPraktikum(
+                    context, PraktikumSyncService.instance.courseById('pemob')),
               ),
               _TodayItem(
                 start: '13:00',
                 end: '14:40',
-                course: _store.desain,
-                onTap: () => _nav.detailPraktikum(context, _store.desain),
+                course: PraktikumSyncService.instance.courseById('desain'),
+                onTap: () => _nav.detailPraktikum(context,
+                    PraktikumSyncService.instance.courseById('desain')),
+              ),
+            ],
+          )
+        else if (_day == 2)
+          _TodayCard(
+            items: [
+              _TodayItem(
+                start: '10:00',
+                end: '11:40',
+                course: PraktikumSyncService.instance.courseById('adj'),
+                onTap: () => _nav.detailPraktikum(
+                    context, PraktikumSyncService.instance.courseById('adj')),
+              ),
+            ],
+          )
+        else if (_day == 3)
+          _TodayCard(
+            items: [
+              _TodayItem(
+                start: '13:00',
+                end: '14:40',
+                course: PraktikumSyncService.instance.courseById('ml'),
+                onTap: () => _nav.detailPraktikum(
+                    context, PraktikumSyncService.instance.courseById('ml')),
               ),
             ],
           )

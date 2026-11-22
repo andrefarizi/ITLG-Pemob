@@ -166,8 +166,24 @@ class PraktikanNav {
   Future<void> tombolHadir(BuildContext c, {bool replace = false}) =>
       _open(c, PraktikanTombolHadirPage(nav: this), replace);
 
-  Future<void> tandaTangan(BuildContext c) =>
-      _open(c, PraktikanTandaTanganPage(nav: this), false);
+  Future<void> tandaTangan(
+    BuildContext c, {
+    String method = 'location',
+    double? lat,
+    double? lng,
+    double? distanceMeters,
+  }) =>
+      _open(
+        c,
+        PraktikanTandaTanganPage(
+          nav: this,
+          method: method,
+          lat: lat,
+          lng: lng,
+          distanceMeters: distanceMeters,
+        ),
+        false,
+      );
 
   /// Dari pop-up "Presensi Tercatat": kembali ke Beranda lalu buka Pilih
   /// Meja, sehingga Kembali di Pilih Meja menuju Beranda (sesuai Figma).

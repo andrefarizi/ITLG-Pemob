@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -18,6 +19,7 @@ class PraktikanDaftarPraktikumPage extends StatefulWidget {
 
 class _PraktikanDaftarPraktikumPageState
     extends State<PraktikanDaftarPraktikumPage> {
+  final PraktikumSyncService _sync = PraktikumSyncService.instance;
   final TextEditingController _search = TextEditingController();
   String _query = '';
 
@@ -29,9 +31,21 @@ class _PraktikanDaftarPraktikumPageState
   int _sort = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
+
+  @override
   void dispose() {
+    _sync.removeListener(_onSyncChanged);
     _search.dispose();
     super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _openFilter() async {
@@ -43,7 +57,7 @@ class _PraktikanDaftarPraktikumPageState
   @override
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase();
-    final courses = widget.nav.store.courses
+    final courses = _sync.courses
         .where((c) => q.isEmpty || c.name.toLowerCase().contains(q))
         .toList();
     if (_sort == 1) courses.sort((a, b) => a.name.compareTo(b.name));
@@ -77,25 +91,28 @@ class _PraktikanDaftarPraktikumPageState
                   style: labText(12, c: ItlgColors.textSubtle)),
             )
           else
-            IntrinsicHeight(
-              child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (var i = 0; i < 2; i++) ...[
-                  if (i > 0) const SizedBox(width: 14),
-                  Expanded(
-                    child: i < courses.length
-                        ? _CourseCard(
-                            course: courses[i],
-                            onTap: () => widget.nav
-                                .detailPraktikum(context, courses[i]),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ],
-            ),
-            ),
+            for (var row = 0; row < courses.length; row += 2) ...[
+              if (row > 0) const SizedBox(height: 14),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var col = 0; col < 2; col++) ...[
+                      if (col > 0) const SizedBox(width: 14),
+                      Expanded(
+                        child: (row + col) < courses.length
+                            ? _CourseCard(
+                                course: courses[row + col],
+                                onTap: () => widget.nav.detailPraktikum(
+                                    context, courses[row + col]),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
         ],
       ),
     );
