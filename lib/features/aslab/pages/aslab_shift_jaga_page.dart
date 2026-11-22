@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_calendar_service.dart';
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -27,6 +29,20 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
 
   int _day = 0;
 
+  Future<void> _syncCalendar() async {
+    final res = await DeviceCalendarService.instance.syncSchedules(
+      JadwalSyncService.instance.schedules,
+      askPermission: true,
+    );
+    if (!mounted) return;
+    if (!res.permissionGranted) {
+      labToast(context, 'Izin Kalender diperlukan untuk sinkron shift jaga');
+    } else if (res.synced && res.count > 0) {
+      labToast(
+          context, '${res.count} jadwal shift tersinkron ke ${res.calendarName}');
+    }
+  }
+
   void _answer(bool accept) {
     setState(() => widget.nav.store.swapAnswer = accept);
     labToast(
@@ -41,59 +57,67 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
   Widget build(BuildContext context) {
     final nav = widget.nav;
     final answer = nav.store.swapAnswer;
-    return LabSubPage(
-      onLogoTap: nav.home,
-      children: [
-        const LabTitle(
-          title: 'Shift Jaga',
-          subtitle: 'Kalender jadwal tugas jaga laboratorium anda',
-        ),
-        LabColumn(
-          gap: 8,
+    final jadwalSync = JadwalSyncService.instance;
+    return ListenableBuilder(
+      listenable: jadwalSync,
+      builder: (context, _) {
+        final daySchedules = jadwalSync.schedulesForDay(_day);
+        return LabSubPage(
+          onLogoTap: nav.home,
           children: [
-            const PrakSpaceRow(
-              left: LabHeading(icon: 'calendar', text: 'September 2026'),
-              right: LabPill(icon: 'calendar', text: 'Minggu ke-4'),
+            const LabTitle(
+              title: 'Shift Jaga',
+              subtitle: 'Kalender jadwal tugas jaga laboratorium anda',
             ),
-            AslabDaySelector(
-              days: _days,
-              index: _day,
-              onChanged: (i) => setState(() => _day = i),
+            LabColumn(
+              gap: 8,
+              children: [
+                PrakSpaceRow(
+                  left: const LabHeading(
+                      icon: 'calendar', text: 'September 2026'),
+                  right: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _syncCalendar,
+                    child: const LabPill(icon: 'calendar', text: 'Minggu ke-4'),
+                  ),
+                ),
+                AslabDaySelector(
+                  days: _days,
+                  index: _day,
+                  onChanged: (i) => setState(() => _day = i),
+                ),
+              ],
             ),
-          ],
-        ),
-        if (_day == 0)
-          const LabColumn(
-            gap: 16,
-            children: [
-              _ShiftCard(
-                shift: 'Shift Pagi',
-                partner: 'Bersama Feri Gunawan',
-                course: 'Praktikum Pemrograman Mobile',
-                time: 'Sen • 08:00–09:40 WIB',
-                room: 'Lab Komputer 1',
+            if (daySchedules.isNotEmpty)
+              LabColumn(
+                gap: 16,
+                children: [
+                  for (final s in daySchedules)
+                    _ShiftCard(
+                      shift: int.tryParse(s.startTime.split(':').first) != null &&
+                              int.parse(s.startTime.split(':').first) < 12
+                          ? 'Shift Pagi'
+                          : 'Shift Siang',
+                      partner: 'Bersama ${s.asisten}',
+                      course: 'Praktikum ${s.courseName}',
+                      time: s.jadwalShort,
+                      room: s.room,
+                    ),
+                ],
+              )
+            else
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+                decoration: BoxDecoration(
+                  color: ItlgColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: ItlgShadows.outline,
+                ),
+                child: Text('Tidak ada shift jaga pada hari ini.',
+                    textAlign: TextAlign.center,
+                    style: labText(12, c: ItlgColors.textSubtle)),
               ),
-              _ShiftCard(
-                shift: 'Shift Siang',
-                partner: 'Bersama Sinta Marpaung',
-                course: 'Praktikum Basis Data',
-                time: 'Sen • 13:00–14:40 WIB',
-                room: 'Lab Jaringan 2',
-              ),
-            ],
-          )
-        else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
-            decoration: BoxDecoration(
-              color: ItlgColors.surfaceDark,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: ItlgShadows.outline,
-            ),
-            child: Text('Tidak ada shift jaga pada hari ini.',
-                textAlign: TextAlign.center,
-                style: labText(12, c: ItlgColors.textSubtle)),
-          ),
         LabCard(
           children: [
             PrakSpaceRow(
@@ -154,6 +178,8 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
           ],
         ),
       ],
+    );
+      },
     );
   }
 }

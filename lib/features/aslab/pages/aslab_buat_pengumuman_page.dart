@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/jadwal_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
@@ -21,31 +24,36 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
     ('info', 'Umum'),
     ('triangle_alert', 'Penting'),
   ];
-  static const List<String> _tujuan = [
-    'Pemrograman Mobile • TIF 3001 - Kelas C',
-    'Basis Data • TIF 2104 - Kelas C',
-    'Semua praktikan yang saya ampu',
-  ];
-  static const List<String> _jadwal = [
-    'Kam, 01 Okt 2026 • 13:00–14:40',
-    'Jum, 02 Okt 2026 • 08:00–09:40',
-    'Sab, 03 Okt 2026 • 10:00–11:40',
+  static const List<(int, String, String, String)> _jadwalOptions = [
+    (3, '13:00', '14:40', 'Kam, 01 Okt 2026 • 13:00–14:40'),
+    (4, '08:00', '09:40', 'Jum, 02 Okt 2026 • 08:00–09:40'),
+    (5, '10:00', '11:40', 'Sab, 03 Okt 2026 • 10:00–11:40'),
+    (1, '10:00', '11:40', 'Sel, 29 Sep 2026 • 10:00–11:40'),
   ];
   static const List<String> _ruang = [
     'Lab Komputer 1',
-    'Lab Komputer 2',
     'Lab Jaringan 2',
+    'Lab Jaringan 1',
+    'Lab AI & Data',
   ];
 
   final TextEditingController _judul =
-      TextEditingController(text: 'Praktikum pengganti Pertemuan 3');
+      TextEditingController(text: 'Praktikum pengganti Pertemuan 4');
   final TextEditingController _isi = TextEditingController(
-      text: 'Pertemuan 3 dipindahkan karena bertepatan dengan libur '
-          'nasional. Mohon hadir sesuai jadwal baru.');
+      text: 'Pertemuan dipindahkan karena bertepatan dengan kegiatan lab. '
+          'Mohon hadir sesuai jadwal baru.');
   int _kat = 0;
   int _to = 0;
   int _jd = 0;
   int _rg = 0;
+
+  List<String> get _tujuan {
+    final courses = PraktikumSyncService.instance.courses;
+    return [
+      for (final c in courses) '${c.name} • ${c.kelas}',
+      'Semua praktikan yang saya ampu',
+    ];
+  }
 
   @override
   void dispose() {
@@ -61,13 +69,38 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
     if (i != null && mounted) setState(() => onPicked(i));
   }
 
-  void _kirim() {
+  Future<void> _kirim() async {
+    final courses = PraktikumSyncService.instance.courses;
+    final courseId = _to < courses.length ? courses[_to].id : null;
+    final sched = _jadwalOptions[_jd];
+    await JadwalSyncService.instance.publishAnnouncementAndSchedule(
+      courseId: courseId,
+      categoryIndex: _kat,
+      title: _judul.text.trim().isEmpty
+          ? 'Pengumuman Praktikum'
+          : _judul.text.trim(),
+      body: _isi.text.trim(),
+      author: AuthController.instance.userName,
+      newDayIndex: _kat == 0 ? sched.$1 : null,
+      newStartTime: _kat == 0 ? sched.$2 : null,
+      newEndTime: _kat == 0 ? sched.$3 : null,
+      newScheduleLabel: _kat == 0 ? sched.$4 : null,
+      newRoom: _kat == 0 ? _ruang[_rg] : null,
+    );
+    if (!mounted) return;
     Navigator.of(context).maybePop();
-    labToast(context, 'Pengumuman terkirim ke praktikan');
+    labToast(
+      context,
+      _kat == 0
+          ? 'Jadwal diperbarui & pengumuman terkirim ke praktikan'
+          : 'Pengumuman terkirim ke praktikan',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final tujuanList = _tujuan;
+    final jadwalLabels = [for (final j in _jadwalOptions) j.$4];
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -101,9 +134,9 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
             PrakField(
               label: 'Ditujukan Kepada',
               child: PrakSelect(
-                value: _tujuan[_to],
+                value: tujuanList[_to.clamp(0, tujuanList.length - 1)],
                 onTap: () => _pick(
-                    'Ditujukan Kepada', _tujuan, _to, (i) => _to = i),
+                    'Ditujukan Kepada', tujuanList, _to, (i) => _to = i),
               ),
             ),
             PrakField(label: 'Judul', child: PrakInput(controller: _judul)),
@@ -115,9 +148,9 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
               PrakField(
                 label: 'Jadwal Baru',
                 child: PrakSelect(
-                  value: _jadwal[_jd],
+                  value: jadwalLabels[_jd],
                   onTap: () =>
-                      _pick('Jadwal Baru', _jadwal, _jd, (i) => _jd = i),
+                      _pick('Jadwal Baru', jadwalLabels, _jd, (i) => _jd = i),
                 ),
               ),
               PrakField(

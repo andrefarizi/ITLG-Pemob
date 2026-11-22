@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
-import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
 /// Figma: "Pengumuman-Praktikan".
@@ -29,8 +29,9 @@ class _PraktikanPengumumanPageState extends State<PraktikanPengumumanPage> {
     super.dispose();
   }
 
-  bool _match(PrakAnnouncement a) {
-    if (_tab != 0 && a.category != _tab) return false;
+  bool _match(AnnouncementRecord a) {
+    final mappedCat = a.category == 1 ? 1 : 2;
+    if (_tab != 0 && mappedCat != _tab) return false;
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return a.title.toLowerCase().contains(q) ||
@@ -40,59 +41,68 @@ class _PraktikanPengumumanPageState extends State<PraktikanPengumumanPage> {
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.nav.store.announcements.where(_match).toList();
-    return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        const LabTitle(
-          title: 'Pengumuman',
-          subtitle: 'Informasi terbaru dan perubahan jadwal praktikum',
-        ),
-        PrakSearchField(
-          hint: 'Cari pengumuman...',
-          controller: _search,
-          onChanged: (v) => setState(() => _query = v),
-          filterActive: _tab != 0,
-          onFilter: () async {
-            final i = await prakShowPicker(
-              context,
-              title: 'Filter Kategori',
-              options: const ['Semua', 'Perubahan Jadwal', 'Umum'],
-              selected: _tab,
-            );
-            if (i != null && mounted) setState(() => _tab = i);
-          },
-        ),
-        LabTabs(
-          labels: const ['Semua', 'Perubahan Jadwal', 'Umum'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        // Figma: semua pengumuman di dalam satu "Kartu Daftar".
-        if (items.isNotEmpty)
-          LabListCard(
-            children: [
-              for (final a in items) _AnnouncementCard(item: a),
-            ],
-          ),
-        if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text('Tidak ada pengumuman.',
-                textAlign: TextAlign.center,
-                style: labText(12, c: ItlgColors.textSubtle)),
-          ),
-      ],
+    final sync = JadwalSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final items = sync.announcements.where(_match).toList();
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
+          children: [
+            const LabTitle(
+              title: 'Pengumuman',
+              subtitle: 'Informasi terbaru dan perubahan jadwal praktikum',
+            ),
+            PrakSearchField(
+              hint: 'Cari pengumuman...',
+              controller: _search,
+              onChanged: (v) => setState(() => _query = v),
+              filterActive: _tab != 0,
+              onFilter: () async {
+                final i = await prakShowPicker(
+                  context,
+                  title: 'Filter Kategori',
+                  options: const ['Semua', 'Perubahan Jadwal', 'Umum'],
+                  selected: _tab,
+                );
+                if (i != null && mounted) setState(() => _tab = i);
+              },
+            ),
+            LabTabs(
+              labels: const ['Semua', 'Perubahan Jadwal', 'Umum'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            // Figma: semua pengumuman di dalam satu "Kartu Daftar".
+            if (items.isNotEmpty)
+              LabListCard(
+                children: [
+                  for (final a in items) _AnnouncementCard(item: a),
+                ],
+              ),
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('Tidak ada pengumuman.',
+                    textAlign: TextAlign.center,
+                    style: labText(12, c: ItlgColors.textSubtle)),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _AnnouncementCard extends StatelessWidget {
-  final PrakAnnouncement item;
+  final AnnouncementRecord item;
   const _AnnouncementCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
+    final showScheduleBox = item.category == 1 &&
+        item.newSchedule != null &&
+        item.newSchedule!.isNotEmpty;
     return LabRowCard(
       gap: 16,
       children: [
@@ -101,11 +111,11 @@ class _AnnouncementCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: item.tagRed ? LabTag.red(item.tag) : LabTag.blue(item.tag),
           ),
-          right: LabMeta(icon: 'clock', text: item.time),
+          right: LabMeta(icon: 'clock', text: item.relativeTime),
         ),
         Text(item.title, style: labText(16, w: kBold, c: Colors.black)),
         Text(item.body, style: labText(12, c: ItlgColors.textMuted)),
-        if (item.scheduleBox)
+        if (showScheduleBox)
           LabInsetBox(
             child: LabColumn(
               gap: 10,
@@ -119,7 +129,7 @@ class _AnnouncementCard extends StatelessWidget {
                           Text('Jadwal Lama',
                               style: labText(11,
                                   w: kMedium, c: ItlgColors.textSubtle)),
-                          Text('Sen, 28 Sep • 13:00',
+                          Text(item.oldSchedule ?? 'Sen • 08:00',
                               style: labText(12,
                                   w: kBold, c: LabColors.divider)),
                         ],
@@ -136,14 +146,17 @@ class _AnnouncementCard extends StatelessWidget {
                           Text('Jadwal Baru',
                               style: labText(11,
                                   w: kMedium, c: ItlgColors.textSubtle)),
-                          Text('Kam, 01 Okt • 13:00',
+                          Text(item.newSchedule!,
                               style: labText(12, w: kBold)),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const LabMeta(icon: 'location', text: 'Lab Komputer 1'),
+                LabMeta(
+                  icon: 'location',
+                  text: item.room ?? 'Lab Komputer 1',
+                ),
               ],
             ),
           ),

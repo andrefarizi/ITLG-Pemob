@@ -33,7 +33,7 @@ INSERT INTO auth.identities (
 (
     'a1111111-1111-1111-1111-111111111111',
     'a1111111-1111-1111-1111-111111111111',
-    format('{"sub":"%s","email":"%s"}', 'a1111111-1111-1111-1111-111111111111', 'andre@students.usu.ac.id')::jsonb,
+    format('{"sub":"%s","email":"%s"}', 'a1111111-1111-1111-1111-111111111111', 'andreal@students.usu.ac.id')::jsonb,
     'email',
     'a1111111-1111-1111-1111-111111111111',
     NOW(), NOW(), NOW()
@@ -41,7 +41,7 @@ INSERT INTO auth.identities (
 (
     'b2222222-2222-2222-2222-222222222222',
     'b2222222-2222-2222-2222-222222222222',
-    format('{"sub":"%s","email":"%s"}', 'b2222222-2222-2222-2222-222222222222', 'abbil@itlg.usu.ac.id')::jsonb,
+    format('{"sub":"%s","email":"%s"}', 'b2222222-2222-2222-2222-222222222222', 'abbilrizki@students.usu.ac.id')::jsonb,
     'email',
     'b2222222-2222-2222-2222-222222222222',
     NOW(), NOW(), NOW()
@@ -49,7 +49,7 @@ INSERT INTO auth.identities (
 (
     'c3333333-3333-3333-3333-333333333333',
     'c3333333-3333-3333-3333-333333333333',
-    format('{"sub":"%s","email":"%s"}', 'c3333333-3333-3333-3333-333333333333', 'reagan@itlg.usu.ac.id')::jsonb,
+    format('{"sub":"%s","email":"%s"}', 'c3333333-3333-3333-3333-333333333333', 'reaganbrian@students.usu.ac.id')::jsonb,
     'email',
     'c3333333-3333-3333-3333-333333333333',
     NOW(), NOW(), NOW()
@@ -57,9 +57,9 @@ INSERT INTO auth.identities (
 (
     'd4444444-4444-4444-4444-444444444444',
     'd4444444-4444-4444-4444-444444444444',
-    format('{"sub":"%s","email":"%s"}', 'd4444444-4444-4444-4444-444444444444', 'daniele@usu.ac.id')::jsonb,
+    format('{"sub":"%s","email":"%s"}', 'd4444444-4444-4444-4444-444444444444', 'danielechristian@students.usu.ac.id')::jsonb,
     'email',
     'd4444444-4444-4444-4444-444444444444',
     NOW(), NOW(), NOW()
 )
-ON CONFLICT (provider, provider_id) DO NOTHING;
+ON CONFLICT (provider, provider_id) DO UPDATE SET identity_data = EXCLUDED.identity_data;

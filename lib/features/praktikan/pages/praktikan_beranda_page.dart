@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_calendar_service.dart';
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
@@ -34,6 +36,47 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
   PraktikanNav get _nav => widget.nav;
   PraktikanStore get _store => widget.nav.store;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoSyncDeviceCalendar();
+    });
+  }
+
+  Future<void> _autoSyncDeviceCalendar() async {
+    final res = await DeviceCalendarService.instance
+        .ensurePermissionAndSyncOnce(JadwalSyncService.instance.schedules);
+    if (!mounted) return;
+    if (res.synced && res.count > 0) {
+      labToast(
+        context,
+        '${res.count} jadwal praktikum tersinkron ke ${res.calendarName}',
+      );
+    }
+  }
+
+  Future<void> _manualSyncDeviceCalendar() async {
+    final res = await DeviceCalendarService.instance.syncSchedules(
+      JadwalSyncService.instance.schedules,
+      askPermission: true,
+    );
+    if (!mounted) return;
+    if (!res.permissionGranted) {
+      labToast(
+        context,
+        'Izinkan akses Kalender di pengaturan perangkat untuk sinkron jadwal',
+      );
+    } else if (res.synced && res.count > 0) {
+      labToast(
+        context,
+        '${res.count} jadwal praktikum diperbarui di ${res.calendarName}',
+      );
+    } else {
+      labToast(context, 'Tidak dapat menulis ke kalender perangkat');
+    }
+  }
+
   void _refresh(void _) {
     if (mounted) setState(() {});
   }
@@ -45,59 +88,41 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PrakTabBody(
-      left: 13,
-      children: [
-        _greeting(),
-        _presensiCard(),
-        _pengumuman(),
-        _jadwalHeader(),
-        if (_day == 0)
-          _TodayCard(
-            items: [
-              _TodayItem(
-                start: '08:00',
-                end: '09:40',
-                course: PraktikumSyncService.instance.courseById('pemob'),
-                onTap: () => _nav.detailPraktikum(
-                    context, PraktikumSyncService.instance.courseById('pemob')),
-              ),
-              _TodayItem(
-                start: '13:00',
-                end: '14:40',
-                course: PraktikumSyncService.instance.courseById('desain'),
-                onTap: () => _nav.detailPraktikum(context,
-                    PraktikumSyncService.instance.courseById('desain')),
-              ),
-            ],
-          )
-        else if (_day == 2)
-          _TodayCard(
-            items: [
-              _TodayItem(
-                start: '10:00',
-                end: '11:40',
-                course: PraktikumSyncService.instance.courseById('adj'),
-                onTap: () => _nav.detailPraktikum(
-                    context, PraktikumSyncService.instance.courseById('adj')),
-              ),
-            ],
-          )
-        else if (_day == 3)
-          _TodayCard(
-            items: [
-              _TodayItem(
-                start: '13:00',
-                end: '14:40',
-                course: PraktikumSyncService.instance.courseById('ml'),
-                onTap: () => _nav.detailPraktikum(
-                    context, PraktikumSyncService.instance.courseById('ml')),
-              ),
-            ],
-          )
-        else
-          _emptyDay(),
-      ],
+    final jadwalSync = JadwalSyncService.instance;
+    final praktikumSync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([jadwalSync, praktikumSync]),
+      builder: (context, _) {
+        final daySchedules = jadwalSync.schedulesForDay(_day);
+        return PrakTabBody(
+          left: 13,
+          children: [
+            _greeting(),
+            _presensiCard(),
+            _pengumuman(),
+            _jadwalHeader(),
+            if (daySchedules.isNotEmpty)
+              _TodayCard(
+                items: [
+                  for (final s in daySchedules)
+                    _TodayItem(
+                      start: s.startTime,
+                      end: s.endTime,
+                      roomOverride: s.room,
+                      asistenOverride: s.asisten,
+                      course: praktikumSync.courseById(s.courseId),
+                      onTap: () => _nav.detailPraktikum(
+                        context,
+                        praktikumSync.courseById(s.courseId),
+                      ),
+                    ),
+                ],
+              )
+            else
+              _emptyDay(),
+          ],
+        );
+      },
     );
   }
 
@@ -244,7 +269,12 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
   }
 
   Widget _pengumuman() {
-    final a = _store.announcements.first;
+    final anns = JadwalSyncService.instance.announcements;
+    final latest = anns.isNotEmpty ? anns.first : null;
+    final title = latest?.title ?? _store.announcements.first.title;
+    final subtitle = latest?.body ??
+        'Praktikum Machine Learning Kelas C pindah ke Kam, 01 Okt • 13:00';
+    final timeText = latest?.relativeTime ?? _store.announcements.first.time;
     return LabColumn(
       gap: 12,
       children: [
@@ -272,14 +302,15 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                   child: LabColumn(
                     gap: 4,
                     children: [
-                      Text(a.title, style: labText(12, w: kBold)),
+                      Text(title, style: labText(12, w: kBold)),
                       Text(
-                        'Praktikum Basis Data Kelas B pindah ke '
-                        'Kam, 01 Okt • 13:00',
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: labText(11,
                             w: kMedium, c: ItlgColors.textSubtle),
                       ),
-                      Text(a.time,
+                      Text(timeText,
                           style: labText(11,
                               w: kMedium,
                               c: _store.announcementUnread
@@ -316,22 +347,26 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
         PrakSpaceRow(
           left: const LabHeading(
               icon: 'calendar_date_range_20_solid', text: 'Jadwal Praktikum'),
-          right: Container(
-            height: 22,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: ItlgColors.surfaceDark,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const LabIcon('m_calendar_small',
-                    size: 11.7, color: ItlgColors.textSubtle),
-                const SizedBox(width: 4),
-                Text('Minggu ke-4',
-                    style: labText(12, c: ItlgColors.textSubtle)),
-              ],
+          right: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _manualSyncDeviceCalendar,
+            child: Container(
+              height: 22,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: ItlgColors.surfaceDark,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const LabIcon('m_calendar_small',
+                      size: 11.7, color: ItlgColors.textSubtle),
+                  const SizedBox(width: 4),
+                  Text('Minggu ke-4',
+                      style: labText(12, c: ItlgColors.textSubtle)),
+                ],
+              ),
             ),
           ),
         ),
@@ -426,11 +461,15 @@ class _DayButton extends StatelessWidget {
 class _TodayItem {
   final String start;
   final String end;
+  final String? roomOverride;
+  final String? asistenOverride;
   final PrakCourse course;
   final VoidCallback onTap;
   const _TodayItem({
     required this.start,
     required this.end,
+    this.roomOverride,
+    this.asistenOverride,
     required this.course,
     required this.onTap,
   });
@@ -504,7 +543,8 @@ class _TodayRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: labText(14, w: kBold)),
-                  Text('${item.course.room} • ${item.course.asisten}',
+                  Text(
+                      '${item.roomOverride ?? item.course.room} • ${item.asistenOverride ?? item.course.asisten}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: labText(12, c: LabColors.textGrey)),

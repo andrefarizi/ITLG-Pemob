@@ -37,11 +37,32 @@ class AuthService {
   /// Menyimpan kata sandi yang baru diubah via Lupa Password selama runtime aplikasi.
   final Map<String, String> _customPasswords = {};
 
+  /// Peta email baru -> email lama di auth.users (fallback kompatibilitas bila
+  /// skrip update_user_emails.sql belum dijalankan di Supabase SQL Editor).
+  static const Map<String, String> _legacyAuthEmails = {
+    'andreal@students.usu.ac.id': 'andre@students.usu.ac.id',
+    'abbilrizki@students.usu.ac.id': 'abbil@itlg.usu.ac.id',
+    'reaganbrian@students.usu.ac.id': 'reagan@itlg.usu.ac.id',
+    'danielechristian@students.usu.ac.id': 'daniele@usu.ac.id',
+  };
+
+  /// Peta email lama -> email USU resmi terbaru sesuai nama pengguna.
+  static const Map<String, String> _canonicalEmails = {
+    'andre@students.usu.ac.id': 'andreal@students.usu.ac.id',
+    'abbil@itlg.usu.ac.id': 'abbilrizki@students.usu.ac.id',
+    'reagan@itlg.usu.ac.id': 'reaganbrian@students.usu.ac.id',
+    'daniele@usu.ac.id': 'danielechristian@students.usu.ac.id',
+  };
+
   /// Data dummy lokal untuk 4 peran pengguna (Praktikan, Aslab, Laboran, Dosen).
   /// Dipakai saat Supabase belum dikonfigurasi atau offline.
   final List<_DummyUser> _dummyUsers = const [
     _DummyUser(
-      identifiers: ['241402105', 'andreal@students.usu.ac.id'],
+      identifiers: [
+        '241402105',
+        'andreal@students.usu.ac.id',
+        'andre@students.usu.ac.id',
+      ],
       password: 'password123',
       profile: UserProfile(
         id: 'usr-praktikan-01',
@@ -53,37 +74,51 @@ class AuthService {
       ),
     ),
     _DummyUser(
-      identifiers: ['211402001', 'ASLAB-04', 'abbil@itlg.usu.ac.id'],
+      identifiers: [
+        '211402001',
+        'ASLAB-04',
+        'abbilrizki@students.usu.ac.id',
+        'abbil@itlg.usu.ac.id',
+      ],
       password: 'password123',
       profile: UserProfile(
         id: 'usr-aslab-01',
         identifier: '211402001',
         fullName: 'Abbil Rizki',
-        email: 'abbil@itlg.usu.ac.id',
+        email: 'abbilrizki@students.usu.ac.id',
         role: UserRole.aslab,
         phone: '081298765432',
       ),
     ),
     _DummyUser(
-      identifiers: ['198501012010011001', 'LAB-01', 'reagan@itlg.usu.ac.id'],
+      identifiers: [
+        '198501012010011001',
+        'LAB-01',
+        'reaganbrian@students.usu.ac.id',
+        'reagan@itlg.usu.ac.id',
+      ],
       password: 'password123',
       profile: UserProfile(
         id: 'usr-laboran-01',
         identifier: '198501012010011001',
         fullName: 'Reagan Brian',
-        email: 'reagan@itlg.usu.ac.id',
+        email: 'reaganbrian@students.usu.ac.id',
         role: UserRole.laboran,
         phone: '081377889900',
       ),
     ),
     _DummyUser(
-      identifiers: ['198705122015041002', 'daniele@usu.ac.id'],
+      identifiers: [
+        '198705122015041002',
+        'danielechristian@students.usu.ac.id',
+        'daniele@usu.ac.id',
+      ],
       password: 'password123',
       profile: UserProfile(
         id: 'usr-dosen-01',
         identifier: '198705122015041002',
         fullName: 'Dr. Eng. Daniele Christian, M.Kom.',
-        email: 'daniele@usu.ac.id',
+        email: 'danielechristian@students.usu.ac.id',
         role: UserRole.dosen,
         phone: '081122334455',
       ),
@@ -116,17 +151,26 @@ class AuthService {
       try {
         debugPrint('[AuthService] Mencoba login melalui Supabase...');
         // 1. Cari profil di PostgreSQL berdasarkan NIM/NIP atau Email
+        final normalizedInput = identifier.trim().toLowerCase();
+        final legacyAlias = _legacyAuthEmails[normalizedInput];
+        final queryFilter = legacyAlias != null
+            ? 'identifier.eq.$identifier,email.eq.$normalizedInput,email.eq.$legacyAlias'
+            : 'identifier.eq.$identifier,email.eq.$identifier';
         final response = await client
             .from('profiles')
             .select()
-            .or('identifier.eq.$identifier,email.eq.$identifier')
+            .or(queryFilter)
             .maybeSingle();
 
         if (response == null) {
           return const AuthResult.failure('Nomor Induk / Email tidak terdaftar dalam database.');
         }
 
-        final profile = UserProfile.fromJson(response);
+        var profile = UserProfile.fromJson(response);
+        final canonicalEmail = _canonicalEmails[profile.email.toLowerCase()];
+        if (canonicalEmail != null) {
+          profile = profile.copyWith(email: canonicalEmail);
+        }
 
         // 2. Validasi kesesuaian peran yang dipilih di UI
         if (profile.role != selectedRole) {
@@ -137,8 +181,10 @@ class AuthService {
 
         // 3. Autentikasi
         final normalizedId = identifier.trim().toLowerCase();
+        final legacyEmail = _legacyAuthEmails[profile.email.toLowerCase()];
         final customPassword = _customPasswords[normalizedId] ??
-            _customPasswords[profile.email.toLowerCase()];
+            _customPasswords[profile.email.toLowerCase()] ??
+            (legacyEmail != null ? _customPasswords[legacyEmail] : null);
 
         // Jika kata sandi baru disetel via alur Lupa Password:
         if (customPassword != null) {
@@ -156,10 +202,10 @@ class AuthService {
             password: password,
           );
         } on AuthException catch (_) {
-          if (profile.email == 'andreal@students.usu.ac.id') {
+          if (legacyEmail != null) {
             try {
               await client.auth.signInWithPassword(
-                email: 'andre@students.usu.ac.id',
+                email: legacyEmail,
                 password: password,
               );
             } catch (_) {
@@ -264,13 +310,20 @@ class AuthService {
 
     if (client != null) {
       try {
+        final legacyAlias = _legacyAuthEmails[normalized];
+        final queryFilter = legacyAlias != null
+            ? 'identifier.eq.$input,email.eq.$normalized,email.eq.$legacyAlias'
+            : 'identifier.eq.$input,email.eq.$normalized';
         final response = await client
             .from('profiles')
             .select('email')
-            .or('identifier.eq.$input,email.eq.$normalized')
+            .or(queryFilter)
             .maybeSingle();
         if (response != null) {
-          return response['email'] as String?;
+          final dbEmail = (response['email'] as String?)?.toLowerCase();
+          if (dbEmail != null) {
+            return _canonicalEmails[dbEmail] ?? dbEmail;
+          }
         }
       } catch (e) {
         debugPrint('[AuthService] findEmail error: $e');
@@ -293,9 +346,16 @@ class AuthService {
   Future<bool> updatePasswordByEmail(String email, String newPassword) async {
     final lowerEmail = email.toLowerCase().trim();
     _customPasswords[lowerEmail] = newPassword;
-    if (lowerEmail == 'andreal@students.usu.ac.id') {
-      _customPasswords['andre@students.usu.ac.id'] = newPassword;
-      _customPasswords['241402105'] = newPassword;
+    final legacyEmail = _legacyAuthEmails[lowerEmail];
+    if (legacyEmail != null) {
+      _customPasswords[legacyEmail] = newPassword;
+    }
+    for (final u in _dummyUsers) {
+      if (u.identifiers.any((id) => id.toLowerCase() == lowerEmail)) {
+        for (final id in u.identifiers) {
+          _customPasswords[id.toLowerCase()] = newPassword;
+        }
+      }
     }
 
     final client = SupabaseService.instance.client;

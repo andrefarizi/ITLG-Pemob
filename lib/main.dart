@@ -12,6 +12,7 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
+import 'core/services/jadwal_sync_service.dart';
 import 'core/services/lab_desk_sync_service.dart';
 import 'core/services/praktikum_sync_service.dart';
 import 'core/services/presensi_sync_service.dart';
@@ -26,6 +27,7 @@ void main() async {
   LabDeskSyncService.instance.initialize();
   PraktikumSyncService.instance.initialize();
   PresensiSyncService.instance.initialize();
+  JadwalSyncService.instance.initialize();
   runApp(const ITLGApp());
 }
 

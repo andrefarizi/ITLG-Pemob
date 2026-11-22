@@ -101,7 +101,7 @@ class ProfilData extends ChangeNotifier {
   }
 
   static String _defaultName(UserRole role) => switch (role) {
-        UserRole.praktikan => 'Nama Praktikan',
+        UserRole.praktikan => 'Andre Al Farizi Sebayang',
         UserRole.aslab => 'Abbil Rizki',
         UserRole.laboran => 'Reagan Brian',
         UserRole.dosen => 'Dr. Eng. Daniele Christian, M.Kom.',
@@ -109,9 +109,9 @@ class ProfilData extends ChangeNotifier {
 
   static String _defaultEmail(UserRole role) => switch (role) {
         UserRole.praktikan => 'andreal@students.usu.ac.id',
-        UserRole.aslab => 'abbil@itlg.usu.ac.id',
-        UserRole.laboran => 'reagan@itlg.usu.ac.id',
-        UserRole.dosen => 'daniele@usu.ac.id',
+        UserRole.aslab => 'abbilrizki@students.usu.ac.id',
+        UserRole.laboran => 'reaganbrian@students.usu.ac.id',
+        UserRole.dosen => 'danielechristian@students.usu.ac.id',
       };
 
   static String _defaultPhone(UserRole role) => '0812-0000-0000';

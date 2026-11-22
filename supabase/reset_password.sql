@@ -19,9 +19,8 @@ BEGIN
   UPDATE auth.users
   SET encrypted_password = crypt(new_password, gen_salt('bf')),
       updated_at = NOW()
-  WHERE email = user_email
-     OR email = 'andre@students.usu.ac.id'
-     OR id IN (SELECT id FROM public.profiles WHERE email = user_email);
+  WHERE lower(email) = lower(user_email)
+     OR id IN (SELECT id FROM public.profiles WHERE lower(email) = lower(user_email));
      
   RETURN true;
 END;

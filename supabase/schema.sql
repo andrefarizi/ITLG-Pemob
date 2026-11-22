@@ -98,22 +98,26 @@ BEGIN
         confirmation_token, recovery_token, email_change_token_new, email_change
     ) VALUES (
         uid_praktikan, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-        'andre@students.usu.ac.id', encrypted_pw, NOW(),
+        'andreal@students.usu.ac.id', encrypted_pw, NOW(),
         '{"provider":"email","providers":["email"]}',
-        '{"full_name":"Andre Al Farizi Sebayang","identifier":"231402033","role":"praktikan"}',
+        '{"full_name":"Andre Al Farizi Sebayang","identifier":"241402105","role":"praktikan"}',
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET 
+        email = EXCLUDED.email,
         encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (
-        uid_praktikan, '231402033', 'Andre Al Farizi Sebayang', 'andre@students.usu.ac.id', 'praktikan', '081234567890'
-    ) ON CONFLICT (id) DO NOTHING;
+        uid_praktikan, '241402105', 'Andre Al Farizi Sebayang', 'andreal@students.usu.ac.id', 'praktikan', '081234567890'
+    ) ON CONFLICT (id) DO UPDATE SET
+        identifier = EXCLUDED.identifier,
+        full_name = EXCLUDED.full_name,
+        email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-    VALUES (uid_praktikan, uid_praktikan, format('{"sub":"%s","email":"%s"}', uid_praktikan, 'andre@students.usu.ac.id')::jsonb, 'email', uid_praktikan::text, NOW(), NOW(), NOW())
-    ON CONFLICT (provider, provider_id) DO NOTHING;
+    VALUES (uid_praktikan, uid_praktikan, format('{"sub":"%s","email":"%s"}', uid_praktikan, 'andreal@students.usu.ac.id')::jsonb, 'email', uid_praktikan::text, NOW(), NOW(), NOW())
+    ON CONFLICT (provider, provider_id) DO UPDATE SET identity_data = EXCLUDED.identity_data;
 
     -- 2. ASISTEN LABORATORIUM (ASLAB)
     INSERT INTO auth.users (
@@ -122,22 +126,25 @@ BEGIN
         confirmation_token, recovery_token, email_change_token_new, email_change
     ) VALUES (
         uid_aslab, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-        'abbil@itlg.usu.ac.id', encrypted_pw, NOW(),
+        'abbilrizki@students.usu.ac.id', encrypted_pw, NOW(),
         '{"provider":"email","providers":["email"]}',
         '{"full_name":"Abbil Rizki","identifier":"211402001","role":"aslab"}',
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET 
+        email = EXCLUDED.email,
         encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (
-        uid_aslab, '211402001', 'Abbil Rizki', 'abbil@itlg.usu.ac.id', 'aslab', '081298765432'
-    ) ON CONFLICT (id) DO NOTHING;
+        uid_aslab, '211402001', 'Abbil Rizki', 'abbilrizki@students.usu.ac.id', 'aslab', '081298765432'
+    ) ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-    VALUES (uid_aslab, uid_aslab, format('{"sub":"%s","email":"%s"}', uid_aslab, 'abbil@itlg.usu.ac.id')::jsonb, 'email', uid_aslab::text, NOW(), NOW(), NOW())
-    ON CONFLICT (provider, provider_id) DO NOTHING;
+    VALUES (uid_aslab, uid_aslab, format('{"sub":"%s","email":"%s"}', uid_aslab, 'abbilrizki@students.usu.ac.id')::jsonb, 'email', uid_aslab::text, NOW(), NOW(), NOW())
+    ON CONFLICT (provider, provider_id) DO UPDATE SET identity_data = EXCLUDED.identity_data;
 
     -- 3. LABORAN / TEKNISI
     INSERT INTO auth.users (
@@ -146,22 +153,25 @@ BEGIN
         confirmation_token, recovery_token, email_change_token_new, email_change
     ) VALUES (
         uid_laboran, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-        'reagan@itlg.usu.ac.id', encrypted_pw, NOW(),
+        'reaganbrian@students.usu.ac.id', encrypted_pw, NOW(),
         '{"provider":"email","providers":["email"]}',
         '{"full_name":"Reagan Brian","identifier":"198501012010011001","role":"laboran"}',
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET 
+        email = EXCLUDED.email,
         encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (
-        uid_laboran, '198501012010011001', 'Reagan Brian', 'reagan@itlg.usu.ac.id', 'laboran', '081377889900'
-    ) ON CONFLICT (id) DO NOTHING;
+        uid_laboran, '198501012010011001', 'Reagan Brian', 'reaganbrian@students.usu.ac.id', 'laboran', '081377889900'
+    ) ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-    VALUES (uid_laboran, uid_laboran, format('{"sub":"%s","email":"%s"}', uid_laboran, 'reagan@itlg.usu.ac.id')::jsonb, 'email', uid_laboran::text, NOW(), NOW(), NOW())
-    ON CONFLICT (provider, provider_id) DO NOTHING;
+    VALUES (uid_laboran, uid_laboran, format('{"sub":"%s","email":"%s"}', uid_laboran, 'reaganbrian@students.usu.ac.id')::jsonb, 'email', uid_laboran::text, NOW(), NOW(), NOW())
+    ON CONFLICT (provider, provider_id) DO UPDATE SET identity_data = EXCLUDED.identity_data;
 
     -- 4. DOSEN PENGAMPU
     INSERT INTO auth.users (
@@ -170,21 +180,24 @@ BEGIN
         confirmation_token, recovery_token, email_change_token_new, email_change
     ) VALUES (
         uid_dosen, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-        'daniele@usu.ac.id', encrypted_pw, NOW(),
+        'danielechristian@students.usu.ac.id', encrypted_pw, NOW(),
         '{"provider":"email","providers":["email"]}',
         '{"full_name":"Dr. Eng. Daniele Christian, M.Kom.","identifier":"198705122015041002","role":"dosen"}',
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET 
+        email = EXCLUDED.email,
         encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (
-        uid_dosen, '198705122015041002', 'Dr. Eng. Daniele Christian, M.Kom.', 'daniele@usu.ac.id', 'dosen', '081122334455'
-    ) ON CONFLICT (id) DO NOTHING;
+        uid_dosen, '198705122015041002', 'Dr. Eng. Daniele Christian, M.Kom.', 'danielechristian@students.usu.ac.id', 'dosen', '081122334455'
+    ) ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-    VALUES (uid_dosen, uid_dosen, format('{"sub":"%s","email":"%s"}', uid_dosen, 'daniele@usu.ac.id')::jsonb, 'email', uid_dosen::text, NOW(), NOW(), NOW())
-    ON CONFLICT (provider, provider_id) DO NOTHING;
+    VALUES (uid_dosen, uid_dosen, format('{"sub":"%s","email":"%s"}', uid_dosen, 'danielechristian@students.usu.ac.id')::jsonb, 'email', uid_dosen::text, NOW(), NOW(), NOW())
+    ON CONFLICT (provider, provider_id) DO UPDATE SET identity_data = EXCLUDED.identity_data;
 
 END $$;
