@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_download_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
@@ -115,11 +116,40 @@ class _PraktikanDetailAbsensiPageState
         LabListCard(
           children: [
             for (final m in items)
-              _MeetingCard(
-                meeting: m,
-                status: _sync.effectiveStatus(c.id, m, userId),
-                notePair: _sync.effectiveNote(c.id, m, userId),
-                onIzin: () => _ajukanIzin(m),
+              Builder(
+                builder: (_) {
+                  final leaveMatches = _sync.leaves.where(
+                    (l) =>
+                        l.courseId == c.id &&
+                        l.meetingNumber == m.number &&
+                        l.userIdentifier == userId &&
+                        (l.fileName?.isNotEmpty ?? false),
+                  );
+                  final izinFileName = leaveMatches.isNotEmpty
+                      ? leaveMatches.first.fileName!
+                      : (m.izinFile ?? 'surat_izin.pdf');
+                  return _MeetingCard(
+                    meeting: m,
+                    status: _sync.effectiveStatus(c.id, m, userId),
+                    notePair: _sync.effectiveNote(c.id, m, userId),
+                    izinFileName: izinFileName,
+                    onIzin: () => _ajukanIzin(m),
+                    onDownloadIzin: () async {
+                      final res =
+                          await FileDownloadService.instance.downloadFile(
+                        fileName: izinFileName,
+                        source: 'Surat Izin • Praktikum ${c.name} Pertemuan ${m.number}',
+                      );
+                      if (!context.mounted) return;
+                      labToast(
+                        context,
+                        res.success
+                            ? 'Tersimpan di ${res.location}'
+                            : 'Gagal mengunduh $izinFileName',
+                      );
+                    },
+                  );
+                },
               ),
             if (items.isEmpty)
               Padding(
@@ -139,13 +169,17 @@ class _MeetingCard extends StatelessWidget {
   final PrakMeeting meeting;
   final PrakAttend status;
   final (String, String) notePair;
+  final String izinFileName;
   final VoidCallback onIzin;
+  final VoidCallback? onDownloadIzin;
 
   const _MeetingCard({
     required this.meeting,
     required this.status,
     required this.notePair,
+    this.izinFileName = 'surat_izin.pdf',
     required this.onIzin,
+    this.onDownloadIzin,
   });
 
   Widget _chip() {
@@ -187,26 +221,30 @@ class _MeetingCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Flexible(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: ItlgColors.surfaceDark,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const LabIcon('attach',
-                          size: 12, color: ItlgColors.primary),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(meeting.izinFile ?? 'surat_izin.pdf',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: labText(11, w: kMedium)),
-                      ),
-                    ],
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onDownloadIzin,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: ItlgColors.surfaceDark,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const LabIcon('attach',
+                            size: 12, color: ItlgColors.primary),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(izinFileName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: labText(11, w: kMedium)),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
