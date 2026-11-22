@@ -1,6 +1,7 @@
 package com.example.itlg_mobile
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
@@ -8,19 +9,24 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.CalendarContract
+import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 import java.util.TimeZone
 
 class MainActivity : FlutterActivity() {
     companion object {
         private const val REQ_CALENDAR_PERMISSION = 4091
+        private const val REQ_PICK_FILE = 4092
     }
 
     private var pendingCalendarPermResult: MethodChannel.Result? = null
+    private var pendingFilePickResult: MethodChannel.Result? = null
 
     private fun isAndroidEmulator(): Boolean {
         return (Build.FINGERPRINT.startsWith("generic")
@@ -59,6 +65,63 @@ class MainActivity : FlutterActivity() {
                 grantResults.all { it == PackageManager.PERMISSION_GRANTED }
             pendingCalendarPermResult?.success(granted)
             pendingCalendarPermResult = null
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_PICK_FILE) {
+            val pending = pendingFilePickResult
+            pendingFilePickResult = null
+            if (pending == null) return
+
+            if (resultCode != Activity.RESULT_OK || data?.data == null) {
+                pending.success(null)
+                return
+            }
+
+            val uri = data.data!!
+            try {
+                var displayName = "berkas_${System.currentTimeMillis()}"
+                var sizeBytes = -1L
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIdx >= 0) {
+                            val n = cursor.getString(nameIdx)
+                            if (!n.isNullOrBlank()) displayName = n
+                        }
+                        if (sizeIdx >= 0 && !cursor.isNull(sizeIdx)) {
+                            sizeBytes = cursor.getLong(sizeIdx)
+                        }
+                    }
+                }
+
+                val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+                val safeName = displayName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val uploadDir = File(cacheDir, "itlg_uploads")
+                if (!uploadDir.exists()) uploadDir.mkdirs()
+                val outFile = File(uploadDir, "${System.currentTimeMillis()}_$safeName")
+
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(outFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (sizeBytes <= 0L) sizeBytes = outFile.length()
+
+                pending.success(
+                    mapOf(
+                        "name" to displayName,
+                        "path" to outFile.absolutePath,
+                        "size" to sizeBytes,
+                        "mimeType" to mimeType
+                    )
+                )
+            } catch (_: Exception) {
+                pending.success(null)
+            }
         }
     }
 
@@ -298,6 +361,38 @@ class MainActivity : FlutterActivity() {
                             result.success(true)
                         } catch (_: Exception) {
                             result.success(false)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.example.itlg_mobile/files")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pickFile" -> {
+                        val imagesOnly = (call.arguments as? Map<*, *>)?.get("imagesOnly") as? Boolean ?: false
+                        pendingFilePickResult?.success(null)
+                        pendingFilePickResult = result
+                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = if (imagesOnly) "image/*" else "*/*"
+                        }
+                        try {
+                            @Suppress("DEPRECATION")
+                            startActivityForResult(intent, REQ_PICK_FILE)
+                        } catch (_: Exception) {
+                            val fallback = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = if (imagesOnly) "image/*" else "*/*"
+                            }
+                            try {
+                                @Suppress("DEPRECATION")
+                                startActivityForResult(fallback, REQ_PICK_FILE)
+                            } catch (_: Exception) {
+                                pendingFilePickResult = null
+                                result.success(null)
+                            }
                         }
                     }
                     else -> result.notImplemented()

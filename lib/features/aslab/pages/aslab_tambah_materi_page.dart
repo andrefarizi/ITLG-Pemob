@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -55,7 +56,7 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
   int _dr = 0;
   int _kunci = 1;
   int _soal = 1;
-  final List<String> _files = [];
+  final List<(String, String)> _files = [];
 
   final TextEditingController _nama = TextEditingController();
   final TextEditingController _desk = TextEditingController();
@@ -87,9 +88,19 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     if (i != null && mounted) setState(() => onPicked(i));
   }
 
-  void _addFile() {
-    const names = ['Modul_5.pdf', 'Tugas_5.pdf', 'Soal_Kuis.xlsx'];
-    setState(() => _files.add(names[_kind]));
+  Future<void> _addFile() async {
+    final sub = const ['modul', 'tugas', 'kuis'][_kind];
+    final picked = await FileUploadService.instance.pickAndUpload(
+      folder: 'materi/${widget.courseId}/$sub',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _files.add((picked.name, picked.metaLabel)));
+    labToast(
+      context,
+      picked.uploadedToCloud
+          ? '${picked.name} berhasil diunggah ke BE'
+          : '${picked.name} dipilih dari perangkat',
+    );
   }
 
   Future<void> _save() async {
@@ -108,7 +119,7 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
       kind: _kind,
       title: title,
       description: _desk.text.trim(),
-      fileName: _files.isNotEmpty ? _files.first : null,
+      fileName: _files.isNotEmpty ? _files.first.$1 : null,
       deadline: _kind == 1 ? _deadline[_dl] : null,
     );
     if (!mounted) return;
@@ -175,8 +186,8 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
         children: [
           for (final f in _files)
             PrakFileItem(
-              name: f,
-              meta: 'Diunggah baru saja',
+              name: f.$1,
+              meta: f.$2,
               action: 'delete_filled',
               onAction: () => setState(() => _files.remove(f)),
             ),

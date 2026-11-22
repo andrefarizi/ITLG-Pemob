@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -44,9 +45,19 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
     super.dispose();
   }
 
-  void _addFile() {
-    setState(() => _files.add(
-        PrakFile('lampiran_${_files.length + 1}.pdf', 'PDF • 256 KB')));
+  Future<void> _addFile() async {
+    final cid = widget.course.id.isNotEmpty ? widget.course.id : 'pemob';
+    final picked = await FileUploadService.instance.pickAndUpload(
+      folder: 'izin/$cid/m${widget.meeting.number}',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _files.add(PrakFile(picked.name, picked.metaLabel)));
+    labToast(
+      context,
+      picked.uploadedToCloud
+          ? '${picked.name} berhasil diunggah ke BE'
+          : '${picked.name} dipilih dari perangkat',
+    );
   }
 
   Future<void> _kirim() async {

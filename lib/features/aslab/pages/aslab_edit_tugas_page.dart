@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -55,9 +56,18 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
     if (i != null && mounted) setState(() => _dl = i);
   }
 
-  void _addFile() {
-    setState(() => _files.add(
-        ('Berkas_Pengganti_${_files.length + 1}.pdf', 'Diunggah baru saja')));
+  Future<void> _addFile() async {
+    final picked = await FileUploadService.instance.pickAndUpload(
+      folder: 'materi/${widget.courseId}/tugas',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _files.add((picked.name, picked.metaLabel)));
+    labToast(
+      context,
+      picked.uploadedToCloud
+          ? '${picked.name} berhasil diunggah ke BE'
+          : '${picked.name} dipilih dari perangkat',
+    );
   }
 
   Future<void> _save() async {

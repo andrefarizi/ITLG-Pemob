@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
@@ -36,8 +37,23 @@ class _PraktikanLaporkanKerusakanPageState
   final LabDeskSyncService _sync = LabDeskSyncService.instance;
   final TextEditingController _deskripsi = TextEditingController();
   int _kat = 0;
-  bool _foto = false;
+  String? _photoName;
   bool _submitting = false;
+
+  Future<void> _pickPhoto() async {
+    final picked = await FileUploadService.instance.pickAndUpload(
+      folder: 'tiket/praktikan',
+      imagesOnly: true,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _photoName = picked.name);
+    labToast(
+      context,
+      picked.uploadedToCloud
+          ? '${picked.name} berhasil diunggah ke BE'
+          : '${picked.name} dipilih dari perangkat',
+    );
+  }
 
   PraktikanStore get _s => widget.nav.store;
 
@@ -91,7 +107,7 @@ class _PraktikanLaporkanKerusakanPageState
       reporterId: auth.userIdentifier,
       reporterName: auth.userName,
       reporterRole: 'praktikan',
-      photoName: _foto ? 'foto_kendala.jpg' : 'tanpa_foto.jpg',
+      photoName: _photoName ?? 'tanpa_foto.jpg',
     );
 
     if (!mounted) return;
@@ -188,11 +204,11 @@ class _PraktikanLaporkanKerusakanPageState
               label: 'Foto (Opsional)',
               child: PrakUploadBox(
                 camera: true,
-                title: _foto
-                    ? 'foto_kendala.jpg terlampir'
+                title: _photoName != null
+                    ? '$_photoName terlampir'
                     : 'Ambil atau Pilih Foto Kendala',
                 subtitle: 'Format didukung PNG, JPG',
-                onTap: () => setState(() => _foto = !_foto),
+                onTap: _pickPhoto,
               ),
             ),
           ],

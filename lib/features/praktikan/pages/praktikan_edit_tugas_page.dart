@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
@@ -68,9 +69,23 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
     super.dispose();
   }
 
-  void _addFile() {
-    final name = _nama.text.trim().isEmpty ? 'Berkas Tugas' : _nama.text.trim();
-    setState(() => _files.add(PrakFile(name, 'Diunggah baru saja')));
+  Future<void> _addFile() async {
+    final picked = await FileUploadService.instance.pickAndUpload(
+      folder: 'tugas/${_course.id}/m$_meetingNumber',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _files.add(PrakFile(picked.name, picked.metaLabel));
+      if (_nama.text.trim().isEmpty) {
+        _nama.text = picked.name;
+      }
+    });
+    labToast(
+      context,
+      picked.uploadedToCloud
+          ? '${picked.name} berhasil diunggah ke BE'
+          : '${picked.name} dipilih dari perangkat',
+    );
   }
 
   Future<void> _simpan() async {
