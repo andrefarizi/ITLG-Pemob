@@ -21,6 +21,8 @@ class AttendanceSessionRecord {
 
   /// 'active' | 'closed'
   String status;
+  String qrToken;
+  DateTime? qrExpiresAt;
   final String startedBy;
   final DateTime startedAt;
 
@@ -37,6 +39,8 @@ class AttendanceSessionRecord {
     required this.requireSignature,
     required this.durationMinutes,
     required this.status,
+    this.qrToken = '',
+    this.qrExpiresAt,
     required this.startedBy,
     required this.startedAt,
   });
@@ -57,6 +61,10 @@ class AttendanceSessionRecord {
       requireSignature: (json['require_signature'] as bool?) ?? true,
       durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 15,
       status: (json['status'] ?? 'active').toString(),
+      qrToken: (json['qr_token'] ?? '').toString(),
+      qrExpiresAt: json['qr_expires_at'] != null
+          ? DateTime.tryParse(json['qr_expires_at'].toString())
+          : null,
       startedBy: (json['started_by'] ?? 'Andi Pratama').toString(),
       startedAt: json['started_at'] != null
           ? (DateTime.tryParse(json['started_at'].toString()) ?? DateTime.now())
@@ -583,6 +591,123 @@ class PresensiSyncService extends ChangeNotifier {
   // Aksi Backend: Sesi Aktif, Catat Hadir, Ajukan Izin, Keputusan Izin, Edit Manual
   // ---------------------------------------------------------------------------
 
+  static String buildQrToken({
+    required String courseId,
+    required int meetingNumber,
+    required int generation,
+    DateTime? now,
+  }) {
+    final ts = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
+    return 'ITLG-${courseId.toUpperCase()}-P$meetingNumber-GEN$generation-$ts';
+  }
+
+  /// Putar token QR dinamis sesi aktif (dipanggil setiap 15 detik dari Aslab)
+  /// dan sinkronkan ke Supabase agar praktikan lintas perangkat memvalidasi
+  /// token yang sedang berlaku.
+  Future<String> rotateActiveQrToken(int generation) async {
+    final now = DateTime.now();
+    final token = buildQrToken(
+      courseId: _activeSession.courseId,
+      meetingNumber: _activeSession.meetingNumber,
+      generation: generation,
+      now: now,
+    );
+    final expiresAt = now.add(const Duration(seconds: 25));
+    _activeSession.qrToken = token;
+    _activeSession.qrExpiresAt = expiresAt;
+    notifyListeners();
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('attendance_sessions').update({
+          'qr_token': token,
+          'qr_expires_at': expiresAt.toIso8601String(),
+        }).eq('id', _activeSession.id);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[PresensiSync] rotateActiveQrToken info: $e');
+      }
+    }
+    return token;
+  }
+
+  /// Validasi QR Code yang dipindai Praktikan.
+  /// Mendukung QR dinamis yang di-generate Aslab untuk semua 4 praktikum
+  /// maupun QR dummy uji coba.
+  ({String? error, String courseId, int meetingNumber}) validateScannedQr(
+      String raw) {
+    final code = raw.trim();
+    if (code == 'ITLG-PEMOB-PERTEMUAN5-TEST') {
+      return (
+        error: null,
+        courseId: _activeSession.courseId,
+        meetingNumber: _activeSession.meetingNumber,
+      );
+    }
+
+    // Jika cocok langsung dengan token QR sesi aktif di BE
+    if (_activeSession.qrToken.isNotEmpty && code == _activeSession.qrToken) {
+      if (!_activeSession.isActive) {
+        return (
+          error: 'Sesi presensi sudah diakhiri oleh asisten',
+          courseId: _activeSession.courseId,
+          meetingNumber: _activeSession.meetingNumber,
+        );
+      }
+      return (
+        error: null,
+        courseId: _activeSession.courseId,
+        meetingNumber: _activeSession.meetingNumber,
+      );
+    }
+
+    // Format baru: ITLG-{COURSE}-P{MEETING}-GEN{N}-{EPOCH}
+    final mNew =
+        RegExp(r'^ITLG-([A-Z0-9_]+)-P(\d+)-GEN\d+-(\d+)$').firstMatch(code);
+    // Format lama: ITLG-{COURSE}-PERTEMUAN{MEETING}-GEN{N}-{EPOCH}
+    final mOld =
+        RegExp(r'^ITLG-([A-Z0-9_]+)-PERTEMUAN(\d+)-GEN\d+-(\d+)$')
+            .firstMatch(code);
+    final match = mNew ?? mOld;
+    if (match == null) {
+      return (
+        error: 'QR tidak valid untuk sesi presensi ITLG',
+        courseId: _activeSession.courseId,
+        meetingNumber: _activeSession.meetingNumber,
+      );
+    }
+
+    final parsedCourse = match.group(1)!.toLowerCase();
+    final parsedMeeting = int.tryParse(match.group(2)!) ?? 5;
+    final ts = int.tryParse(match.group(3)!) ?? 0;
+
+    if (_activeSession.courseId == parsedCourse &&
+        _activeSession.meetingNumber == parsedMeeting &&
+        !_activeSession.isActive) {
+      return (
+        error: 'Sesi presensi sudah diakhiri oleh asisten',
+        courseId: parsedCourse,
+        meetingNumber: parsedMeeting,
+      );
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if ((now - ts).abs() > 60) {
+      return (
+        error: 'QR sudah kedaluwarsa, arahkan ke QR terbaru',
+        courseId: parsedCourse,
+        meetingNumber: parsedMeeting,
+      );
+    }
+
+    return (
+      error: null,
+      courseId: parsedCourse,
+      meetingNumber: parsedMeeting,
+    );
+  }
+
   Future<void> startSession({
     String courseId = 'pemob',
     int meetingNumber = 5,
@@ -597,6 +722,13 @@ class PresensiSyncService extends ChangeNotifier {
     required String startedBy,
   }) async {
     final now = DateTime.now();
+    final initialToken = buildQrToken(
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      generation: 1,
+      now: now,
+    );
+    final expiresAt = now.add(const Duration(seconds: 25));
     _activeSession = AttendanceSessionRecord(
       id: '$courseId-p$meetingNumber',
       courseId: courseId,
@@ -610,6 +742,8 @@ class PresensiSyncService extends ChangeNotifier {
       requireSignature: requireSignature,
       durationMinutes: durationMinutes,
       status: 'active',
+      qrToken: initialToken,
+      qrExpiresAt: expiresAt,
       startedBy: startedBy,
       startedAt: now,
     );
@@ -617,30 +751,42 @@ class PresensiSyncService extends ChangeNotifier {
 
     final client = SupabaseService.instance.client;
     if (client != null) {
+      final basePayload = <String, dynamic>{
+        'id': _activeSession.id,
+        'course_id': courseId,
+        'meeting_number': meetingNumber,
+        'lab_name': labName,
+        'lat': lat,
+        'lng': lng,
+        'radius_m': radiusMeters,
+        'allow_qr': allowQr,
+        'allow_button': allowButton,
+        'require_signature': requireSignature,
+        'duration_minutes': durationMinutes,
+        'status': 'active',
+        'started_by': startedBy,
+        'started_at': now.toIso8601String(),
+        'ended_at': null,
+      };
       try {
         await client.from('attendance_sessions').upsert(
           {
-            'id': _activeSession.id,
-            'course_id': courseId,
-            'meeting_number': meetingNumber,
-            'lab_name': labName,
-            'lat': lat,
-            'lng': lng,
-            'radius_m': radiusMeters,
-            'allow_qr': allowQr,
-            'allow_button': allowButton,
-            'require_signature': requireSignature,
-            'duration_minutes': durationMinutes,
-            'status': 'active',
-            'started_by': startedBy,
-            'started_at': now.toIso8601String(),
-            'ended_at': null,
+            ...basePayload,
+            'qr_token': initialToken,
+            'qr_expires_at': expiresAt.toIso8601String(),
           },
           onConflict: 'id',
         );
         _backendAvailable = true;
       } catch (e) {
-        debugPrint('[PresensiSync] startSession error: $e');
+        try {
+          await client
+              .from('attendance_sessions')
+              .upsert(basePayload, onConflict: 'id');
+          _backendAvailable = true;
+        } catch (e2) {
+          debugPrint('[PresensiSync] startSession error: $e2');
+        }
       }
     }
   }

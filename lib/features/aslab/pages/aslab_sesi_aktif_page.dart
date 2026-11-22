@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -12,8 +13,8 @@ import '../widgets/aslab_ui.dart';
 
 /// Figma: "Sesi Aktif & QR Presensi-Aslab".
 ///
-/// QR berganti tiap 15 detik (hitung mundur berjalan, gambar QR dibalik
-/// sebagai tanda kode baru).
+/// QR berganti otomatis tiap 15 detik dengan token stabil yang tersinkron ke
+/// backend agar dapat langsung dipindai oleh Praktikan.
 class AslabSesiAktifPage extends StatefulWidget {
   final AslabNav nav;
   const AslabSesiAktifPage({super.key, required this.nav});
@@ -25,14 +26,12 @@ class AslabSesiAktifPage extends StatefulWidget {
 class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
   Timer? _timer;
 
-  /// Kode QR session saat ini — berubah tiap [_left] habis.
-  /// Format: ITLG-{sessionId}-{generation}-{timestamp}
-  String get _qrData =>
-      'ITLG-PEMOB-PERTEMUAN5-GEN$_generation-${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
+  /// Token QR stabil selama siklus 15 detik (tidak berubah tiap detik).
+  late String _qrData;
 
-  /// Figma: 12 detik tersisa.
-  int _left = 12;
-  int _generation = 0;
+  /// Siklus rotasi QR 15 detik.
+  int _left = 15;
+  int _generation = 1;
 
   final PresensiSyncService _sync = PresensiSyncService.instance;
 
@@ -41,17 +40,35 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
     super.initState();
     _sync.addListener(_onSyncChanged);
     _sync.refreshFromBackend();
+    final existing = _sync.activeSession.qrToken;
+    _qrData = existing.isNotEmpty
+        ? existing
+        : PresensiSyncService.buildQrToken(
+            courseId: _sync.activeSession.courseId,
+            meetingNumber: _sync.activeSession.meetingNumber,
+            generation: _generation,
+          );
+    _rotateQr(publishImmediate: true);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() {
-        if (_left > 1) {
-          _left--;
-        } else {
+      if (_left > 1) {
+        setState(() => _left--);
+      } else {
+        setState(() {
           _left = 15;
           _generation++;
-        }
-      });
+        });
+        _rotateQr();
+      }
     });
+  }
+
+  Future<void> _rotateQr({bool publishImmediate = false}) async {
+    final token = await _sync.rotateActiveQrToken(_generation);
+    if (!mounted) return;
+    if (publishImmediate || _qrData != token) {
+      setState(() => _qrData = token);
+    }
   }
 
   @override
@@ -75,35 +92,41 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
   @override
   Widget build(BuildContext context) {
     final nav = widget.nav;
+    final session = _sync.activeSession;
+    final course = PraktikumSyncService.instance.courseById(session.courseId);
     return LabSubPage(
       onLogoTap: nav.home,
       children: [
         LabCard(
           children: [
             PrakSpaceRow(
-              left: const LabChip.live('Sesi Berlangsung'),
-              right: AslabElapsedPill(start: nav.store.sessionStart),
+              left: session.isActive
+                  ? const LabChip.live('Sesi Berlangsung')
+                  : const LabChip.idle('Sesi Ditutup'),
+              right: AslabElapsedPill(start: session.startedAt),
             ),
-            const AslabClassTitle(),
-            const Row(
+            AslabClassTitle(kelas: course.kelas, name: course.name),
+            Row(
               children: [
                 Flexible(
-                  child:
-                      LabMeta(icon: 'clock', text: 'Senin • 08:00–09:40 WIB'),
+                  child: LabMeta(icon: 'clock', text: course.jadwalAbsensi),
                 ),
-                SizedBox(width: 24),
+                const SizedBox(width: 24),
                 Flexible(
-                  child: LabMeta(icon: 'location', text: 'Lab Komputer 1'),
+                  child: LabMeta(icon: 'location', text: session.labName),
                 ),
               ],
             ),
-            const Wrap(
+            Wrap(
               spacing: 8,
               runSpacing: 6,
               children: [
-                LabTag.blue('QR Dinamis'),
-                LabTag.blue('Tombol + Lokasi 50 m'),
-                LabTag.blue('Wajib Tanda Tangan'),
+                if (session.allowQr) const LabTag.blue('QR Dinamis'),
+                if (session.allowButton)
+                  LabTag.blue(
+                      'Tombol + Lokasi ${session.radiusMeters.toInt()} m'),
+                if (session.requireSignature)
+                  const LabTag.blue('Wajib Tanda Tangan'),
               ],
             ),
           ],
@@ -123,9 +146,11 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
                     child: QrImageView(
-                      key: ValueKey<int>(_generation),
+                      key: ValueKey<String>(_qrData),
                       data: _qrData,
                       version: QrVersions.auto,
+                      errorCorrectionLevel: QrErrorCorrectLevel.M,
+                      gapless: true,
                       size: 220,
                       eyeStyle: const QrEyeStyle(
                         eyeShape: QrEyeShape.square,

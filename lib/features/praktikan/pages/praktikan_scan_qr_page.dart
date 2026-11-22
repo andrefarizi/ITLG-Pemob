@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -38,44 +40,29 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
   bool _handled = false;
   DateTime? _lastInvalidToast;
 
-  void _verified() => widget.nav.tandaTangan(context, method: 'qr');
-
-  /// Validasi QR dinamis sesi ITLG:
-  /// - Format dinamis: ITLG-{sesi}-GEN{n}-{detik epoch}; berlaku <= 60 detik.
-  /// - Format dummy uji coba: ITLG-PEMOB-PERTEMUAN5-TEST.
-  String? _validateQr(String raw) {
-    final code = raw.trim();
-    if (code == 'ITLG-PEMOB-PERTEMUAN5-TEST') {
-      return null;
-    }
-    final m = RegExp(r'^ITLG-[A-Z0-9_-]+-GEN\d+-(\d+)$').firstMatch(code);
-    if (m == null) {
-      return 'QR tidak valid untuk sesi presensi ITLG';
-    }
-    final ts = int.tryParse(m.group(1)!) ?? 0;
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    if ((now - ts).abs() > 60) {
-      return 'QR sudah kedaluwarsa, arahkan ke QR terbaru';
-    }
-    return null;
-  }
+  void _verified(String courseId, int meetingNumber) => widget.nav.tandaTangan(
+        context,
+        method: 'qr',
+        courseId: courseId,
+        meetingNumber: meetingNumber,
+      );
 
   void _onDetect(BarcodeCapture capture) {
     if (_handled || !mounted) return;
     for (final b in capture.barcodes) {
       final raw = b.rawValue;
       if (raw == null || raw.isEmpty) continue;
-      final err = _validateQr(raw);
-      if (err == null) {
+      final res = PresensiSyncService.instance.validateScannedQr(raw);
+      if (res.error == null) {
         _handled = true;
         _camera.stop();
-        _verified();
+        _verified(res.courseId, res.meetingNumber);
       } else {
         final now = DateTime.now();
         if (_lastInvalidToast == null ||
             now.difference(_lastInvalidToast!) > const Duration(seconds: 2)) {
           _lastInvalidToast = now;
-          labToast(context, err);
+          labToast(context, res.error!);
         }
       }
       break;
@@ -184,39 +171,52 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
             ),
           ),
         ),
-        LabCard(
-          children: [
-            const PrakSpaceRow(
-              left: LabChip.live('Presensi Berlangsung'),
-              right: LabPill(icon: 'calendar', text: 'Minggu ke-4'),
-            ),
-            Text('Praktikum\nPemrograman Mobile',
-                style: labText(22, w: kBold, c: Colors.black)),
-            const PrakSessionMeta(),
-            LabInsetBox(
-              child: Row(
-                children: [
-                  const LabIcon('shield_check_outline',
-                      size: 20, color: ItlgColors.secondary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: LabColumn(
-                      gap: 2,
-                      children: [
-                        Text('Validasi Sesi Aktif',
-                            style: labText(12, w: kBold)),
-                        Text(
-                          'QR diperbarui tiap 15 detik dan hanya berlaku pada '
-                          'sesi yang sedang berjalan.',
-                          style: labText(12, c: ItlgColors.textMuted),
-                        ),
-                      ],
-                    ),
+        ListenableBuilder(
+          listenable: PresensiSyncService.instance,
+          builder: (_, __) {
+            final session = PresensiSyncService.instance.activeSession;
+            final course =
+                PraktikumSyncService.instance.courseById(session.courseId);
+            return LabCard(
+              children: [
+                PrakSpaceRow(
+                  left: session.isActive
+                      ? const LabChip.live('Presensi Berlangsung')
+                      : const LabChip.idle('Sesi Ditutup'),
+                  right: LabPill(
+                    icon: 'calendar',
+                    text: 'Minggu ke-${session.meetingNumber}',
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+                Text('Praktikum\n${course.name}',
+                    style: labText(22, w: kBold, c: Colors.black)),
+                const PrakSessionMeta(),
+                LabInsetBox(
+                  child: Row(
+                    children: [
+                      const LabIcon('shield_check_outline',
+                          size: 20, color: ItlgColors.secondary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: LabColumn(
+                          gap: 2,
+                          children: [
+                            Text('Validasi Sesi Aktif',
+                                style: labText(12, w: kBold)),
+                            Text(
+                              'QR diperbarui tiap 15 detik dan hanya berlaku pada '
+                              'sesi yang sedang berjalan.',
+                              style: labText(12, c: ItlgColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         LabOutlineButton(
           icon: 'arrow_cycle',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
@@ -8,12 +9,11 @@ import '../praktikan_nav.dart';
 import '../widgets/praktikan_ui.dart';
 
 /// Figma: "Tanda Tangan Presensi-Praktikan".
-///
-/// Contoh tanda tangan dari Figma tampil di awal. "Hapus" mengosongkan area,
-/// lalu praktikan bisa menggambar tanda tangannya sendiri dengan jari.
 class PraktikanTandaTanganPage extends StatefulWidget {
   final PraktikanNav nav;
   final String method;
+  final String? courseId;
+  final int? meetingNumber;
   final double? lat;
   final double? lng;
   final double? distanceMeters;
@@ -22,6 +22,8 @@ class PraktikanTandaTanganPage extends StatefulWidget {
     super.key,
     required this.nav,
     this.method = 'location',
+    this.courseId,
+    this.meetingNumber,
     this.lat,
     this.lng,
     this.distanceMeters,
@@ -57,8 +59,8 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
     final auth = AuthController.instance;
     final session = PresensiSyncService.instance.activeSession;
     await PresensiSyncService.instance.submitPresence(
-      courseId: session.courseId,
-      meetingNumber: session.meetingNumber,
+      courseId: widget.courseId ?? session.courseId,
+      meetingNumber: widget.meetingNumber ?? session.meetingNumber,
       userIdentifier: auth.userIdentifier,
       userName: auth.userName,
       method: widget.method,
@@ -79,6 +81,10 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
 
   @override
   Widget build(BuildContext context) {
+    final session = PresensiSyncService.instance.activeSession;
+    final activeCourseId = widget.courseId ?? session.courseId;
+    final activeMeeting = widget.meetingNumber ?? session.meetingNumber;
+    final course = PraktikumSyncService.instance.courseById(activeCourseId);
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -98,13 +104,13 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
               gap: 8,
               cross: CrossAxisAlignment.start,
               children: [
-                const LabMeta(
+                LabMeta(
                   icon: 'book_open',
-                  text: 'Praktikum Pemrograman Mobile • Pertemuan 5',
+                  text: 'Praktikum ${course.name} • Pertemuan $activeMeeting',
                 ),
-                const LabMeta(
+                LabMeta(
                   icon: 'location',
-                  text: 'Lab Komputer 1, Gedung C Lantai 2',
+                  text: '${session.labName}, Gedung C Lantai 2',
                 ),
                 const LabMeta(
                   icon: 'map_marker_radius_outline',

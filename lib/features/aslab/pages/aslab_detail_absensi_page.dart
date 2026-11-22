@@ -71,7 +71,11 @@ class _AslabDetailAbsensiPageState extends State<AslabDetailAbsensiPage> {
             for (final s in items)
               _SessionCard(
                 session: s,
-                onCreate: () => nav.buatSesi(context),
+                onCreate: () => nav.buatSesi(
+                  context,
+                  courseId: c.id,
+                  meetingNumber: s.number,
+                ),
                 onDetail: () => nav.detailPresensi(context),
               ),
           ],

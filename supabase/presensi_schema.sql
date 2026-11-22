@@ -22,10 +22,15 @@ CREATE TABLE IF NOT EXISTS public.attendance_sessions (
     require_signature BOOLEAN NOT NULL DEFAULT TRUE,
     duration_minutes INT NOT NULL DEFAULT 15,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+    qr_token TEXT,
+    qr_expires_at TIMESTAMPTZ,
     started_by TEXT NOT NULL DEFAULT 'Andi Pratama',
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ended_at TIMESTAMPTZ
 );
+
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS qr_token TEXT;
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS qr_expires_at TIMESTAMPTZ;
 
 -- 2. Tabel Catatan Kehadiran Praktikan (public.attendance_records)
 CREATE TABLE IF NOT EXISTS public.attendance_records (

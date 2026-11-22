@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
@@ -13,7 +14,15 @@ import '../widgets/aslab_ui.dart';
 /// Figma: "Buat Sesi Presensi-Aslab".
 class AslabBuatSesiPage extends StatefulWidget {
   final AslabNav nav;
-  const AslabBuatSesiPage({super.key, required this.nav});
+  final String courseId;
+  final int meetingNumber;
+
+  const AslabBuatSesiPage({
+    super.key,
+    required this.nav,
+    this.courseId = 'pemob',
+    this.meetingNumber = 5,
+  });
 
   @override
   State<AslabBuatSesiPage> createState() => _AslabBuatSesiPageState();
@@ -84,8 +93,8 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
     final radii = const [25.0, 50.0, 100.0];
     final durations = const [10, 15, 30];
     await PresensiSyncService.instance.startSession(
-      courseId: 'pemob',
-      meetingNumber: 5,
+      courseId: widget.courseId,
+      meetingNumber: widget.meetingNumber,
       labName: _titik[_tt].split(' • ').first,
       lat: coords.isNotEmpty ? (coords[0] ?? 3.5621) : 3.5621,
       lng: coords.length > 1 ? (coords[1] ?? 98.6600) : 98.6600,
@@ -102,13 +111,14 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
 
   @override
   Widget build(BuildContext context) {
+    final course = PraktikumSyncService.instance.courseById(widget.courseId);
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
-        const LabCard(
+        LabCard(
           children: [
             LabOverline(
-              overline: 'Praktikum Pemrograman Mobile • Kelas C',
+              overline: 'Praktikum ${course.name} • Kelas C',
               title: 'Buat Sesi\nPresensi',
             ),
             Row(
@@ -116,11 +126,11 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                 Flexible(
                   child: LabMeta(
                     icon: 'calendar',
-                    text: 'Pertemuan 5 • Sen, 05 Okt 2026',
+                    text: 'Pertemuan ${widget.meetingNumber} • Sen, 05 Okt 2026',
                   ),
                 ),
-                SizedBox(width: 24),
-                Flexible(
+                const SizedBox(width: 24),
+                const Flexible(
                   child: LabMeta(icon: 'people_group', text: '24 Praktikan'),
                 ),
               ],

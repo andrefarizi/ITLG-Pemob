@@ -169,6 +169,8 @@ class PraktikanNav {
   Future<void> tandaTangan(
     BuildContext c, {
     String method = 'location',
+    String? courseId,
+    int? meetingNumber,
     double? lat,
     double? lng,
     double? distanceMeters,
@@ -178,6 +180,8 @@ class PraktikanNav {
         PraktikanTandaTanganPage(
           nav: this,
           method: method,
+          courseId: courseId,
+          meetingNumber: meetingNumber,
           lat: lat,
           lng: lng,
           distanceMeters: distanceMeters,
