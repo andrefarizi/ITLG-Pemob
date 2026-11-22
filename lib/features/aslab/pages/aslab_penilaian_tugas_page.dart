@@ -17,12 +17,14 @@ class AslabPenilaianTugasPage extends StatefulWidget {
   final AslabNav nav;
   final AslabStudent student;
   final String courseId;
+  final int meetingNumber;
 
   const AslabPenilaianTugasPage({
     super.key,
     required this.nav,
     this.student = kRina,
     this.courseId = 'pemob',
+    this.meetingNumber = 4,
   });
 
   @override
@@ -32,19 +34,44 @@ class AslabPenilaianTugasPage extends StatefulWidget {
 
 class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
   static const List<(String, String, int, int)> _rubrik = [
-    ('Kebenaran Relasi Database', 'Kardinalitas, primary & foreign key', 35,
+    ('Kebenaran Implementasi', 'Sesuai spesifikasi modul & alur program', 35,
         40),
-    ('Eksekusi Query', 'Query berjalan dan hasil sesuai', 38, 40),
+    ('Pengujian & Hasil', 'Berjalan tanpa error dan hasil sesuai', 38, 40),
     ('Kerapian Laporan', 'Struktur, penjelasan, tangkapan layar', 15, 20),
   ];
 
-  late final List<TextEditingController> _scores = [
-    for (final r in _rubrik) TextEditingController(text: '${r.$3}'),
-  ];
-  final TextEditingController _catatan = TextEditingController(
-      text: 'Relasi antar tabel sudah tepat. Query JOIN pada soal 3 masih '
-          'menghasilkan duplikasi, gunakan DISTINCT atau perbaiki kondisi '
-          'JOIN.');
+  late final List<TextEditingController> _scores;
+  late final TextEditingController _catatan;
+
+  @override
+  void initState() {
+    super.initState();
+    final pendingAppeal = NilaiSyncService.instance
+        .pendingAppealForStudent(widget.courseId, widget.student.nim);
+    final targetModul = pendingAppeal?.modul ?? widget.meetingNumber;
+    final existing = PraktikumSyncService.instance
+        .submissionFor(widget.courseId, targetModul, widget.student.nim);
+    final prevScore = existing?.score;
+    if (prevScore != null) {
+      final s0 = ((prevScore * 40) / 100).round().clamp(0, 40);
+      final s1 = ((prevScore * 40) / 100).round().clamp(0, 40);
+      final s2 = (prevScore - s0 - s1).clamp(0, 20);
+      _scores = [
+        TextEditingController(text: '$s0'),
+        TextEditingController(text: '$s1'),
+        TextEditingController(text: '$s2'),
+      ];
+    } else {
+      _scores = [
+        for (final r in _rubrik) TextEditingController(text: '${r.$3}'),
+      ];
+    }
+    _catatan = TextEditingController(
+      text: (existing?.feedback != null && existing!.feedback!.isNotEmpty)
+          ? existing.feedback!
+          : 'Implementasi sudah baik dan sesuai instruksi modul.',
+    );
+  }
 
   @override
   void dispose() {
@@ -78,7 +105,7 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
     }
     final pendingAppeal = NilaiSyncService.instance
         .pendingAppealForStudent(widget.courseId, widget.student.nim);
-    final targetModul = pendingAppeal?.modul ?? 4;
+    final targetModul = pendingAppeal?.modul ?? widget.meetingNumber;
     await PraktikumSyncService.instance.gradeTugasSubmission(
       courseId: widget.courseId,
       meetingNumber: targetModul,
@@ -106,166 +133,243 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
     );
   }
 
+  String _formatSubmittedAt(DateTime dt) {
+    final local = dt.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    return 'Dikumpulkan $hh:$mm WIB, ${local.day} ${months[local.month - 1]} ${local.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.student;
-    final course = PraktikumSyncService.instance.courseById(widget.courseId);
-    final pendingAppeal =
-        NilaiSyncService.instance.pendingAppealForStudent(course.id, s.nim);
-    final targetModul = pendingAppeal?.modul ?? 4;
-    final existing =
-        PraktikumSyncService.instance.submissionFor(course.id, targetModul, s.nim);
-    final isGraded = existing?.status == 'graded' && pendingAppeal == null;
-    return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        LabCard(
+    final sync = PraktikumSyncService.instance;
+    final nilaiSync = NilaiSyncService.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([sync, nilaiSync]),
+      builder: (context, _) {
+        final course = sync.courseById(widget.courseId);
+        final pendingAppeal =
+            nilaiSync.pendingAppealForStudent(course.id, s.nim);
+        final targetModul = pendingAppeal?.modul ?? widget.meetingNumber;
+        final meeting = sync.meetingFor(course.id, targetModul);
+        final existing = sync.submissionFor(course.id, targetModul, s.nim);
+        final isGraded = existing?.status == 'graded' && pendingAppeal == null;
+        final tugasTitle = (meeting != null && meeting.tugasTitle.isNotEmpty)
+            ? meeting.tugasTitle
+            : course.tugasTitle;
+        final hasRealFiles = existing != null &&
+            (existing.files.isNotEmpty || existing.repoUrl.isNotEmpty);
+
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: pendingAppeal != null
-                  ? LabChip.danger('Sanggah Nilai • Modul ${pendingAppeal.modul}')
-                  : (isGraded
-                      ? const LabChip.live('Sudah Dinilai')
-                      : const LabChip.warn('Belum Dinilai')),
-            ),
-            LabOverline(
-              overline: 'Praktikum ${course.name}',
-              title: pendingAppeal != null
-                  ? 'Tinjau Sanggahan Modul ${pendingAppeal.modul}'
-                  : course.tugasTitle,
-            ),
-            LabPerson(
-              initials: s.initials,
-              name: s.name,
-              caption: '${s.nim} • ${course.kelas}',
-            ),
-            if (pendingAppeal != null)
-              LabMeta(
-                icon: 'chat_bubble',
-                text: 'Alasan: ${pendingAppeal.reason}',
-              ),
-            const LabMeta(
-              icon: 'clock',
-              text: 'Dikumpulkan Senin 10:12 WIB, 29 September 2026',
-            ),
-          ],
-        ),
-        LabCard(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child:
-                  LabSectionTitle(icon: 'download', text: 'Berkas Praktikan'),
-            ),
-            LabColumn(
-              gap: 8,
+            LabCard(
               children: [
-                _FileRow(
-                  icon: 'file',
-                  title: 'laporan_erd.pdf',
-                  meta: 'Laporan PDF • 1,2 MB',
-                  action: 'download',
-                  onTap: () => labToast(context, 'laporan_erd.pdf diunduh'),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: pendingAppeal != null
+                      ? LabChip.danger(
+                          'Sanggah Nilai • Modul ${pendingAppeal.modul}')
+                      : (isGraded
+                          ? const LabChip.live('Sudah Dinilai')
+                          : const LabChip.warn('Belum Dinilai')),
                 ),
-                _FileRow(
-                  icon: 'database_outline',
-                  title: 'query_tugas4.sql',
-                  meta: 'Script Query SQL • 14 KB',
-                  action: 'download',
-                  onTap: () => labToast(context, 'query_tugas4.sql diunduh'),
+                LabOverline(
+                  overline: 'Praktikum ${course.name}',
+                  title: pendingAppeal != null
+                      ? 'Tinjau Sanggahan Modul ${pendingAppeal.modul}'
+                      : tugasTitle,
                 ),
-                _FileRow(
-                  icon: 'link_chain',
-                  title: 'github.com/rinanovita/erd-toko',
-                  meta: 'Tautan Repositori Kode',
-                  action: 'chevron_right',
-                  onTap: () => labShowLink(
-                      context, url: 'https://github.com/rinanovita/erd-toko'),
+                LabPerson(
+                  initials: s.initials,
+                  name: s.name,
+                  caption: '${s.nim} • ${course.kelas}',
+                ),
+                if (pendingAppeal != null)
+                  LabMeta(
+                    icon: 'chat_bubble',
+                    text: 'Alasan: ${pendingAppeal.reason}',
+                  ),
+                if (existing != null && existing.note.isNotEmpty)
+                  LabMeta(
+                    icon: 'file',
+                    text: 'Catatan praktikan: ${existing.note}',
+                  ),
+                LabMeta(
+                  icon: 'clock',
+                  text: existing != null
+                      ? _formatSubmittedAt(existing.updatedAt)
+                      : 'Dikumpulkan Senin 10:12 WIB, 29 September 2026',
                 ),
               ],
             ),
-          ],
-        ),
-        LabCard(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabSectionTitle(
-                  icon: 'clipboard', text: 'Rubrik Penilaian'),
-            ),
-            for (var i = 0; i < _rubrik.length; i++)
-              LabColumn(
-                gap: 8,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: LabColumn(
-                          gap: 2,
-                          children: [
-                            Text(_rubrik[i].$1, style: labText(12, w: kBold)),
-                            Text(_rubrik[i].$2,
-                                style: labText(11,
-                                    w: kMedium, c: ItlgColors.textSubtle)),
-                          ],
+            LabCard(
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(
+                      icon: 'download', text: 'Berkas Praktikan'),
+                ),
+                LabColumn(
+                  gap: 8,
+                  children: [
+                    if (pendingAppeal?.attachmentName != null &&
+                        pendingAppeal!.attachmentName!.isNotEmpty)
+                      _FileRow(
+                        icon: 'attach',
+                        title: pendingAppeal.attachmentName!,
+                        meta: 'Lampiran Bukti Sanggahan',
+                        action: 'download',
+                        onTap: () => labShowFilePreview(
+                          context,
+                          name: pendingAppeal.attachmentName!,
+                          source: 'Bukti Sanggahan • ${s.name}',
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      AslabScoreInput(
-                        controller: _scores[i],
-                        max: _rubrik[i].$4,
-                        onChanged: (_) => setState(() {}),
+                    if (hasRealFiles) ...[
+                      for (final f in existing.files)
+                        _FileRow(
+                          icon: 'file',
+                          title: f.name,
+                          meta: f.meta,
+                          action: 'download',
+                          onTap: () => labShowFilePreview(
+                            context,
+                            name: f.name,
+                            size: f.meta,
+                            source: 'Tugas $targetModul • ${s.name}',
+                          ),
+                        ),
+                      if (existing.repoUrl.isNotEmpty)
+                        _FileRow(
+                          icon: 'link_chain',
+                          title: existing.repoUrl,
+                          meta: 'Tautan Repositori Kode',
+                          action: 'chevron_right',
+                          onTap: () => labShowLink(
+                            context,
+                            url: existing.repoUrl.startsWith('http')
+                                ? existing.repoUrl
+                                : 'https://${existing.repoUrl}',
+                          ),
+                        ),
+                    ] else ...[
+                      _FileRow(
+                        icon: 'file',
+                        title: 'laporan_tugas$targetModul.pdf',
+                        meta: 'Laporan PDF • 1,2 MB',
+                        action: 'download',
+                        onTap: () => labShowFilePreview(
+                          context,
+                          name: 'laporan_tugas$targetModul.pdf',
+                          size: '1,2 MB',
+                          source: 'Tugas $targetModul • ${s.name}',
+                        ),
+                      ),
+                      _FileRow(
+                        icon: 'link_chain',
+                        title:
+                            'github.com/${s.name.toLowerCase().replaceAll(' ', '')}/tugas-$targetModul',
+                        meta: 'Tautan Repositori Kode',
+                        action: 'chevron_right',
+                        onTap: () => labShowLink(
+                          context,
+                          url:
+                              'https://github.com/${s.name.toLowerCase().replaceAll(' ', '')}/tugas-$targetModul',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            LabCard(
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(
+                      icon: 'clipboard', text: 'Rubrik Penilaian'),
+                ),
+                for (var i = 0; i < _rubrik.length; i++)
+                  LabColumn(
+                    gap: 8,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: LabColumn(
+                              gap: 2,
+                              children: [
+                                Text(_rubrik[i].$1,
+                                    style: labText(12, w: kBold)),
+                                Text(_rubrik[i].$2,
+                                    style: labText(11,
+                                        w: kMedium, c: ItlgColors.textSubtle)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          AslabScoreInput(
+                            controller: _scores[i],
+                            max: _rubrik[i].$4,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ],
+                      ),
+                      PrakTrack(
+                        fraction: _value(i) / _rubrik[i].$4,
+                        color: ItlgColors.primary,
                       ),
                     ],
                   ),
-                  PrakTrack(
-                    fraction: _value(i) / _rubrik[i].$4,
-                    color: ItlgColors.primary,
-                  ),
-                ],
-              ),
-            Container(height: 1, color: const Color(0x80B5B9BC)),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Text('Total Nilai',
-                      style: labText(16, w: kBold, c: Colors.black)),
-                ),
-                Text('$_total',
-                    style: labText(22, w: kBold, c: ItlgColors.primary)),
-                const SizedBox(width: 4),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Text('/ 100',
-                      style: labText(11,
-                          w: kMedium, c: ItlgColors.textSubtle)),
+                Container(height: 1, color: const Color(0x80B5B9BC)),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Text('Total Nilai',
+                          style: labText(16, w: kBold, c: Colors.black)),
+                    ),
+                    Text('$_total',
+                        style: labText(22, w: kBold, c: ItlgColors.primary)),
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text('/ 100',
+                          style: labText(11,
+                              w: kMedium, c: ItlgColors.textSubtle)),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-        LabCard(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabSectionTitle(
-                  icon: 'chat_bubble', text: 'Feedback untuk Praktikan'),
+            LabCard(
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(
+                      icon: 'chat_bubble', text: 'Feedback untuk Praktikan'),
+                ),
+                PrakField(
+                  label: 'Catatan Evaluasi :',
+                  child: PrakTextArea(controller: _catatan, height: 120),
+                ),
+              ],
             ),
-            PrakField(
-              label: 'Catatan Evaluasi :',
-              child: PrakTextArea(controller: _catatan, height: 120),
+            LabPrimaryButton(
+              icon: 'check',
+              label: 'Simpan Nilai',
+              large: true,
+              onTap: _simpan,
             ),
           ],
-        ),
-        LabPrimaryButton(
-          icon: 'check',
-          label: 'Simpan Nilai',
-          large: true,
-          onTap: _simpan,
-        ),
-      ],
+        );
+      },
     );
   }
 }

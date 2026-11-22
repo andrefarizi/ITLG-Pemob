@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -23,14 +24,16 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
   Widget build(BuildContext context) {
     final nav = widget.nav;
     final sync = PraktikumSyncService.instance;
+    final nilaiSync = NilaiSyncService.instance;
     return ListenableBuilder(
-      listenable: sync,
+      listenable: Listenable.merge([sync, nilaiSync]),
       builder: (context, _) {
         final courses = sync.courses;
         final totalPending = courses.fold<int>(0, (sum, c) {
           final subs = sync.submissionsForCourse(c.id, 4);
           final pendingExtra = subs.where((s) => s.status != 'graded').length;
-          return sum + 6 + pendingExtra;
+          final appeals = nilaiSync.pendingAppealsForCourse(c.id).length;
+          return sum + 6 + pendingExtra + appeals;
         });
         final totalGraded = courses.fold<int>(0, (sum, c) {
           final subs = sync.submissionsForCourse(c.id, 4);

@@ -4,6 +4,7 @@ import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../praktikan/praktikan_store.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 
@@ -18,11 +19,15 @@ class AslabTambahMateriPage extends StatefulWidget {
   /// ID praktikum yang dipilih (pemob, desain, adj, ml).
   final String courseId;
 
+  /// Nomor pertemuan awal (opsional, misalnya saat membuka "Edit Kuis").
+  final int? meetingNumber;
+
   const AslabTambahMateriPage({
     super.key,
     required this.nav,
     this.kind = 0,
     this.courseId = 'pemob',
+    this.meetingNumber,
   });
 
   @override
@@ -35,11 +40,14 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     ('clipboard', 'Tugas'),
     ('question', 'Kuis'),
   ];
-  static const List<String> _pertemuan = [
-    'Pertemuan 5 • Sen, 05 Okt 2026',
-    'Pertemuan 6 • Sen, 12 Okt 2026',
-    'Pertemuan 7 • Sen, 19 Okt 2026',
+  static const List<(int, String)> _pertemuanData = [
+    (3, 'Pertemuan 3 • Sen, 21 Sep 2026'),
+    (4, 'Pertemuan 4 • Sen, 28 Sep 2026'),
+    (5, 'Pertemuan 5 • Sen, 05 Okt 2026'),
+    (6, 'Pertemuan 6 • Sen, 12 Okt 2026'),
+    (7, 'Pertemuan 7 • Sen, 19 Okt 2026'),
   ];
+  static List<String> get _pertemuan => [for (final p in _pertemuanData) p.$2];
   static const List<String> _deadline = [
     'Sen, 12 Okt 2026 • 10:30 WIB',
     'Sen, 12 Okt 2026 • 23:59 WIB',
@@ -50,13 +58,14 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
   static const List<String> _letters = ['A', 'B', 'C', 'D'];
 
   late int _kind = widget.kind;
-  int _pt = 0;
+  int _pt = 2; // default Pertemuan 5
   int _dl = 0;
   int _jk = 0;
   int _dr = 0;
   int _kunci = 1;
   int _soal = 1;
   final List<(String, String)> _files = [];
+  final List<PrakQuestion> _savedQuestions = [];
 
   final TextEditingController _nama = TextEditingController();
   final TextEditingController _desk = TextEditingController();
@@ -69,6 +78,24 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     TextEditingController(text: 'InheritedWidget'),
     TextEditingController(text: 'Container'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final targetNum = widget.meetingNumber ?? 5;
+    final idx = _pertemuanData.indexWhere((p) => p.$1 == targetNum);
+    if (idx != -1) _pt = idx;
+    if (widget.meetingNumber != null && widget.kind == 2) {
+      final existing = PraktikumSyncService.instance
+          .meetingFor(widget.courseId, targetNum);
+      if (existing != null && existing.kuisTitle.isNotEmpty) {
+        _nama.text = existing.kuisTitle;
+      }
+      if (existing != null && existing.description.isNotEmpty) {
+        _desk.text = existing.description;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -103,19 +130,41 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     );
   }
 
+  void _appendCurrentQuestionIfValid() {
+    final qText = _tanya.text.trim();
+    if (qText.isEmpty) return;
+    final opts = [
+      for (var i = 0; i < 4; i++)
+        _opsi[i].text.trim().isNotEmpty
+            ? _opsi[i].text.trim()
+            : 'Pilihan ${_letters[i]}',
+    ];
+    _savedQuestions.add(PrakQuestion(qText, opts, _kunci));
+  }
+
   Future<void> _save() async {
-    final meetingNum = 5 + _pt;
+    final meetingNum = _pertemuanData[_pt].$1;
+    final dateLabel = _pertemuanData[_pt].$2;
     final title = _nama.text.trim().isNotEmpty
         ? _nama.text.trim()
-        : const [
-            'Navigasi & Routing',
-            'Tugas 5 : Aplikasi Multi Halaman',
-            'Pre-Test Modul 5',
+        : [
+            'Modul $meetingNum : Materi Praktikum',
+            'Tugas $meetingNum : Implementasi Praktikum',
+            '${_jenisKuis[_jk]} Modul $meetingNum',
           ][_kind];
+    if (_kind == 2) {
+      _appendCurrentQuestionIfValid();
+      if (_savedQuestions.isNotEmpty) {
+        PraktikumSyncService.instance.saveQuizQuestionsFromAslab(
+          courseId: widget.courseId,
+          questions: _savedQuestions,
+        );
+      }
+    }
     await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
       courseId: widget.courseId,
       meetingNumber: meetingNum,
-      dateLabel: _pertemuan[_pt],
+      dateLabel: dateLabel,
       kind: _kind,
       title: title,
       description: _desk.text.trim(),
@@ -126,7 +175,11 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     Navigator.of(context).maybePop();
     labToast(
       context,
-      const ['Modul disimpan', 'Tugas diterbitkan', 'Kuis diterbitkan'][_kind],
+      const [
+        'Modul disimpan & diterbitkan ke BE',
+        'Tugas diterbitkan ke BE',
+        'Kuis & soal diterbitkan ke BE'
+      ][_kind],
     );
   }
 
@@ -361,6 +414,7 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
           label: 'Tambah Soal',
           large: true,
           onTap: () {
+            _appendCurrentQuestionIfValid();
             setState(() {
               _soal++;
               _tanya.clear();
@@ -369,7 +423,7 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
               }
               _kunci = 0;
             });
-            labToast(context, 'Soal ${_soal - 1} disimpan');
+            labToast(context, 'Soal ${_soal - 1} disimpan (${_savedQuestions.length} soal)');
           },
         ),
       ],

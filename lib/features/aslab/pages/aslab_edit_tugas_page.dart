@@ -11,10 +11,12 @@ import 'aslab_edit_modul_page.dart';
 class AslabEditTugasPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
+  final int meetingNumber;
   const AslabEditTugasPage({
     super.key,
     required this.nav,
     this.courseId = 'pemob',
+    this.meetingNumber = 4,
   });
 
   @override
@@ -26,21 +28,33 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
     'Sel, 29 Sep 2026 • 10:30 WIB',
     'Sel, 29 Sep 2026 • 23:59 WIB',
     'Rab, 30 Sep 2026 • 10:30 WIB',
+    'Sen, 12 Okt 2026 • 10:30 WIB',
   ];
 
   late final TextEditingController _nama;
   late final TextEditingController _desk;
   int _dl = 0;
-  final List<(String, String)> _files = [
-    ('Tugas_4_Praktikum.pdf', 'PDF • 640 KB'),
-  ];
+  late final List<(String, String)> _files;
 
   @override
   void initState() {
     super.initState();
-    final c = PraktikumSyncService.instance.courseById(widget.courseId);
-    _nama = TextEditingController(text: c.tugasTitle);
-    _desk = TextEditingController(text: c.modulDesc);
+    final sync = PraktikumSyncService.instance;
+    final c = sync.courseById(widget.courseId);
+    final m = sync.meetingFor(widget.courseId, widget.meetingNumber);
+    _nama = TextEditingController(
+      text: (m != null && m.tugasTitle.isNotEmpty)
+          ? m.tugasTitle
+          : c.tugasTitle,
+    );
+    _desk = TextEditingController(
+      text: (m != null && m.description.isNotEmpty)
+          ? m.description
+          : c.modulDesc,
+    );
+    _files = [
+      ('Tugas_${widget.meetingNumber}_Praktikum.pdf', 'PDF • 640 KB'),
+    ];
   }
 
   @override
@@ -61,7 +75,7 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
       folder: 'materi/${widget.courseId}/tugas',
     );
     if (picked == null || !mounted) return;
-    setState(() => _files.add((picked.name, picked.metaLabel)));
+    setState(() => _files.insert(0, (picked.name, picked.metaLabel)));
     labToast(
       context,
       picked.uploadedToCloud
@@ -71,11 +85,13 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
   }
 
   Future<void> _save() async {
-    final c = PraktikumSyncService.instance.courseById(widget.courseId);
-    await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
+    final sync = PraktikumSyncService.instance;
+    final c = sync.courseById(widget.courseId);
+    final m = sync.meetingFor(widget.courseId, widget.meetingNumber);
+    await sync.upsertMeetingContentFromAslab(
       courseId: c.id,
-      meetingNumber: 4,
-      dateLabel: 'Sen, 28 Sep 2026 • ${c.jam}',
+      meetingNumber: widget.meetingNumber,
+      dateLabel: m?.date ?? 'Sen, 28 Sep 2026 • ${c.jam}',
       kind: 1,
       title: _nama.text.trim().isEmpty ? c.tugasTitle : _nama.text.trim(),
       description: _desk.text.trim(),
@@ -83,7 +99,17 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
       deadline: _deadline[_dl],
     );
     if (!mounted) return;
-    _close('Perubahan tugas disimpan');
+    _close('Perubahan tugas Pertemuan ${widget.meetingNumber} disimpan ke BE');
+  }
+
+  Future<void> _delete() async {
+    await PraktikumSyncService.instance.deleteMeetingContentFromAslab(
+      courseId: widget.courseId,
+      meetingNumber: widget.meetingNumber,
+      kind: 1,
+    );
+    if (!mounted) return;
+    _close('Tugas ${widget.meetingNumber} dihapus dari BE');
   }
 
   void _close(String message) {
@@ -93,14 +119,27 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = PraktikumSyncService.instance.courseById(widget.courseId);
+    final sync = PraktikumSyncService.instance;
+    final c = sync.courseById(widget.courseId);
+    final m = sync.meetingFor(widget.courseId, widget.meetingNumber);
+    final dateText = m != null
+        ? 'Pertemuan ${widget.meetingNumber} • ${m.date.split(' • ').first}'
+        : 'Pertemuan ${widget.meetingNumber} • Sen, 28 September 2026';
+    final subsCount =
+        (20 + sync.submissionsForCourse(c.id, widget.meetingNumber).length)
+            .clamp(0, 24);
+
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
-        AslabEditHeader(title: 'Edit Tugas 4', courseName: c.name),
-        const PrakNotice.warn(
+        AslabEditHeader(
+          title: 'Edit Tugas ${widget.meetingNumber}',
+          courseName: c.name,
+          dateLabel: dateText,
+        ),
+        PrakNotice.warn(
           icon: 'info',
-          text: '20 praktikan sudah mengumpulkan. Perubahan deadline atau '
+          text: '$subsCount praktikan sudah mengumpulkan. Perubahan deadline atau '
               'berkas akan dikirim sebagai notif',
         ),
         LabCard(
@@ -163,7 +202,7 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
               icon: 'delete_filled',
               label: 'Hapus Tugas',
               large: true,
-              onTap: () => _close('Tugas 4 dihapus'),
+              onTap: _delete,
             ),
           ],
         ),

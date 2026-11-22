@@ -91,46 +91,112 @@ class AslabNav {
   Future<void> detailPraktikum(BuildContext c, AslabCourse course) =>
       _open(c, AslabDetailPraktikumPage(nav: this, course: course), false);
 
-  Future<void> detailPertemuan(BuildContext c, AslabMeeting meeting) =>
-      _open(c, AslabDetailPertemuanPage(nav: this, meeting: meeting), false);
+  Future<void> detailPertemuan(
+    BuildContext c,
+    AslabMeeting meeting, {
+    String courseId = 'pemob',
+  }) =>
+      _open(
+        c,
+        AslabDetailPertemuanPage(
+            nav: this, meeting: meeting, courseId: courseId),
+        false,
+      );
 
-  Future<void> detailModul(BuildContext c) =>
-      _open(c, AslabDetailModulPage(nav: this), false);
+  Future<void> detailModul(
+    BuildContext c, {
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabDetailModulPage(
+            nav: this, courseId: courseId, meetingNumber: meetingNumber),
+        false,
+      );
 
   /// [kind]: 0 modul, 1 tugas, 2 kuis.
   Future<void> tambahMateri(
     BuildContext c, {
     int kind = 0,
     String courseId = 'pemob',
+    int? meetingNumber,
   }) =>
       _open(
         c,
-        AslabTambahMateriPage(nav: this, kind: kind, courseId: courseId),
+        AslabTambahMateriPage(
+          nav: this,
+          kind: kind,
+          courseId: courseId,
+          meetingNumber: meetingNumber,
+        ),
         false,
       );
 
-  Future<void> editModul(BuildContext c, {String courseId = 'pemob'}) =>
-      _open(c, AslabEditModulPage(nav: this, courseId: courseId), false);
+  Future<void> editModul(
+    BuildContext c, {
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabEditModulPage(
+            nav: this, courseId: courseId, meetingNumber: meetingNumber),
+        false,
+      );
 
-  Future<void> editTugas(BuildContext c, {String courseId = 'pemob'}) =>
-      _open(c, AslabEditTugasPage(nav: this, courseId: courseId), false);
+  Future<void> editTugas(
+    BuildContext c, {
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabEditTugasPage(
+            nav: this, courseId: courseId, meetingNumber: meetingNumber),
+        false,
+      );
 
-  Future<void> hasilKuis(BuildContext c, {String courseId = 'pemob'}) =>
-      _open(c, AslabHasilKuisPage(nav: this, courseId: courseId), false);
+  Future<void> hasilKuis(
+    BuildContext c, {
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabHasilKuisPage(
+            nav: this, courseId: courseId, meetingNumber: meetingNumber),
+        false,
+      );
 
   // --- Penilaian -------------------------------------------------------------
 
-  Future<void> evaluasiTugas(BuildContext c, {String courseId = 'pemob'}) =>
-      _open(c, AslabEvaluasiTugasPage(nav: this, courseId: courseId), false);
+  Future<void> evaluasiTugas(
+    BuildContext c, {
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabEvaluasiTugasPage(
+            nav: this, courseId: courseId, meetingNumber: meetingNumber),
+        false,
+      );
 
   Future<void> penilaianTugas(
     BuildContext c, {
     AslabStudent student = kRina,
     String courseId = 'pemob',
+    int meetingNumber = 4,
   }) =>
       _open(
         c,
-        AslabPenilaianTugasPage(nav: this, student: student, courseId: courseId),
+        AslabPenilaianTugasPage(
+          nav: this,
+          student: student,
+          courseId: courseId,
+          meetingNumber: meetingNumber,
+        ),
         false,
       );
 

@@ -5,6 +5,7 @@ import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
@@ -13,10 +14,12 @@ import '../widgets/aslab_ui.dart';
 class AslabEvaluasiTugasPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
+  final int meetingNumber;
   const AslabEvaluasiTugasPage({
     super.key,
     required this.nav,
     this.courseId = 'pemob',
+    this.meetingNumber = 4,
   });
 
   @override
@@ -101,7 +104,8 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
           );
         }
 
-        for (final rec in sync.submissionsForCourse(course.id, 4)) {
+        for (final rec
+            in sync.submissionsForCourse(course.id, widget.meetingNumber)) {
           if (seenNims.contains(rec.userIdentifier)) continue;
           seenNims.add(rec.userIdentifier);
           final parts = rec.userName.trim().split(RegExp(r'\s+'));
@@ -125,13 +129,19 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
             _all.where((s) => !seenNims.contains(s.student.nim)).toList();
         final combined = [...dynamicSubs, ...seedFiltered];
         final items = combined.where(_match).toList();
-        final waitingExtra =
-            dynamicSubs.where((s) => !s.graded).length;
-        final gradedExtra =
-            dynamicSubs.where((s) => s.graded).length;
+        final waitingExtra = dynamicSubs.where((s) => !s.graded).length;
+        final gradedExtra = dynamicSubs.where((s) => s.graded).length;
         final waitingCount = 6 + waitingExtra;
         final gradedCount = 14 + gradedExtra;
         final totalCount = (20 + dynamicSubs.length).clamp(0, 24);
+        final meeting = sync.meetingFor(course.id, widget.meetingNumber);
+        final tugasTitle = (meeting != null && meeting.tugasTitle.isNotEmpty)
+            ? meeting.tugasTitle
+            : course.tugasTitle;
+        final tugasDeadline =
+            (meeting != null && meeting.tugasDeadline.isNotEmpty)
+                ? meeting.tugasDeadline
+                : course.tugasDeadline;
         return LabSubPage(
           onLogoTap: widget.nav.home,
           children: [
@@ -161,11 +171,12 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
             LabCard(
               children: [
                 PrakSpaceRow(
-                  left: const LabTag.red('Tugas 4'),
-                  right: LabMeta(icon: 'clock', text: course.tugasDeadline),
+                  left: LabTag.red('Tugas ${widget.meetingNumber}'),
+                  right: LabMeta(icon: 'clock', text: tugasDeadline),
                 ),
                 Text(
-                  course.tugasTitle.replaceFirst('Tugas 4 : ', ''),
+                  tugasTitle.replaceFirst(
+                      'Tugas ${widget.meetingNumber} : ', ''),
                   style: labText(16, w: kBold, c: Colors.black),
                 ),
                 LabStatRow(
@@ -197,12 +208,24 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
             for (final s in items)
               _SubmissionCard(
                 item: s,
-                onDownload: () => labToast(
-                    context, 'Berkas ${s.student.name} sedang diunduh'),
+                onDownload: () {
+                  if (s.files.isNotEmpty) {
+                    labShowFilePreview(
+                      context,
+                      name: s.files.first.$2,
+                      source:
+                          'Tugas ${widget.meetingNumber} • ${s.student.name}',
+                    );
+                  } else {
+                    labToast(
+                        context, 'Berkas ${s.student.name} sedang diunduh');
+                  }
+                },
                 onGrade: () => widget.nav.penilaianTugas(
                   context,
                   student: s.student,
                   courseId: course.id,
+                  meetingNumber: widget.meetingNumber,
                 ),
               ),
             if (items.isEmpty)

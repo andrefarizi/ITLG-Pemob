@@ -12,10 +12,12 @@ import '../widgets/aslab_ui.dart';
 class AslabHasilKuisPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
+  final int meetingNumber;
   const AslabHasilKuisPage({
     super.key,
     required this.nav,
     this.courseId = 'pemob',
+    this.meetingNumber = 4,
   });
 
   @override
@@ -112,8 +114,11 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
       listenable: sync,
       builder: (context, _) {
         final course = sync.courseById(widget.courseId);
+        final meeting = sync.meetingFor(course.id, widget.meetingNumber);
         final liveAttempts = sync.allQuizAttempts
-            .where((q) => q.courseId == course.id)
+            .where((q) =>
+                q.courseId == course.id &&
+                q.meetingNumber == widget.meetingNumber)
             .toList();
         final dynamicResults = [
           for (final q in liveAttempts) _resultFromAttempt(q),
@@ -126,7 +131,15 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
         final passCount = 18 + passExtra;
         final failCount = 4 + failExtra;
         final maxScore = combined.fold<int>(
-            100, (m, r) => r.score > m ? r.score : m);
+            0, (m, r) => r.score > m ? r.score : m);
+        final avgNum = combined.isEmpty
+            ? 0.0
+            : combined.fold<int>(0, (acc, r) => acc + r.score) /
+                combined.length;
+        final avgLabel = avgNum.toStringAsFixed(1).replaceAll('.', ',');
+        final kuisTitle = (meeting != null && meeting.kuisTitle.isNotEmpty)
+            ? meeting.kuisTitle
+            : course.preTest;
 
         return LabSubPage(
           onLogoTap: widget.nav.home,
@@ -161,7 +174,7 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
                   right: LabMeta(
                       icon: 'clock', text: 'Ditutup 28 Sep 2026, 08:10 WIB'),
                 ),
-                Text(course.preTest,
+                Text(kuisTitle,
                     style: labText(16, w: kBold, c: Colors.black)),
                 LabStatRow(
                   stats: [
@@ -170,10 +183,10 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
                       label: 'Mengerjakan',
                       value: '$totalCount / 24',
                     ),
-                    const LabStat(
+                    LabStat(
                       icon: 'check',
                       label: 'Rata-rata',
-                      value: '78,5',
+                      value: avgLabel,
                     ),
                     LabStat(
                       icon: 'clock',
