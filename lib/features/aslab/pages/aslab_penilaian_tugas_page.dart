@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -68,26 +69,53 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
   }
 
   Future<void> _simpan() async {
+    if (NilaiSyncService.instance.isCourseValidated(widget.courseId)) {
+      labToast(
+        context,
+        'Nilai kelas ini sudah divalidasi dosen dan tidak dapat diubah',
+      );
+      return;
+    }
+    final pendingAppeal = NilaiSyncService.instance
+        .pendingAppealForStudent(widget.courseId, widget.student.nim);
+    final targetModul = pendingAppeal?.modul ?? 4;
     await PraktikumSyncService.instance.gradeTugasSubmission(
       courseId: widget.courseId,
-      meetingNumber: 4,
+      meetingNumber: targetModul,
       userIdentifier: widget.student.nim,
       userName: widget.student.name,
       score: _total,
       feedback: _catatan.text.trim(),
     );
+    if (pendingAppeal != null) {
+      await NilaiSyncService.instance.resolveAppeal(
+        courseId: widget.courseId,
+        modul: targetModul,
+        userIdentifier: widget.student.nim,
+        newScore: _total,
+        feedback: _catatan.text.trim(),
+      );
+    }
     if (!mounted) return;
     Navigator.of(context).maybePop();
-    labToast(context, 'Nilai ${widget.student.name} disimpan: $_total / 100');
+    labToast(
+      context,
+      pendingAppeal != null
+          ? 'Sanggahan Modul $targetModul selesai • Nilai ${widget.student.name}: $_total / 100'
+          : 'Nilai ${widget.student.name} disimpan: $_total / 100',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.student;
     final course = PraktikumSyncService.instance.courseById(widget.courseId);
-    final existing = PraktikumSyncService.instance
-        .submissionFor(course.id, 4, s.nim);
-    final isGraded = existing?.status == 'graded';
+    final pendingAppeal =
+        NilaiSyncService.instance.pendingAppealForStudent(course.id, s.nim);
+    final targetModul = pendingAppeal?.modul ?? 4;
+    final existing =
+        PraktikumSyncService.instance.submissionFor(course.id, targetModul, s.nim);
+    final isGraded = existing?.status == 'graded' && pendingAppeal == null;
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -95,19 +123,28 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: isGraded
-                  ? const LabChip.live('Sudah Dinilai')
-                  : const LabChip.warn('Belum Dinilai'),
+              child: pendingAppeal != null
+                  ? LabChip.danger('Sanggah Nilai • Modul ${pendingAppeal.modul}')
+                  : (isGraded
+                      ? const LabChip.live('Sudah Dinilai')
+                      : const LabChip.warn('Belum Dinilai')),
             ),
             LabOverline(
               overline: 'Praktikum ${course.name}',
-              title: course.tugasTitle,
+              title: pendingAppeal != null
+                  ? 'Tinjau Sanggahan Modul ${pendingAppeal.modul}'
+                  : course.tugasTitle,
             ),
             LabPerson(
               initials: s.initials,
               name: s.name,
               caption: '${s.nim} • ${course.kelas}',
             ),
+            if (pendingAppeal != null)
+              LabMeta(
+                icon: 'chat_bubble',
+                text: 'Alasan: ${pendingAppeal.reason}',
+              ),
             const LabMeta(
               icon: 'clock',
               text: 'Dikumpulkan Senin 10:12 WIB, 29 September 2026',

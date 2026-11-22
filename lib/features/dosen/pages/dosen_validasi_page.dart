@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/services/notification_sync_service.dart';
+import '../../../core/services/nilai_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
@@ -9,7 +12,7 @@ import 'dosen_minta_revisi_page.dart';
 import 'dosen_rekap_nilai_page.dart';
 
 /// Figma: "Validasi Nilai Akhir-Dosen". Status "Tervalidasi" disimpan di
-/// store (di Figma memakai variabel validasi/menunggu & validasi/selesai).
+/// BE melalui [NilaiSyncService] dan langsung terkunci di Aslab & Praktikan.
 class DosenValidasiPage extends StatefulWidget {
   final DosenStore store;
 
@@ -27,24 +30,13 @@ class DosenValidasiPage extends StatefulWidget {
 }
 
 class _DosenValidasiPageState extends State<DosenValidasiPage> {
-  void _validate() {
-    setState(() => widget.store.validated = true);
-    NotificationSyncService.instance.push(
-      role: 'aslab',
-      icon: 'circle_check',
-      title: 'Nilai Akhir Tervalidasi Dosen',
-      body: 'Nilai akhir TIF 3001 - Kelas C telah disinkronkan ke Portal Akademik',
-      targetKey: 'evaluasi',
-      important: true,
+  Future<void> _validate() async {
+    widget.store.validated = true;
+    await NilaiSyncService.instance.validateCourse(
+      courseId: 'pemob',
+      validatedBy: AuthController.instance.userName,
     );
-    NotificationSyncService.instance.push(
-      role: 'praktikan',
-      icon: 'trophy',
-      title: 'Nilai Akhir Praktikum Tervalidasi',
-      body: 'Nilai akhir Pemrograman Mobile Kelas C telah disahkan oleh Dosen Pengampu',
-      targetKey: 'detailNilai',
-      important: true,
-    );
+    if (!mounted) return;
     dosenShowResult(
       context,
       icon: 'circle_check',
@@ -58,91 +50,123 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
-    final done = store.validated;
-    return LabTabBody(
-      children: [
-        LabCard(
+    final nilaiSync = NilaiSyncService.instance;
+    final praktikumSync = PraktikumSyncService.instance;
+    final presensiSync = PresensiSyncService.instance;
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([nilaiSync, praktikumSync, presensiSync]),
+      builder: (context, _) {
+        final valRec = nilaiSync.validationFor('pemob');
+        final done = valRec.isValidated;
+        final liveAll = nilaiSync.liveDosenGrades(store.grades, courseId: 'pemob');
+        final livePreview = liveAll.take(5).toList();
+        final summary = nilaiSync.summarizeGrades(liveAll);
+        final othersCount = (liveAll.length - livePreview.length).clamp(0, 999);
+
+        return LabTabBody(
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: done
-                    ? const LabChip.live('Tervalidasi', key: ValueKey('ok'))
-                    : const LabChip.warn('Menunggu Validasi',
-                        key: ValueKey('wait')),
-              ),
-            ),
-            const DosenClassTitle(),
-            const LabStatRow(
-              stats: [
-                LabStat(icon: 'people_group', label: 'Praktikan', value: '24'),
-                LabStat(icon: 'trophy', label: 'Rata-rata', value: '84,2'),
-                LabStat(icon: 'check', label: 'Lulus', value: '23'),
-              ],
-            ),
-            const LabMeta(
-              icon: 'people_group',
-              text: 'Dinilai oleh Andi Pratama & Feri Gunawan',
-            ),
-          ],
-        ),
-        LabCard(
-          children: [
-            Row(
+            LabCard(
               children: [
-                const LabSectionTitle(
-                    icon: 'clipboard', text: 'Rekap Nilai Akhir'),
-                const Spacer(),
-                Text('12 Modul', style: labText(12, c: ItlgColors.primary)),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: done
+                        ? const LabChip.live('Tervalidasi', key: ValueKey('ok'))
+                        : (valRec.isRevisionRequested
+                            ? const LabChip.danger('Revisi Diminta',
+                                key: ValueKey('rev'))
+                            : const LabChip.warn('Menunggu Validasi',
+                                key: ValueKey('wait'))),
+                  ),
+                ),
+                const DosenClassTitle(),
+                LabStatRow(
+                  stats: [
+                    LabStat(
+                      icon: 'people_group',
+                      label: 'Praktikan',
+                      value: '${summary.totalCount}',
+                    ),
+                    LabStat(
+                      icon: 'trophy',
+                      label: 'Rata-rata',
+                      value: summary.avgScore,
+                    ),
+                    LabStat(
+                      icon: 'check',
+                      label: 'Lulus',
+                      value: '${summary.passCount}',
+                    ),
+                  ],
+                ),
+                const LabMeta(
+                  icon: 'people_group',
+                  text: 'Dinilai oleh Andi Pratama & Feri Gunawan',
+                ),
               ],
             ),
-            DosenGradeTable(grades: store.previewGrades),
-            LabOutlineButton(
-              icon: 'chevron_down',
-              label: 'Lihat 19 Praktikan Lainnya',
-              onTap: () => labPush(
-                context,
-                DosenRekapNilaiPage(store: store, onLogoTap: widget.onHome),
-              ),
-            ),
-          ],
-        ),
-        done
-            ? const DosenInfoBox(
-                icon: 'circle_check',
-                text: 'Nilai akhir telah disinkronkan ke Portal Akademik dan '
-                    'tidak dapat diubah lagi oleh asisten.',
-              )
-            : const DosenInfoBox(
-                icon: 'arrow_cycle',
-                text: 'Setelah divalidasi, nilai akhir disinkronkan ke Portal '
-                    'Akademik dan tidak dapat diubah lagi oleh asisten.',
-              ),
-        if (done)
-          const DosenDisabledButton(icon: 'check', label: 'Sudah Divalidasi')
-        else
-          LabColumn(
-            gap: 12,
-            children: [
-              LabPrimaryButton(
-                icon: 'check',
-                label: 'Validasi & Sinkronkan Nilai',
-                large: true,
-                onTap: _validate,
-              ),
-              LabOutlineButton(
-                icon: 'pencil',
-                label: 'Minta Revisi ke Asisten',
-                large: true,
-                onTap: () => labPush(
-                  context,
-                  DosenMintaRevisiPage(onLogoTap: widget.onHome),
+            LabCard(
+              children: [
+                Row(
+                  children: [
+                    const LabSectionTitle(
+                        icon: 'clipboard', text: 'Rekap Nilai Akhir'),
+                    const Spacer(),
+                    Text('12 Modul',
+                        style: labText(12, c: ItlgColors.primary)),
+                  ],
                 ),
+                DosenGradeTable(grades: livePreview),
+                LabOutlineButton(
+                  icon: 'chevron_down',
+                  label: 'Lihat $othersCount Praktikan Lainnya',
+                  onTap: () => labPush(
+                    context,
+                    DosenRekapNilaiPage(store: store, onLogoTap: widget.onHome),
+                  ),
+                ),
+              ],
+            ),
+            done
+                ? const DosenInfoBox(
+                    icon: 'circle_check',
+                    text: 'Nilai akhir telah disinkronkan ke Portal Akademik dan '
+                        'tidak dapat diubah lagi oleh asisten.',
+                  )
+                : const DosenInfoBox(
+                    icon: 'arrow_cycle',
+                    text: 'Setelah divalidasi, nilai akhir disinkronkan ke Portal '
+                        'Akademik dan tidak dapat diubah lagi oleh asisten.',
+                  ),
+            if (done)
+              const DosenDisabledButton(
+                  icon: 'check', label: 'Sudah Divalidasi')
+            else
+              LabColumn(
+                gap: 12,
+                children: [
+                  LabPrimaryButton(
+                    icon: 'check',
+                    label: 'Validasi & Sinkronkan Nilai',
+                    large: true,
+                    onTap: _validate,
+                  ),
+                  LabOutlineButton(
+                    icon: 'pencil',
+                    label: 'Minta Revisi ke Asisten',
+                    large: true,
+                    onTap: () => labPush(
+                      context,
+                      DosenMintaRevisiPage(onLogoTap: widget.onHome),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

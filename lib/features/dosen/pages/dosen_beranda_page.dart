@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -21,36 +23,62 @@ class DosenBerandaPage extends StatelessWidget {
   Widget build(BuildContext context) {
     void toValidasi() => onOpenTab(DosenShell.tabValidasi);
     void toPeringatan() => onOpenTab(DosenShell.tabPeringatan);
+    final praktikumSync = PraktikumSyncService.instance;
+    final nilaiSync = NilaiSyncService.instance;
+    final presensiSync = PresensiSyncService.instance;
 
-    return LabTabBody(
-      children: [
-        _Greeting(onBell: onOpenNotifikasi),
-        _EqualRow(
+    return ListenableBuilder(
+      listenable: Listenable.merge([praktikumSync, nilaiSync, presensiSync]),
+      builder: (context, _) {
+        final courses = praktikumSync.courses;
+        final nim = ProfilData.praktikan.idValue;
+        final avgSum = courses.fold<double>(
+          0,
+          (sum, c) =>
+              sum +
+              (double.tryParse(praktikumSync
+                      .effectiveAverageForCourse(c, nim)
+                      .replaceAll(',', '.')) ??
+                  85.0),
+        );
+        final avgAllText = courses.isEmpty
+            ? '84,2'
+            : (avgSum / courses.length).toStringAsFixed(1).replaceAll('.', ',');
+
+        final attendSum = courses.fold<double>(0, (sum, c) {
+          final s = presensiSync.summaryForCourse(c, nim);
+          final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
+          return sum + ((s.hadir * 100) / denom);
+        });
+        final attendAllPct =
+            courses.isEmpty ? 91 : (attendSum / courses.length).round();
+        final pendingVal = nilaiSync.pendingValidationCount;
+
+        return LabTabBody(
           children: [
-            _MetricCard(
-              icon: 'people_group',
-              label: 'Tingkat Kehadiran',
-              value: '91%',
-              valueColor: ItlgColors.primary,
-              trend: '+2% dari minggu lalu',
-              onTap: toPeringatan,
+            _Greeting(onBell: onOpenNotifikasi),
+            _EqualRow(
+              children: [
+                _MetricCard(
+                  icon: 'people_group',
+                  label: 'Tingkat Kehadiran',
+                  value: '$attendAllPct%',
+                  valueColor: ItlgColors.primary,
+                  trend: '+2% dari minggu lalu',
+                  onTap: toPeringatan,
+                ),
+                _MetricCard(
+                  icon: 'trophy',
+                  label: 'Rata-rata Nilai',
+                  value: avgAllText,
+                  valueColor: ItlgColors.secondary,
+                  trend: '+1,4 dari modul 3',
+                  onTap: toPeringatan,
+                ),
+              ],
             ),
-            _MetricCard(
-              icon: 'trophy',
-              label: 'Rata-rata Nilai',
-              value: '84,2',
-              valueColor: ItlgColors.secondary,
-              trend: '+1,4 dari modul 3',
-              onTap: toPeringatan,
-            ),
-          ],
-        ),
-        const _PerformaCard(),
-        ListenableBuilder(
-          listenable: PraktikumSyncService.instance,
-          builder: (context, _) {
-            final courses = PraktikumSyncService.instance.courses;
-            return LabColumn(
+            const _PerformaCard(),
+            LabColumn(
               gap: 12,
               children: [
                 Row(
@@ -63,45 +91,57 @@ class DosenBerandaPage extends StatelessWidget {
                   ],
                 ),
                 for (final c in courses)
-                  _GroupItem(
-                    title: '${c.name} • Kelas C',
-                    assistant: c.asisten,
-                    attendance:
-                        '${((c.hadir / (c.hadir + c.izin + c.alpa == 0 ? 4 : c.hadir + c.izin + c.alpa)) * 100).round()}%',
-                    score: c.nilaiRata.split(',').first,
-                    onTap: toValidasi,
+                  Builder(
+                    builder: (_) {
+                      final s = presensiSync.summaryForCourse(c, nim);
+                      final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
+                      final pct = ((s.hadir * 100) / denom).round();
+                      final avg = praktikumSync
+                          .effectiveAverageForCourse(c, nim)
+                          .split(',')
+                          .first;
+                      return _GroupItem(
+                        title: '${c.name} • Kelas C',
+                        assistant: c.asisten,
+                        attendance: '$pct%',
+                        score: avg,
+                        onTap: toValidasi,
+                      );
+                    },
                   ),
               ],
-            );
-          },
-        ),
-        LabColumn(
-          gap: 12,
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabHeading(icon: 'grid', text: 'Menu Dosen'),
             ),
-            _EqualRow(
+            LabColumn(
+              gap: 12,
               children: [
-                _MenuCard(
-                  icon: 'clipboard',
-                  badge: '2',
-                  title: 'Validasi Nilai Akhir',
-                  subtitle: '2 kelas menunggu',
-                  onTap: toValidasi,
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabHeading(icon: 'grid', text: 'Menu Dosen'),
                 ),
-                _MenuCard(
-                  icon: 'download',
-                  title: 'Generate Laporan',
-                  subtitle: 'Spreadsheet atau PDF',
-                  onTap: () => onOpenTab(DosenShell.tabLaporan),
+                _EqualRow(
+                  children: [
+                    _MenuCard(
+                      icon: 'clipboard',
+                      badge: pendingVal > 0 ? '$pendingVal' : null,
+                      title: 'Validasi Nilai Akhir',
+                      subtitle: pendingVal > 0
+                          ? '$pendingVal kelas menunggu'
+                          : 'Semua kelas tervalidasi',
+                      onTap: toValidasi,
+                    ),
+                    _MenuCard(
+                      icon: 'download',
+                      title: 'Generate Laporan',
+                      subtitle: 'Spreadsheet atau PDF',
+                      onTap: () => onOpenTab(DosenShell.tabLaporan),
+                    ),
+                  ],
                 ),
               ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../widgets/dosen_ui.dart';
 
@@ -29,8 +31,20 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _send() async {
     FocusScope.of(context).unfocus();
+    final targets = <String>[
+      if (_andi) 'Andi Pratama',
+      if (_feri) 'Feri Gunawan',
+    ];
+    await NilaiSyncService.instance.requestRevision(
+      courseId: 'pemob',
+      part: _bagian[_part],
+      note: _note.text.trim(),
+      assistants: targets.isEmpty ? ['Asisten Lab'] : targets,
+      requestedBy: AuthController.instance.userName,
+    );
+    if (!mounted) return;
     dosenShowResult(
       context,
       icon: 'send',

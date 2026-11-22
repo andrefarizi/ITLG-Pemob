@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -37,11 +38,13 @@ class _PraktikanDetailNilaiPageState extends State<PraktikanDetailNilaiPage> {
   @override
   Widget build(BuildContext context) {
     final sync = PraktikumSyncService.instance;
+    final nilaiSync = NilaiSyncService.instance;
     final nim = ProfilData.praktikan.idValue;
     return ListenableBuilder(
-      listenable: sync,
+      listenable: Listenable.merge([sync, nilaiSync]),
       builder: (context, _) {
         final c = sync.courseById(widget.course.id);
+        final validated = nilaiSync.isCourseValidated(c.id);
         final allGrades = sync.effectiveGradesForCourse(c, nim);
         final graded = allGrades.where((g) => g.score != null).length;
         final items = allGrades.where(_match).toList();
@@ -114,10 +117,23 @@ class _PraktikanDetailNilaiPageState extends State<PraktikanDetailNilaiPage> {
               LabListCard(
                 children: [
                   for (final g in items)
-                    _GradeCard(
-                      grade: g,
-                      asisten: c.asisten,
-                      onSanggah: () => widget.nav.sanggah(context, c, g),
+                    Builder(
+                      builder: (_) {
+                        final appeal = nilaiSync.appealFor(c.id, g.modul, nim);
+                        final sanggahLabel = validated
+                            ? 'Nilai Tervalidasi'
+                            : (appeal == null
+                                ? 'Sanggah Nilai'
+                                : (appeal.status == 'resolved'
+                                    ? 'Sanggahan Selesai'
+                                    : 'Sanggahan Diajukan'));
+                        return _GradeCard(
+                          grade: g,
+                          asisten: c.asisten,
+                          sanggahLabel: sanggahLabel,
+                          onSanggah: () => widget.nav.sanggah(context, c, g),
+                        );
+                      },
                     ),
                 ],
               ),
@@ -131,11 +147,13 @@ class _PraktikanDetailNilaiPageState extends State<PraktikanDetailNilaiPage> {
 class _GradeCard extends StatelessWidget {
   final PrakGrade grade;
   final String asisten;
+  final String sanggahLabel;
   final VoidCallback onSanggah;
 
   const _GradeCard({
     required this.grade,
     required this.asisten,
+    this.sanggahLabel = 'Sanggah Nilai',
     required this.onSanggah,
   });
 
@@ -216,7 +234,7 @@ class _GradeCard extends StatelessWidget {
                 PrakSpaceRow(
                   left: LabMeta(
                       icon: 'person', text: '$asisten • Asisten Lab'),
-                  right: PrakSideLink('Sanggah Nilai', onTap: onSanggah),
+                  right: PrakSideLink(sanggahLabel, onTap: onSanggah),
                 ),
               ],
             ),

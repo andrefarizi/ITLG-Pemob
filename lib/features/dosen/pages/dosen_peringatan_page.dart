@@ -28,6 +28,8 @@ class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
   @override
   Widget build(BuildContext context) {
     final all = widget.store.students;
+    final lowAttCount = all.where((s) => s.lowAttendance).length;
+    final lowScoreCount = all.where((s) => s.lowScore).length;
     final shown = all.where((s) {
       if (_tab == 1) return s.lowAttendance;
       if (_tab == 2) return s.lowScore;
@@ -41,15 +43,24 @@ class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
           subtitle:
               'Praktikan dengan kehadiran atau nilai di bawah batas minimal',
         ),
-        const LabStatRow(
+        LabStatRow(
           stats: [
-            LabStat(icon: 'triangle_alert', label: 'Berisiko', value: '5'),
-            LabStat(icon: 'person_cross', label: 'Kehadiran', value: '3'),
-            LabStat(icon: 'statistic_down', label: 'Nilai', value: '2'),
+            LabStat(
+                icon: 'triangle_alert',
+                label: 'Berisiko',
+                value: '${all.length}'),
+            LabStat(
+                icon: 'person_cross',
+                label: 'Kehadiran',
+                value: '$lowAttCount'),
+            LabStat(
+                icon: 'statistic_down',
+                label: 'Nilai',
+                value: '$lowScoreCount'),
           ],
         ),
         LabTabs(
-          labels: const ['Semua (5)', 'Kehadiran', 'Nilai'],
+          labels: ['Semua (${all.length})', 'Kehadiran', 'Nilai'],
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),

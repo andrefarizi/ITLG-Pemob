@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -70,13 +71,38 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
   @override
   Widget build(BuildContext context) {
     final sync = PraktikumSyncService.instance;
+    final nilaiSync = NilaiSyncService.instance;
     return ListenableBuilder(
-      listenable: sync,
+      listenable: Listenable.merge([sync, nilaiSync]),
       builder: (context, _) {
         final course = sync.courseById(widget.courseId);
         final dynamicSubs = <_Submission>[];
         final seenNims = <String>{};
+
+        // Tampilkan praktikan yang mengajukan sanggahan nilai di paling atas
+        for (final ap in nilaiSync.pendingAppealsForCourse(course.id)) {
+          seenNims.add(ap.userIdentifier);
+          final parts = ap.userName.trim().split(RegExp(r'\s+'));
+          final initials = parts.length >= 2
+              ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+              : (ap.userName.isNotEmpty
+                  ? ap.userName.substring(0, 1).toUpperCase()
+                  : 'PR');
+          dynamicSubs.add(
+            _Submission(
+              AslabStudent(initials, ap.userName, ap.userIdentifier),
+              false,
+              [
+                ('chat_bubble', 'Sanggahan Modul ${ap.modul}'),
+                if (ap.attachmentName != null && ap.attachmentName!.isNotEmpty)
+                  ('attach', ap.attachmentName!),
+              ],
+            ),
+          );
+        }
+
         for (final rec in sync.submissionsForCourse(course.id, 4)) {
+          if (seenNims.contains(rec.userIdentifier)) continue;
           seenNims.add(rec.userIdentifier);
           final parts = rec.userName.trim().split(RegExp(r'\s+'));
           final initials = parts.length >= 2

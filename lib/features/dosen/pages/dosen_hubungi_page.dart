@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
@@ -29,8 +30,16 @@ class _DosenHubungiPageState extends State<DosenHubungiPage> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _send() async {
     FocusScope.of(context).unfocus();
+    await NilaiSyncService.instance.sendAssistantFollowUp(
+      studentNim: widget.student.nim,
+      studentName: widget.student.name,
+      assistantName: widget.student.asisten,
+      followUpType: _followUps[_followUp],
+      message: _message.text.trim(),
+    );
+    if (!mounted) return;
     dosenShowResult(
       context,
       icon: 'chat_bubble',

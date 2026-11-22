@@ -153,28 +153,27 @@ class PraktikumSyncService extends ChangeNotifier {
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
 
   /// Daftar nilai efektif praktikan per mata kuliah (menggabungkan nilai
-  /// Modul 4 yang baru diberikan Aslab melalui [gradeTugasSubmission]).
+  /// terbaru dari Aslab untuk semua modul 1..4 termasuk hasil revisi sanggahan).
   List<PrakGrade> effectiveGradesForCourse(
       PrakCourse course, String userIdentifier) {
-    final sub = submissionFor(course.id, 4, userIdentifier);
-    if (sub == null || sub.status != 'graded' || sub.score == null) {
-      return course.grades;
-    }
     return [
       for (final g in course.grades)
-        if (g.modul == 4)
-          PrakGrade(
-            modul: g.modul,
-            title: g.title,
-            date: g.date,
-            score: '${sub.score}',
-            note: (sub.feedback != null && sub.feedback!.isNotEmpty)
-                ? sub.feedback
-                : 'Penilaian telah diselesaikan oleh asisten.',
-            components: g.components,
-          )
-        else
-          g,
+        () {
+          final sub = submissionFor(course.id, g.modul, userIdentifier);
+          if (sub != null && sub.status == 'graded' && sub.score != null) {
+            return PrakGrade(
+              modul: g.modul,
+              title: g.title,
+              date: g.date,
+              score: '${sub.score}',
+              note: (sub.feedback != null && sub.feedback!.isNotEmpty)
+                  ? sub.feedback
+                  : (g.note ?? 'Penilaian telah diperbarui oleh asisten.'),
+              components: g.components,
+            );
+          }
+          return g;
+        }(),
     ];
   }
 
