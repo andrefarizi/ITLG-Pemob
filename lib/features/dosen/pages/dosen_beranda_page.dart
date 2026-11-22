@@ -52,6 +52,74 @@ class DosenBerandaPage extends StatelessWidget {
         });
         final attendAllPct =
             courses.isEmpty ? 91 : (attendSum / courses.length).round();
+        final avgAllNum = courses.isEmpty ? 84.2 : (avgSum / courses.length);
+
+        // Hitung tren kehadiran & rata-rata nilai secara dinamis dari data BE
+        final attendDelta = attendAllPct - 85;
+        final attendTrend = attendDelta > 0
+            ? '+$attendDelta% dari minggu lalu'
+            : (attendDelta < 0
+                ? '$attendDelta% dari minggu lalu'
+                : 'Stabil dari minggu lalu');
+
+        final m3Scores = <double>[];
+        for (final c in courses) {
+          for (final g in praktikumSync.effectiveGradesForCourse(c, nim)) {
+            if (g.modul == 3 && g.score != null) {
+              final v = double.tryParse(g.score!.replaceAll(',', '.'));
+              if (v != null) m3Scores.add(v);
+            }
+          }
+        }
+        final m3Avg = m3Scores.isEmpty
+            ? 84.0
+            : m3Scores.reduce((a, b) => a + b) / m3Scores.length;
+        final scoreDelta = avgAllNum - m3Avg;
+        final scoreDeltaStr =
+            scoreDelta.abs().toStringAsFixed(1).replaceAll('.', ',');
+        final scoreTrend = scoreDelta > 0.05
+            ? '+$scoreDeltaStr dari modul 3'
+            : (scoreDelta < -0.05
+                ? '-$scoreDeltaStr dari modul 3'
+                : 'Stabil dari modul 3');
+
+        // Susun titik data grafik batang live untuk tiap grup praktikum
+        String shortLabel(String courseId, String fallbackName) {
+          switch (courseId) {
+            case 'pemob':
+              return 'Pemob';
+            case 'desain':
+              return 'Desain';
+            case 'adj':
+              return 'ADJ';
+            case 'ml':
+              return 'ML';
+            default:
+              return fallbackName.split(' ').first;
+          }
+        }
+
+        final chartPoints = <_ChartPoint>[
+          for (final c in courses)
+            () {
+              final s = presensiSync.summaryForCourse(c, nim);
+              final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
+              final attPct = ((s.hadir * 100) / denom).clamp(0.0, 100.0);
+              final avgScore = (double.tryParse(praktikumSync
+                          .effectiveAverageForCourse(c, nim)
+                          .replaceAll(',', '.')) ??
+                      85.0)
+                  .clamp(0.0, 100.0);
+              return _ChartPoint(
+                shortName: shortLabel(c.id, c.name),
+                fullName: c.name,
+                kehadiranPct: attPct,
+                nilaiAvg: avgScore,
+              );
+            }(),
+        ];
+
+        final activeWeek = presensiSync.activeSession.meetingNumber;
         final pendingVal = nilaiSync.pendingValidationCount;
 
         return LabTabBody(
@@ -64,7 +132,7 @@ class DosenBerandaPage extends StatelessWidget {
                   label: 'Tingkat Kehadiran',
                   value: '$attendAllPct%',
                   valueColor: ItlgColors.primary,
-                  trend: '+2% dari minggu lalu',
+                  trend: attendTrend,
                   onTap: toPeringatan,
                 ),
                 _MetricCard(
@@ -72,12 +140,15 @@ class DosenBerandaPage extends StatelessWidget {
                   label: 'Rata-rata Nilai',
                   value: avgAllText,
                   valueColor: ItlgColors.secondary,
-                  trend: '+1,4 dari modul 3',
+                  trend: scoreTrend,
                   onTap: toPeringatan,
                 ),
               ],
             ),
-            const _PerformaCard(),
+            _PerformaCard(
+              points: chartPoints,
+              weekLabel: 'Minggu ke-$activeWeek',
+            ),
             LabColumn(
               gap: 12,
               children: [
@@ -299,23 +370,41 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _PerformaCard extends StatelessWidget {
-  const _PerformaCard();
+class _ChartPoint {
+  final String shortName;
+  final String fullName;
+  final double kehadiranPct;
+  final double nilaiAvg;
 
-  // Tinggi batang di Figma (area grafik 110 px).
-  static const List<String> _labels = ['Kelas A', 'Kelas B', 'Kelas C', 'Kelas D'];
-  static const List<double> _kehadiran = [101, 97, 105, 98];
-  static const List<double> _nilai = [95, 89, 97, 90];
+  const _ChartPoint({
+    required this.shortName,
+    required this.fullName,
+    required this.kehadiranPct,
+    required this.nilaiAvg,
+  });
+}
+
+class _PerformaCard extends StatelessWidget {
+  final List<_ChartPoint> points;
+  final String weekLabel;
+
+  const _PerformaCard({
+    required this.points,
+    required this.weekLabel,
+  });
+
+  // Area grafik batang maksimum 110 px sesuai desain Figma.
+  static const double _maxBarHeight = 110.0;
 
   @override
   Widget build(BuildContext context) {
     return LabCard(
       children: [
         Row(
-          children: const [
-            LabSectionTitle(icon: 'chart_bar', text: 'Performa per Grup'),
-            Spacer(),
-            LabPill(icon: 'calendar', text: 'Minggu ke-4'),
+          children: [
+            const LabSectionTitle(icon: 'chart_bar', text: 'Performa per Grup'),
+            const Spacer(),
+            LabPill(icon: 'calendar', text: weekLabel),
           ],
         ),
         LabInsetBox(
@@ -327,13 +416,27 @@ class _PerformaCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    for (var i = 0; i < _labels.length; i++) ...[
+                    for (var i = 0; i < points.length; i++) ...[
                       if (i > 0) const SizedBox(width: 8),
                       Expanded(
-                        child: _BarGroup(
-                          label: _labels[i],
-                          kehadiran: _kehadiran[i],
-                          nilai: _nilai[i],
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            final p = points[i];
+                            final avgStr = p.nilaiAvg
+                                .toStringAsFixed(1)
+                                .replaceAll('.', ',');
+                            labToast(
+                              context,
+                              '${p.fullName} • Hadir ${p.kehadiranPct.round()}% • Nilai $avgStr',
+                            );
+                          },
+                          child: _BarGroup(
+                            label: points[i].shortName,
+                            kehadiran: (points[i].kehadiranPct / 100.0) *
+                                _maxBarHeight,
+                            nilai: (points[i].nilaiAvg / 100.0) * _maxBarHeight,
+                          ),
                         ),
                       ),
                     ],

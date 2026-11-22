@@ -78,6 +78,31 @@ DROP POLICY IF EXISTS "lab_desks_insert_all" ON public.lab_desks;
 CREATE POLICY "lab_desks_insert_all" ON public.lab_desks FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "lab_desks_update_all" ON public.lab_desks;
 CREATE POLICY "lab_desks_update_all" ON public.lab_desks FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "lab_desks_delete_all" ON public.lab_desks;
+CREATE POLICY "lab_desks_delete_all" ON public.lab_desks FOR DELETE USING (true);
+
+-- 4. Tabel Kelengkapan Software per Laboratorium (public.lab_software)
+CREATE TABLE IF NOT EXISTS public.lab_software (
+    id BIGSERIAL PRIMARY KEY,
+    lab_name TEXT NOT NULL,
+    software_name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'code_tags',
+    is_installed BOOLEAN NOT NULL DEFAULT true,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (lab_name, software_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lab_software_lab ON public.lab_software(lab_name);
+ALTER TABLE public.lab_software ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lab_software_select_all" ON public.lab_software;
+CREATE POLICY "lab_software_select_all" ON public.lab_software FOR SELECT USING (true);
+DROP POLICY IF EXISTS "lab_software_insert_all" ON public.lab_software;
+CREATE POLICY "lab_software_insert_all" ON public.lab_software FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "lab_software_update_all" ON public.lab_software;
+CREATE POLICY "lab_software_update_all" ON public.lab_software FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "lab_software_delete_all" ON public.lab_software;
+CREATE POLICY "lab_software_delete_all" ON public.lab_software FOR DELETE USING (true);
 
 DROP POLICY IF EXISTS "desk_bookings_select_all" ON public.desk_bookings;
 CREATE POLICY "desk_bookings_select_all" ON public.desk_bookings FOR SELECT USING (true);
@@ -105,6 +130,12 @@ END $$;
 DO $$
 BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.lab_tickets;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.lab_software;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -169,3 +200,22 @@ INSERT INTO public.lab_tickets (
     'Sinta Marpaung', 'aslab', 'foto_jaringan.jpg', 0, ''
 )
 ON CONFLICT (ticket_code) DO NOTHING;
+
+-- Seed Kelengkapan Software untuk 3 Lab Inventaris
+INSERT INTO public.lab_software (lab_name, software_name, icon, is_installed) VALUES
+    ('Lab Komputer 1', 'MySQL 8.0', 'database_outline', true),
+    ('Lab Komputer 1', 'PostgreSQL 16', 'database_outline', true),
+    ('Lab Komputer 1', 'Android Studio', 'code_tags', false),
+    ('Lab Komputer 1', 'Visual Studio Code', 'code_tags', true),
+    ('Lab Komputer 1', 'Figma Desktop', 'pencil', true),
+    ('Lab Jaringan 2', 'Cisco Packet Tracer', 'wifi', true),
+    ('Lab Jaringan 2', 'Wireshark', 'wifi', true),
+    ('Lab Jaringan 2', 'PuTTY / OpenSSH', 'code_tags', true),
+    ('Lab Jaringan 2', 'VirtualBox', 'desktop_device', true),
+    ('Lab Jaringan 2', 'GNS3', 'wifi', false),
+    ('Lab Multimedia', 'Figma Desktop', 'pencil', true),
+    ('Lab Multimedia', 'Blender 4.2', 'desktop_device', true),
+    ('Lab Multimedia', 'Visual Studio Code', 'code_tags', true),
+    ('Lab Multimedia', 'Unity Hub', 'code_tags', false),
+    ('Lab Multimedia', 'OBS Studio', 'camera', true)
+ON CONFLICT (lab_name, software_name) DO NOTHING;

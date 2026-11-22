@@ -77,11 +77,38 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
   Future<void> _changeStatus(LabDeskRecord d) async {
     final i = await prakShowPicker(
       context,
-      title: 'Status ${d.displayName}',
-      options: const ['Siap digunakan', 'Rusak / perlu perbaikan'],
+      title: 'Kelola ${d.displayName}',
+      options: const [
+        'Tandai Siap digunakan',
+        'Tandai Rusak / perlu perbaikan',
+        'Edit Spesifikasi & Kode PC',
+        'Hapus dari Inventaris',
+      ],
       selected: d.isReady ? 0 : 1,
     );
     if (i == null || !mounted) return;
+    if (i == 2) {
+      await labPush<bool>(
+        context,
+        LaboranTambahPerangkatPage(
+          store: widget.store,
+          initialLab: _tab,
+          editRecord: d,
+          onLogoTap: widget.onLogoTap,
+        ),
+      );
+      if (mounted) setState(() {});
+      return;
+    }
+    if (i == 3) {
+      await _sync.deleteDeskDevice(
+        labName: d.labName,
+        deskNumber: d.deskNumber,
+      );
+      if (!mounted) return;
+      labToast(context, '${d.displayName} dihapus dari inventaris BE');
+      return;
+    }
     final ready = i == 0;
     if (ready == d.isReady) return;
     await _sync.setDeskReadiness(
@@ -91,6 +118,18 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
     );
     if (!mounted) return;
     labToast(context, '${d.displayName} ditandai ${ready ? 'siap' : 'rusak'}');
+  }
+
+  Future<void> _toggleSoftware(LabSoftwareRecord sw) async {
+    await _sync.toggleSoftwareInstalled(
+      labName: sw.labName,
+      softwareName: sw.name,
+    );
+    if (!mounted) return;
+    labToast(
+      context,
+      '${sw.name}: ${sw.installed ? 'Terpasang' : 'Perlu instalasi'} (tersinkron ke BE)',
+    );
   }
 
   Future<void> _tambah() async {
@@ -113,6 +152,14 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
     final totalDesks = allLabDesks.length;
     final brokenCount = allLabDesks.where((d) => !d.isReady).length;
     final readyCount = totalDesks - brokenCount;
+
+    final allSoftware = _sync.softwareForLab(lab.name);
+    final softwarePct = _sync.softwareReadinessPct(lab.name);
+    final shownSoftware = allSoftware
+        .where((s) =>
+            (_status == 0 || s.installed == (_status == 1)) &&
+            (q.isEmpty || s.name.toLowerCase().contains(q)))
+        .toList();
 
     final desks = allLabDesks
         .where((d) =>
@@ -213,27 +260,31 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                     value: '$brokenCount'),
               ],
             ),
-            const LabProgress(
+            LabProgress(
               label: 'Kesiapan Software',
-              value: '93%',
-              fraction: 314 / 338,
+              value: '$softwarePct%',
+              fraction: (softwarePct / 100).clamp(0.0, 1.0),
             ),
           ],
         ),
-        const LabCard(
+        LabCard(
           children: [
-            Align(
+            const Align(
               alignment: Alignment.centerLeft,
               child: LabSectionTitle(
                   icon: 'database_outline', text: 'Kelengkapan Software'),
             ),
-            _SoftwareRow(icon: 'database_outline', name: 'MySQL 8.0', ok: true),
-            _SoftwareRow(
-                icon: 'database_outline', name: 'PostgreSQL 16', ok: true),
-            _SoftwareRow(icon: 'code_tags', name: 'Android Studio', ok: false),
-            _SoftwareRow(
-                icon: 'code_tags', name: 'Visual Studio Code', ok: true),
-            _SoftwareRow(icon: 'pencil', name: 'Figma Desktop', ok: true),
+            if (shownSoftware.isEmpty)
+              Text('Tidak ada software yang cocok dengan pencarian / filter.',
+                  style: labText(12, c: ItlgColors.textSubtle))
+            else
+              for (final sw in shownSoftware)
+                _SoftwareRow(
+                  icon: sw.icon,
+                  name: sw.name,
+                  ok: sw.installed,
+                  onTap: () => _toggleSoftware(sw),
+                ),
           ],
         ),
         LabCard(
@@ -293,26 +344,32 @@ class _SoftwareRow extends StatelessWidget {
   final String icon;
   final String name;
   final bool ok;
+  final VoidCallback onTap;
 
   const _SoftwareRow({
     required this.icon,
     required this.name,
     required this.ok,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        LabIcon(icon, size: 14, color: ItlgColors.primary),
-        const SizedBox(width: 8),
-        Expanded(child: Text(name, style: labText(12, w: kBold))),
-        LabStatusDot(
-          size: 26,
-          color: ok ? LabColors.green : ItlgColors.primary,
-          icon: ok ? 'check' : 'cross',
-        ),
-      ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Row(
+        children: [
+          LabIcon(icon, size: 14, color: ItlgColors.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(name, style: labText(12, w: kBold))),
+          LabStatusDot(
+            size: 26,
+            color: ok ? LabColors.green : ItlgColors.primary,
+            icon: ok ? 'check' : 'cross',
+          ),
+        ],
+      ),
     );
   }
 }

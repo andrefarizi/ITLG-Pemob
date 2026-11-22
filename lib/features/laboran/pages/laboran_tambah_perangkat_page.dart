@@ -6,17 +6,20 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Form "Tambah Perangkat" dari halaman Data Inventaris. Perangkat baru
-/// disimpan di [LaboranStore.desks] (memori saja, belum ke backend).
+/// Form "Tambah / Edit Perangkat" dari halaman Data Inventaris.
+/// Tersinkron penuh ke backend Supabase (`public.lab_desks`) melalui
+/// [LabDeskSyncService].
 class LaboranTambahPerangkatPage extends StatefulWidget {
   final LaboranStore store;
   final int initialLab;
+  final LabDeskRecord? editRecord;
   final VoidCallback? onLogoTap;
 
   const LaboranTambahPerangkatPage({
     super.key,
     required this.store,
     this.initialLab = 0,
+    this.editRecord,
     this.onLogoTap,
   });
 
@@ -32,6 +35,8 @@ class _LaboranTambahPerangkatPageState
     ('triangle_alert', 'Rusak'),
   ];
 
+  bool get _isEdit => widget.editRecord != null;
+
   late int _lab = widget.initialLab;
   int _st = 0;
   final TextEditingController _meja = TextEditingController();
@@ -42,7 +47,17 @@ class _LaboranTambahPerangkatPageState
   @override
   void initState() {
     super.initState();
-    _suggestNumber();
+    final edit = widget.editRecord;
+    if (edit != null) {
+      final labIdx = LaboranStore.inventoryLabs.indexOf(edit.labName);
+      if (labIdx != -1) _lab = labIdx;
+      _st = edit.isReady ? 0 : 1;
+      _meja.text = edit.deskNumber.toString().padLeft(2, '0');
+      _pc.text = edit.pcCode;
+      _spec.text = edit.spec;
+    } else {
+      _suggestNumber();
+    }
   }
 
   /// Isi nomor meja berikutnya otomatis (bisa diubah).
@@ -66,6 +81,7 @@ class _LaboranTambahPerangkatPageState
   }
 
   Future<void> _pickLab() async {
+    if (_isEdit) return;
     final i = await prakShowPicker(
       context,
       title: 'Pilih Laboratorium',
@@ -99,6 +115,21 @@ class _LaboranTambahPerangkatPageState
     }
     final labName = LaboranStore.inventoryLabs[_lab];
     final name = 'Meja ${meja.padLeft(2, '0')} • ${pc.toUpperCase()}';
+
+    if (_isEdit) {
+      await LabDeskSyncService.instance.updateDeskDevice(
+        labName: widget.editRecord!.labName,
+        deskNumber: widget.editRecord!.deskNumber,
+        pcCode: pc.toUpperCase(),
+        spec: spec,
+        ready: _st == 0,
+      );
+      if (!mounted) return;
+      Navigator.of(context).maybePop(true);
+      labToast(context, '$name diperbarui di BE');
+      return;
+    }
+
     final ok = await LabDeskSyncService.instance.addDeskDevice(
       labName: labName,
       deskNumber: deskNumber,
@@ -122,12 +153,16 @@ class _LaboranTambahPerangkatPageState
       children: [
         LabCard(
           children: [
-            const LabOverline(
+            LabOverline(
               overline: 'Data Inventaris',
-              title: 'Tambah Perangkat',
+              title: _isEdit ? 'Edit Perangkat' : 'Tambah Perangkat',
             ),
-            Text('Daftarkan meja dan PC baru beserta spesifikasinya.',
-                style: labText(12, c: ItlgColors.textMuted)),
+            Text(
+              _isEdit
+                  ? 'Perbarui kode PC, spesifikasi, atau kesiapan perangkat ini.'
+                  : 'Daftarkan meja dan PC baru beserta spesifikasinya.',
+              style: labText(12, c: ItlgColors.textMuted),
+            ),
           ],
         ),
         LabCard(

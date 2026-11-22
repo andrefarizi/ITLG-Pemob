@@ -145,11 +145,18 @@ class LaboranBerandaPage extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: _MenuCard(
-                    icon: 'chip',
-                    title: 'Data Inventaris',
-                    subtitle: '5 lab • 142 PC',
-                    onTap: () => onOpenTab(LaboranShell.tabInventaris),
+                  child: ListenableBuilder(
+                    listenable: LabDeskSyncService.instance,
+                    builder: (_, __) {
+                      final inv = LabDeskSyncService.instance;
+                      return _MenuCard(
+                        icon: 'chip',
+                        title: 'Data Inventaris',
+                        subtitle:
+                            '${inv.totalLabCount} lab • ${inv.totalDeviceCount} PC',
+                        onTap: () => onOpenTab(LaboranShell.tabInventaris),
+                      );
+                    },
                   ),
                 ),
               ],
