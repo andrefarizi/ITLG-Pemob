@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../praktikan/widgets/prak_google_map.dart';
@@ -73,11 +75,28 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
     );
   }
 
-  void _mulai() {
+  Future<void> _mulai() async {
     if (!_qr && !_tombol) {
       labToast(context, 'Pilih minimal satu cara verifikasi');
       return;
     }
+    final coords = _koordinat[_tt].split(',').map((e) => double.tryParse(e.trim())).toList();
+    final radii = const [25.0, 50.0, 100.0];
+    final durations = const [10, 15, 30];
+    await PresensiSyncService.instance.startSession(
+      courseId: 'pemob',
+      meetingNumber: 5,
+      labName: _titik[_tt].split(' • ').first,
+      lat: coords.isNotEmpty ? (coords[0] ?? 3.5621) : 3.5621,
+      lng: coords.length > 1 ? (coords[1] ?? 98.6600) : 98.6600,
+      radiusMeters: radii[_rd],
+      allowQr: _qr,
+      allowButton: _tombol,
+      requireSignature: _ttd,
+      durationMinutes: durations[_bt],
+      startedBy: AuthController.instance.userName,
+    );
+    if (!mounted) return;
     widget.nav.sesiAktif(context, replace: true);
   }
 

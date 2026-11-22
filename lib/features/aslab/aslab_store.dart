@@ -58,6 +58,7 @@ class AslabSession {
 }
 
 class AslabCourse {
+  final String id;
   final String name;
   final String kelas;
   final String room;
@@ -67,6 +68,7 @@ class AslabCourse {
   final List<AslabSession> sessions;
 
   const AslabCourse({
+    this.id = 'pemob',
     required this.name,
     required this.kelas,
     required this.room,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../shared/profil_data.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
@@ -34,74 +36,94 @@ class _PraktikanDetailNilaiPageState extends State<PraktikanDetailNilaiPage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.course;
-    final graded = c.grades.where((g) => g.score != null).length;
-    final items = c.grades.where(_match).toList();
-    return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        LabCard(
+    final sync = PraktikumSyncService.instance;
+    final nim = ProfilData.praktikan.idValue;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final c = sync.courseById(widget.course.id);
+        final allGrades = sync.effectiveGradesForCourse(c, nim);
+        final graded = allGrades.where((g) => g.score != null).length;
+        final items = allGrades.where(_match).toList();
+        final avgLabel = sync.effectiveAverageForCourse(c, nim);
+        final totalPoints = allGrades.fold<double>(
+          0,
+          (sum, g) =>
+              sum +
+              (g.score != null
+                  ? (double.tryParse(g.score!.replaceAll(',', '.')) ?? 0)
+                  : 0),
+        );
+        final akumulasiText =
+            '${totalPoints % 1 == 0 ? totalPoints.toInt() : totalPoints.toStringAsFixed(1).replaceAll('.', ',')} / ${graded * 100}';
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
           children: [
-            LabColumn(
-              gap: 6,
+            LabCard(
               children: [
-                Text(c.kelas,
-                    style: labText(16, w: kBold, c: ItlgColors.primaryDark)),
-                Text('Praktikum\n${c.name}',
-                    style: labText(22, w: kBold, c: Colors.black)),
+                LabColumn(
+                  gap: 6,
+                  children: [
+                    Text(c.kelas,
+                        style: labText(16, w: kBold, c: ItlgColors.primaryDark)),
+                    Text('Praktikum\n${c.name}',
+                        style: labText(22, w: kBold, c: Colors.black)),
+                  ],
+                ),
+                InnerShadowBox(
+                  radius: 12,
+                  color: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                  child: Column(
+                    children: [
+                      Text('Nilai Rata-rata',
+                          style: labText(12, c: ItlgColors.textSubtle)),
+                      const SizedBox(height: 4),
+                      PrakBigScore(avgLabel),
+                      const SizedBox(height: 4),
+                      LabMeta(
+                        icon: 'clipboard',
+                        text: 'Dari $graded modul yang sudah dinilai',
+                      ),
+                    ],
+                  ),
+                ),
+                LabStatRow(
+                  gap: 13,
+                  stats: [
+                    LabStat(
+                        icon: 'trophy',
+                        label: 'Akumulasi Nilai',
+                        value: graded > 0 ? akumulasiText : c.akumulasi),
+                    LabStat(
+                        icon: 'clipboard',
+                        label: 'Modul Dinilai',
+                        value: '$graded / 12'),
+                  ],
+                ),
               ],
             ),
-            InnerShadowBox(
-              radius: 12,
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-              child: Column(
+            LabTabs(
+              labels: const ['Semua', 'Sudah Dinilai', 'Menunggu'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            // Figma: semua nilai di dalam satu "Kartu Daftar".
+            if (items.isNotEmpty)
+              LabListCard(
                 children: [
-                  Text('Nilai Rata-rata',
-                      style: labText(12, c: ItlgColors.textSubtle)),
-                  const SizedBox(height: 4),
-                  PrakBigScore(c.nilaiRata),
-                  const SizedBox(height: 4),
-                  LabMeta(
-                    icon: 'clipboard',
-                    text: 'Dari $graded modul yang sudah dinilai',
-                  ),
+                  for (final g in items)
+                    _GradeCard(
+                      grade: g,
+                      asisten: c.asisten,
+                      onSanggah: () => widget.nav.sanggah(context, c, g),
+                    ),
                 ],
               ),
-            ),
-            LabStatRow(
-              gap: 13,
-              stats: [
-                LabStat(
-                    icon: 'trophy',
-                    label: 'Akumulasi Nilai',
-                    value: c.akumulasi),
-                LabStat(
-                    icon: 'clipboard',
-                    label: 'Modul Dinilai',
-                    value: '$graded / 12'),
-              ],
-            ),
           ],
-        ),
-        LabTabs(
-          labels: const ['Semua', 'Sudah Dinilai', 'Menunggu'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        // Figma: semua nilai di dalam satu "Kartu Daftar".
-        if (items.isNotEmpty)
-          LabListCard(
-            children: [
-              for (final g in items)
-                _GradeCard(
-                  grade: g,
-                  asisten: c.asisten,
-                  onSanggah: () => widget.nav.sanggah(context, c, g),
-                ),
-            ],
-          ),
-      ],
+        );
+      },
     );
   }
 }

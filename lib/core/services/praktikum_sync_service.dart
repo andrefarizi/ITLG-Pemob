@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/aslab/aslab_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
 import 'supabase_service.dart';
 
@@ -139,6 +140,172 @@ class PraktikumSyncService extends ChangeNotifier {
   bool get isBackendAvailable => _backendAvailable;
 
   List<PrakCourse> get courses => List.unmodifiable(_courses);
+
+  List<KuisAttemptRecord> get allQuizAttempts =>
+      List.unmodifiable(_quizAttempts.values.toList()
+        ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt)));
+
+  List<TugasSubmissionRecord> get allSubmissions =>
+      List.unmodifiable(_submissions.values
+          .where((s) => s.isSubmitted)
+          .toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
+
+  /// Daftar nilai efektif praktikan per mata kuliah (menggabungkan nilai
+  /// Modul 4 yang baru diberikan Aslab melalui [gradeTugasSubmission]).
+  List<PrakGrade> effectiveGradesForCourse(
+      PrakCourse course, String userIdentifier) {
+    final sub = submissionFor(course.id, 4, userIdentifier);
+    if (sub == null || sub.status != 'graded' || sub.score == null) {
+      return course.grades;
+    }
+    return [
+      for (final g in course.grades)
+        if (g.modul == 4)
+          PrakGrade(
+            modul: g.modul,
+            title: g.title,
+            date: g.date,
+            score: '${sub.score}',
+            note: (sub.feedback != null && sub.feedback!.isNotEmpty)
+                ? sub.feedback
+                : 'Penilaian telah diselesaikan oleh asisten.',
+            components: g.components,
+          )
+        else
+          g,
+    ];
+  }
+
+  /// Nilai rata-rata efektif (termasuk nilai baru dari Aslab jika ada).
+  String effectiveAverageForCourse(PrakCourse course, String userIdentifier) {
+    final grades = effectiveGradesForCourse(course, userIdentifier);
+    final nums = <double>[];
+    for (final g in grades) {
+      if (g.score != null) {
+        final v = double.tryParse(g.score!.replaceAll(',', '.'));
+        if (v != null) nums.add(v);
+      }
+    }
+    if (nums.isEmpty) return course.nilaiRata;
+    final avg = nums.reduce((a, b) => a + b) / nums.length;
+    return avg.toStringAsFixed(1).replaceAll('.', ',');
+  }
+
+  /// Konversi 4 praktikum sinkron ke model [AslabCourse] agar halaman
+  /// Praktikum Saya & Absensi milik Aslab memakai sumber data yang sama.
+  List<AslabCourse> get aslabCourses {
+    return [
+      for (final c in _courses)
+        AslabCourse(
+          id: c.id,
+          name: c.name,
+          kelas: c.kelas,
+          room: c.room,
+          jadwal: c.jadwalDaftar,
+          rataHadir: '${((c.hadir / (c.hadir + c.izin + c.alpa == 0 ? 4 : c.hadir + c.izin + c.alpa)) * 100).round()}%',
+          meetings: [
+            for (final m in c.meetings
+                .where((m) =>
+                    m.number <= 4 ||
+                    m.materiTitle.isNotEmpty ||
+                    m.tugasTitle.isNotEmpty ||
+                    m.kuisTitle.isNotEmpty)
+                .take(3))
+              AslabMeeting(
+                m.number,
+                m.date.split(' • ').first,
+                'Pertemuan ${m.number} :\n${m.module.split(' • ').last}',
+                [
+                  AslabItem(
+                    0,
+                    m.materiTitle.isNotEmpty
+                        ? m.materiTitle
+                        : (m.number == 4 ? c.materiTitle : 'Materi ${m.module}'),
+                    'PDF • 3,2 MB • dilihat 21 / 24',
+                  ),
+                  AslabItem(
+                    1,
+                    m.tugasTitle.isNotEmpty
+                        ? m.tugasTitle
+                        : (m.number == 4 ? c.tugasTitle : 'Tugas ${m.number}'),
+                    '${m.tugasDeadline.isNotEmpty ? m.tugasDeadline : c.tugasDeadline} • ${20 + submissionsForCourse(c.id, m.number).length} / 24 terkumpul',
+                  ),
+                  if (m.number == 4 || m.kuisTitle.isNotEmpty)
+                    AslabItem(
+                      2,
+                      m.kuisTitle.isNotEmpty ? m.kuisTitle : c.preTest,
+                      '10 soal • 10 menit • ${22 + _quizAttempts.values.where((q) => q.courseId == c.id).length} / 24 mengerjakan',
+                    ),
+                ],
+              ),
+          ],
+          sessions: [
+            for (final m in c.meetings)
+              AslabSession(
+                m.number,
+                m.module,
+                m.date,
+                m.number == 5 ? 0 : (m.number > 5 ? 1 : 2),
+                hadir: m.number < 5 ? 21 : 0,
+                izin: m.number < 5 ? 2 : 0,
+                alpa: m.number < 5 ? 1 : 0,
+              ),
+          ],
+        ),
+    ];
+  }
+
+  /// Simpan nilai & feedback dari Aslab (Penilaian Tugas) ke Supabase dan
+  /// sinkronkan langsung ke sisi Praktikan & Dosen.
+  Future<void> gradeTugasSubmission({
+    required String courseId,
+    required int meetingNumber,
+    required String userIdentifier,
+    required String userName,
+    required int score,
+    required String feedback,
+  }) async {
+    final now = DateTime.now();
+    final key = _subKey(courseId, meetingNumber, userIdentifier);
+    final old = _submissions[key];
+    _submissions[key] = TugasSubmissionRecord(
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      userIdentifier: userIdentifier,
+      userName: userName,
+      files: old?.files ?? const [PrakFile('laporan_tugas.pdf', 'PDF • 1,2 MB')],
+      repoUrl: old?.repoUrl ?? '',
+      note: old?.note ?? '',
+      status: 'graded',
+      score: score,
+      feedback: feedback,
+      updatedAt: now,
+    );
+    notifyListeners();
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('tugas_submissions').upsert(
+          {
+            'course_id': courseId,
+            'meeting_number': meetingNumber,
+            'user_identifier': userIdentifier,
+            'user_name': userName,
+            'status': 'graded',
+            'score': score,
+            'feedback': feedback,
+            'updated_at': now.toIso8601String(),
+          },
+          onConflict: 'course_id,meeting_number,user_identifier',
+        );
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[PraktikumSync] gradeTugasSubmission error: $e');
+      }
+    }
+  }
 
   PrakCourse courseById(String id) {
     return _courses.firstWhere(

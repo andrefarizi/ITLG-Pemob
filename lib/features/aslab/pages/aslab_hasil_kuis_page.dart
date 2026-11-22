@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -10,7 +11,12 @@ import '../widgets/aslab_ui.dart';
 /// Figma: "Hasil Kuis-Aslab".
 class AslabHasilKuisPage extends StatefulWidget {
   final AslabNav nav;
-  const AslabHasilKuisPage({super.key, required this.nav});
+  final String courseId;
+  const AslabHasilKuisPage({
+    super.key,
+    required this.nav,
+    this.courseId = 'pemob',
+  });
 
   @override
   State<AslabHasilKuisPage> createState() => _AslabHasilKuisPageState();
@@ -81,94 +87,154 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
     }
   }
 
+  _Result _resultFromAttempt(KuisAttemptRecord q) {
+    final parts = q.userName.trim().split(RegExp(r'\s+'));
+    final initials = parts.length >= 2
+        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+        : (q.userName.isNotEmpty
+            ? q.userName.substring(0, 1).toUpperCase()
+            : 'PR');
+    final mins = (q.durationSeconds / 60).ceil().clamp(1, 60);
+    final chip = q.score >= 70 ? 2 : 1;
+    return _Result(
+      AslabStudent(initials, q.userName, q.userIdentifier),
+      q.score,
+      '${q.correctCount} / ${q.correctCount + q.wrongCount} benar',
+      '$mins menit',
+      chip,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final items = _all.where(_match).toList();
-    return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        const LabTitle(
-          title: 'Hasil Kuis',
-          subtitle: 'Praktikum Pemrograman Mobile - TIF 3001 - Kelas C',
-        ),
-        PrakSearchField(
-          hint: 'Cari nama atau NIM praktikan...',
-          controller: _search,
-          onChanged: (v) => setState(() => _query = v),
-          filterActive: _tab != 0,
-          onFilter: () async {
-            final i = await prakShowPicker(
-              context,
-              title: 'Filter Hasil Kuis',
-              options: const ['Semua (22)', 'Lulus (18)', 'Remedial (4)'],
-              selected: _tab,
-            );
-            if (i != null && mounted) setState(() => _tab = i);
-          },
-        ),
-        LabCard(
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final course = sync.courseById(widget.courseId);
+        final liveAttempts = sync.allQuizAttempts
+            .where((q) => q.courseId == course.id)
+            .toList();
+        final dynamicResults = [
+          for (final q in liveAttempts) _resultFromAttempt(q),
+        ];
+        final combined = [...dynamicResults, ..._all];
+        final items = combined.where(_match).toList();
+        final totalCount = (22 + dynamicResults.length).clamp(0, 24);
+        final passExtra = dynamicResults.where((r) => r.lulus).length;
+        final failExtra = dynamicResults.where((r) => !r.lulus).length;
+        final passCount = 18 + passExtra;
+        final failCount = 4 + failExtra;
+        final maxScore = combined.fold<int>(
+            100, (m, r) => r.score > m ? r.score : m);
+
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
           children: [
-            const PrakSpaceRow(
-              left: LabTag.red('Kuis'),
-              right: LabMeta(
-                  icon: 'clock', text: 'Ditutup 28 Sep 2026, 08:10 WIB'),
+            LabTitle(
+              title: 'Hasil Kuis',
+              subtitle: 'Praktikum ${course.name} - ${course.kelas}',
             ),
-            Text('Pre-Test Modul 4 : State Management',
-                style: labText(16, w: kBold, c: Colors.black)),
-            const LabStatRow(
-              stats: [
-                LabStat(icon: 'file', label: 'Mengerjakan', value: '22 / 24'),
-                LabStat(icon: 'check', label: 'Rata-rata', value: '78,5'),
-                LabStat(icon: 'clock', label: 'Tertinggi', value: '100'),
+            PrakSearchField(
+              hint: 'Cari nama atau NIM praktikan...',
+              controller: _search,
+              onChanged: (v) => setState(() => _query = v),
+              filterActive: _tab != 0,
+              onFilter: () async {
+                final i = await prakShowPicker(
+                  context,
+                  title: 'Filter Hasil Kuis',
+                  options: [
+                    'Semua ($totalCount)',
+                    'Lulus ($passCount)',
+                    'Remedial ($failCount)',
+                  ],
+                  selected: _tab,
+                );
+                if (i != null && mounted) setState(() => _tab = i);
+              },
+            ),
+            LabCard(
+              children: [
+                const PrakSpaceRow(
+                  left: LabTag.red('Kuis'),
+                  right: LabMeta(
+                      icon: 'clock', text: 'Ditutup 28 Sep 2026, 08:10 WIB'),
+                ),
+                Text(course.preTest,
+                    style: labText(16, w: kBold, c: Colors.black)),
+                LabStatRow(
+                  stats: [
+                    LabStat(
+                      icon: 'file',
+                      label: 'Mengerjakan',
+                      value: '$totalCount / 24',
+                    ),
+                    const LabStat(
+                      icon: 'check',
+                      label: 'Rata-rata',
+                      value: '78,5',
+                    ),
+                    LabStat(
+                      icon: 'clock',
+                      label: 'Tertinggi',
+                      value: '$maxScore',
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-        LabTabs(
-          labels: const ['Semua (22)', 'Lulus (18)', 'Remedial (4)'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        for (final r in items)
-          LabCard(
-            children: [
-              Row(
+            LabTabs(
+              labels: [
+                'Semua ($totalCount)',
+                'Lulus ($passCount)',
+                'Remedial ($failCount)',
+              ],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            for (final r in items)
+              LabCard(
                 children: [
-                  LabAvatar(r.student.initials),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: LabColumn(
-                      gap: 2,
-                      children: [
-                        Text(r.student.name, style: labText(14, w: kBold)),
-                        Text(r.student.nim,
-                            style: labText(11,
-                                w: kMedium, c: ItlgColors.textSubtle)),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      LabAvatar(r.student.initials),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: LabColumn(
+                          gap: 2,
+                          children: [
+                            Text(r.student.name, style: labText(14, w: kBold)),
+                            Text(r.student.nim,
+                                style: labText(11,
+                                    w: kMedium, c: ItlgColors.textSubtle)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(r),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  _chip(r),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      AslabFilePill(icon: 'circle_check', text: r.benar),
+                      AslabFilePill(icon: 'clock', text: r.waktu),
+                    ],
+                  ),
                 ],
               ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  AslabFilePill(icon: 'circle_check', text: r.benar),
-                  AslabFilePill(icon: 'clock', text: r.waktu),
-                ],
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('Tidak ada hasil.',
+                    textAlign: TextAlign.center,
+                    style: labText(12, c: ItlgColors.textSubtle)),
               ),
-            ],
-          ),
-        if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text('Tidak ada hasil.',
-                textAlign: TextAlign.center,
-                style: labText(12, c: ItlgColors.textSubtle)),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../praktikan/praktikan_store.dart';
 import '../../shared/profil_data.dart';
 import '../laboran_shell.dart';
 import '../widgets/laboran_ui.dart';
@@ -37,25 +40,48 @@ class LaboranBerandaPage extends StatelessWidget {
                 LabPill(icon: 'arrow_cycle', text: 'Real-time'),
               ],
             ),
-            _LabCard(
-              name: 'Lab Komputer 1',
-              course: 'Praktikum Pemrograman Mobile',
-              initials: 'AP',
-              assistant: 'Andi Pratama',
-              verifiedAt: '07:52',
-              attendance: '21 / 24',
-              fraction: 296 / 338,
-              onTap: onOpenDenahMeja ?? onOpenPresensi,
-            ),
-            _LabCard(
-              name: 'Lab Jaringan 2',
-              course: 'Praktikum Desain Interaksi',
-              initials: 'FG',
-              assistant: 'Feri Gunawan',
-              verifiedAt: '07:58',
-              attendance: '19 / 22',
-              fraction: 292 / 338,
-              onTap: onOpenPresensi,
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                PresensiSyncService.instance,
+                PraktikumSyncService.instance,
+              ]),
+              builder: (_, __) {
+                final presensi = PresensiSyncService.instance;
+                final praktikum = PraktikumSyncService.instance;
+                final session = presensi.activeSession;
+                final pemob = praktikum.courseById('pemob');
+                final desain = praktikum.courseById('desain');
+                final extraHadir = presensi
+                    .recordsForMeeting(session.courseId, session.meetingNumber)
+                    .where((r) => r.status == PrakAttend.hadir)
+                    .length;
+                final totalHadir = (18 + extraHadir).clamp(0, 24);
+                return LabColumn(
+                  gap: 12,
+                  children: [
+                    _LabCard(
+                      name: pemob.room,
+                      course: 'Praktikum ${pemob.name}',
+                      initials: pemob.asistenInitials,
+                      assistant: pemob.asisten,
+                      verifiedAt: '07:52',
+                      attendance: '$totalHadir / 24',
+                      fraction: (totalHadir / 24).clamp(0.0, 1.0),
+                      onTap: onOpenDenahMeja ?? onOpenPresensi,
+                    ),
+                    _LabCard(
+                      name: desain.room,
+                      course: 'Praktikum ${desain.name}',
+                      initials: desain.asistenInitials,
+                      assistant: desain.asisten,
+                      verifiedAt: '07:58',
+                      attendance: '19 / 22',
+                      fraction: 292 / 338,
+                      onTap: onOpenPresensi,
+                    ),
+                  ],
+                );
+              },
             ),
             const _EmptyLabCard(),
           ],

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -15,10 +17,13 @@ class PraktikanAbsensiPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = PraktikumSyncService.instance;
+    final presensiSync = PresensiSyncService.instance;
     return ListenableBuilder(
-      listenable: sync,
+      listenable: Listenable.merge([sync, presensiSync]),
       builder: (context, _) {
         final courses = sync.courses;
+        final session = presensiSync.activeSession;
+        final userId = AuthController.instance.userIdentifier;
         return LabTabBody(
           children: [
             const LabTitle(
@@ -29,21 +34,25 @@ class PraktikanAbsensiPage extends StatelessWidget {
             ),
             LabCard(
               children: [
-                const PrakSpaceRow(
-                  left: LabChip.live('Presensi Berlangsung'),
-                  right: LabPill(icon: 'calendar', text: 'Minggu ke-5'),
+                PrakSpaceRow(
+                  left: session.isActive
+                      ? const LabChip.live('Presensi Berlangsung')
+                      : const LabChip.idle('Sesi Ditutup'),
+                  right: LabPill(
+                      icon: 'calendar',
+                      text: 'Minggu ke-${session.meetingNumber}'),
                 ),
                 Text('Praktikum Pemrograman Mobile',
                     style: labText(16, w: kBold, c: Colors.black)),
-                const Row(
+                Row(
                   children: [
-                    Flexible(
+                    const Flexible(
                       child: LabMeta(
                           icon: 'clock', text: 'Senin • 08:00–09:40 WIB'),
                     ),
-                    SizedBox(width: 24),
+                    const SizedBox(width: 24),
                     Flexible(
-                      child: LabMeta(icon: 'door', text: 'Lab Komputer 1'),
+                      child: LabMeta(icon: 'door', text: session.labName),
                     ),
                   ],
                 ),
@@ -74,6 +83,8 @@ class PraktikanAbsensiPage extends StatelessWidget {
                             child: (row + col) < courses.length
                                 ? _AttendanceCard(
                                     course: courses[row + col],
+                                    summary: presensiSync.summaryForCourse(
+                                        courses[row + col], userId),
                                     onTap: () => nav.detailAbsensi(
                                         context, courses[row + col]),
                                   )
@@ -96,12 +107,17 @@ class PraktikanAbsensiPage extends StatelessWidget {
 /// Kartu 178 x 270 per praktikum.
 class _AttendanceCard extends StatelessWidget {
   final PrakCourse course;
+  final ({int hadir, int izin, int alpa, int doneMeetings}) summary;
   final VoidCallback onTap;
-  const _AttendanceCard({required this.course, required this.onTap});
+  const _AttendanceCard({
+    required this.course,
+    required this.summary,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final total = course.hadir + course.izin + course.alpa;
+    final total = summary.hadir + summary.izin + summary.alpa;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -120,7 +136,7 @@ class _AttendanceCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const LabIconTile('book_open'),
-                LabTag.blue('Hadir ${course.hadir} / $total'),
+                LabTag.blue('Hadir ${summary.hadir} / $total'),
               ],
             ),
             const SizedBox(height: 10),
@@ -138,10 +154,10 @@ class _AttendanceCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            const LabProgress(
+            LabProgress(
               label: 'Pertemuan',
-              value: '4 / 12',
-              fraction: 50 / 150,
+              value: '${summary.doneMeetings} / 12',
+              fraction: (summary.doneMeetings / 12).clamp(0.0, 1.0),
             ),
           ],
         ),

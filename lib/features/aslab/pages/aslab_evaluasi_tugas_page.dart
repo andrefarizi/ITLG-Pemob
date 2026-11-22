@@ -11,7 +11,12 @@ import '../widgets/aslab_ui.dart';
 /// Figma: "Evaluasi Tugas-Aslab".
 class AslabEvaluasiTugasPage extends StatefulWidget {
   final AslabNav nav;
-  const AslabEvaluasiTugasPage({super.key, required this.nav});
+  final String courseId;
+  const AslabEvaluasiTugasPage({
+    super.key,
+    required this.nav,
+    this.courseId = 'pemob',
+  });
 
   @override
   State<AslabEvaluasiTugasPage> createState() => _AslabEvaluasiTugasPageState();
@@ -68,91 +73,121 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
     return ListenableBuilder(
       listenable: sync,
       builder: (context, _) {
+        final course = sync.courseById(widget.courseId);
         final dynamicSubs = <_Submission>[];
-        for (final c in sync.courses) {
-          for (final rec in sync.submissionsForCourse(c.id, 4)) {
-            final parts = rec.userName.trim().split(RegExp(r'\s+'));
-            final initials = parts.length >= 2
-                ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-                : (rec.userName.isNotEmpty
-                    ? rec.userName.substring(0, 1).toUpperCase()
-                    : 'PR');
-            dynamicSubs.add(
-              _Submission(
-                AslabStudent(initials, rec.userName, rec.userIdentifier),
-                rec.status == 'graded',
-                [
-                  for (final f in rec.files) ('file', f.name),
-                  if (rec.repoUrl.isNotEmpty) ('link_chain', rec.repoUrl),
-                ],
-              ),
-            );
-          }
-        }
-        final combined = [...dynamicSubs, ..._all];
-        final items = combined.where(_match).toList();
-        return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        const LabTitle(
-          title: 'Evaluasi Tugas',
-          subtitle: 'Praktikum Basis Data • TIF 2104 - Kelas C',
-        ),
-        PrakSearchField(
-          hint: 'Cari nama atau NIM praktikan...',
-          controller: _search,
-          onChanged: (v) => setState(() => _query = v),
-          filterActive: _tab != 0,
-          onFilter: () async {
-            final i = await prakShowPicker(
-              context,
-              title: 'Filter Status Tugas',
-              options: const ['Menunggu (6)', 'Sudah Dinilai', 'Terlambat'],
-              selected: _tab,
-            );
-            if (i != null && mounted) setState(() => _tab = i);
-          },
-        ),
-        LabCard(
-          children: [
-            const PrakSpaceRow(
-              left: LabTag.red('Tugas 4'),
-              right: LabMeta(
-                  icon: 'clock', text: 'Deadline 29 Sep 2026, 10:30 WIB'),
-            ),
-            Text('Perancangan ERD &\nQuery SQL',
-                style: labText(16, w: kBold, c: Colors.black)),
-            const LabStatRow(
-              stats: [
-                LabStat(icon: 'file', label: 'Terkumpul', value: '20 / 24'),
-                LabStat(icon: 'check', label: 'Dinilai', value: '14'),
-                LabStat(icon: 'clock', label: 'Menunggu', value: '6'),
+        final seenNims = <String>{};
+        for (final rec in sync.submissionsForCourse(course.id, 4)) {
+          seenNims.add(rec.userIdentifier);
+          final parts = rec.userName.trim().split(RegExp(r'\s+'));
+          final initials = parts.length >= 2
+              ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+              : (rec.userName.isNotEmpty
+                  ? rec.userName.substring(0, 1).toUpperCase()
+                  : 'PR');
+          dynamicSubs.add(
+            _Submission(
+              AslabStudent(initials, rec.userName, rec.userIdentifier),
+              rec.status == 'graded',
+              [
+                for (final f in rec.files) ('file', f.name),
+                if (rec.repoUrl.isNotEmpty) ('link_chain', rec.repoUrl),
               ],
             ),
+          );
+        }
+        final seedFiltered =
+            _all.where((s) => !seenNims.contains(s.student.nim)).toList();
+        final combined = [...dynamicSubs, ...seedFiltered];
+        final items = combined.where(_match).toList();
+        final waitingExtra =
+            dynamicSubs.where((s) => !s.graded).length;
+        final gradedExtra =
+            dynamicSubs.where((s) => s.graded).length;
+        final waitingCount = 6 + waitingExtra;
+        final gradedCount = 14 + gradedExtra;
+        final totalCount = (20 + dynamicSubs.length).clamp(0, 24);
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
+          children: [
+            LabTitle(
+              title: 'Evaluasi Tugas',
+              subtitle: 'Praktikum ${course.name} • ${course.kelas}',
+            ),
+            PrakSearchField(
+              hint: 'Cari nama atau NIM praktikan...',
+              controller: _search,
+              onChanged: (v) => setState(() => _query = v),
+              filterActive: _tab != 0,
+              onFilter: () async {
+                final i = await prakShowPicker(
+                  context,
+                  title: 'Filter Status Tugas',
+                  options: [
+                    'Menunggu ($waitingCount)',
+                    'Sudah Dinilai',
+                    'Terlambat',
+                  ],
+                  selected: _tab,
+                );
+                if (i != null && mounted) setState(() => _tab = i);
+              },
+            ),
+            LabCard(
+              children: [
+                PrakSpaceRow(
+                  left: const LabTag.red('Tugas 4'),
+                  right: LabMeta(icon: 'clock', text: course.tugasDeadline),
+                ),
+                Text(
+                  course.tugasTitle.replaceFirst('Tugas 4 : ', ''),
+                  style: labText(16, w: kBold, c: Colors.black),
+                ),
+                LabStatRow(
+                  stats: [
+                    LabStat(
+                      icon: 'file',
+                      label: 'Terkumpul',
+                      value: '$totalCount / 24',
+                    ),
+                    LabStat(
+                      icon: 'check',
+                      label: 'Dinilai',
+                      value: '$gradedCount',
+                    ),
+                    LabStat(
+                      icon: 'clock',
+                      label: 'Menunggu',
+                      value: '$waitingCount',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            LabTabs(
+              labels: ['Menunggu ($waitingCount)', 'Sudah Dinilai', 'Terlambat'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            for (final s in items)
+              _SubmissionCard(
+                item: s,
+                onDownload: () => labToast(
+                    context, 'Berkas ${s.student.name} sedang diunduh'),
+                onGrade: () => widget.nav.penilaianTugas(
+                  context,
+                  student: s.student,
+                  courseId: course.id,
+                ),
+              ),
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('Tidak ada pengumpulan.',
+                    textAlign: TextAlign.center,
+                    style: labText(12, c: ItlgColors.textSubtle)),
+              ),
           ],
-        ),
-        LabTabs(
-          labels: const ['Menunggu (6)', 'Sudah Dinilai', 'Terlambat'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        for (final s in items)
-          _SubmissionCard(
-            item: s,
-            onDownload: () => labToast(
-                context, 'Berkas ${s.student.name} sedang diunduh'),
-            onGrade: () =>
-                widget.nav.penilaianTugas(context, student: s.student),
-          ),
-        if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text('Tidak ada pengumpulan.',
-                textAlign: TextAlign.center,
-                style: labText(12, c: ItlgColors.textSubtle)),
-          ),
-      ],
-    );
+        );
       },
     );
   }

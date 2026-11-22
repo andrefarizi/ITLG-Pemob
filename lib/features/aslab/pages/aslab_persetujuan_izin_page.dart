@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
-import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
 /// Figma: "Persetujuan Izin-Aslab".
@@ -18,22 +19,46 @@ class AslabPersetujuanIzinPage extends StatefulWidget {
 }
 
 class _AslabPersetujuanIzinPageState extends State<AslabPersetujuanIzinPage> {
+  final PresensiSyncService _sync = PresensiSyncService.instance;
+
   /// 0 Menunggu, 1 Disetujui, 2 Ditolak.
   int _tab = 0;
 
-  void _decide(AslabLeave l, bool approve) {
-    setState(() => l.status = approve ? 1 : 2);
+  @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _sync.removeListener(_onSyncChanged);
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _decide(LeaveRequestRecord l, bool approve) async {
+    await _sync.decideLeaveRequest(
+      leave: l,
+      approve: approve,
+      decidedBy: AuthController.instance.userName,
+    );
+    if (!mounted) return;
     labToast(
       context,
       approve
-          ? 'Pengajuan ${l.student.name} disetujui'
-          : 'Pengajuan ${l.student.name} ditolak',
+          ? 'Pengajuan ${l.userName} disetujui'
+          : 'Pengajuan ${l.userName} ditolak',
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final leaves = widget.nav.store.leaves;
+    final leaves = _sync.leaves;
     final items = leaves.where((l) => l.status == _tab).toList();
     final pending = leaves.where((l) => l.status == 0).length;
     return LabSubPage(
@@ -67,7 +92,7 @@ class _AslabPersetujuanIzinPageState extends State<AslabPersetujuanIzinPage> {
 }
 
 class _LeaveCard extends StatelessWidget {
-  final AslabLeave leave;
+  final LeaveRequestRecord leave;
   final VoidCallback onReject;
   final VoidCallback onApprove;
 
@@ -90,21 +115,25 @@ class _LeaveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = leave.student;
     return LabCard(
       children: [
-        PrakSpaceRow(left: _chip(), right: LabTag.blue(leave.type)),
+        PrakSpaceRow(left: _chip(), right: LabTag.blue(leave.leaveType)),
         LabPerson(
-          initials: s.initials,
-          name: s.name,
-          caption: '${s.nim} • TIF 3001 - Kelas C',
+          initials: leave.initials,
+          name: leave.userName,
+          caption: '${leave.userIdentifier} • TIF 3001 - Kelas C',
         ),
         LabStatRow(
           gap: 13,
           stats: [
             LabStat(
-                icon: 'calendar', label: 'Pertemuan', value: leave.pertemuan),
-            LabStat(icon: 'clock', label: 'Diajukan', value: leave.diajukan),
+                icon: 'calendar',
+                label: 'Pertemuan',
+                value: leave.pertemuanLabel),
+            LabStat(
+                icon: 'clock',
+                label: 'Diajukan',
+                value: leave.submittedLabel),
           ],
         ),
         LabInsetBox(
@@ -114,10 +143,10 @@ class _LeaveCard extends StatelessWidget {
             children: [
               Text('Keterangan', style: labText(12, w: kBold)),
               Text(leave.note, style: labText(12, c: ItlgColors.textMuted)),
-              if (leave.file != null)
+              if (leave.fileName != null && leave.fileName!.isNotEmpty)
                 AslabFilePill(
                   icon: 'attach',
-                  text: leave.file!,
+                  text: leave.fileName!,
                   background: ItlgColors.surfaceDark,
                 ),
             ],

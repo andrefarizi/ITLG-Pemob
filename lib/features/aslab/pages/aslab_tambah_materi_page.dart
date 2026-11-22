@@ -14,7 +14,15 @@ class AslabTambahMateriPage extends StatefulWidget {
   /// 0 modul, 1 tugas, 2 kuis.
   final int kind;
 
-  const AslabTambahMateriPage({super.key, required this.nav, this.kind = 0});
+  /// ID praktikum yang dipilih (pemob, desain, adj, ml).
+  final String courseId;
+
+  const AslabTambahMateriPage({
+    super.key,
+    required this.nav,
+    this.kind = 0,
+    this.courseId = 'pemob',
+  });
 
   @override
   State<AslabTambahMateriPage> createState() => _AslabTambahMateriPageState();
@@ -94,7 +102,7 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
             'Pre-Test Modul 5',
           ][_kind];
     await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
-      courseId: 'pemob',
+      courseId: widget.courseId,
       meetingNumber: meetingNum,
       dateLabel: _pertemuan[_pt],
       kind: _kind,
@@ -113,13 +121,14 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
 
   @override
   Widget build(BuildContext context) {
+    final course = PraktikumSyncService.instance.courseById(widget.courseId);
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
         LabCard(
           children: [
-            const LabOverline(
-              overline: 'Praktikum Pemrograman Mobile • Kelas C',
+            LabOverline(
+              overline: 'Praktikum ${course.name} • Kelas C',
               title: 'Tambah Materi',
             ),
             PrakField(

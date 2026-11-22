@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
@@ -8,7 +9,12 @@ import 'aslab_edit_modul_page.dart';
 /// Figma: "Edit Tugas-Aslab".
 class AslabEditTugasPage extends StatefulWidget {
   final AslabNav nav;
-  const AslabEditTugasPage({super.key, required this.nav});
+  final String courseId;
+  const AslabEditTugasPage({
+    super.key,
+    required this.nav,
+    this.courseId = 'pemob',
+  });
 
   @override
   State<AslabEditTugasPage> createState() => _AslabEditTugasPageState();
@@ -21,15 +27,20 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
     'Rab, 30 Sep 2026 • 10:30 WIB',
   ];
 
-  final TextEditingController _nama =
-      TextEditingController(text: 'Tugas 4 : Aplikasi Counter');
-  final TextEditingController _desk = TextEditingController(
-      text: 'Buat aplikasi counter dengan Provider, sertakan laporan PDF dan '
-          'tautan repositori.');
+  late final TextEditingController _nama;
+  late final TextEditingController _desk;
   int _dl = 0;
   final List<(String, String)> _files = [
-    ('Tugas_4_Aplikasi_Counter.pdf', 'PDF • 640 KB'),
+    ('Tugas_4_Praktikum.pdf', 'PDF • 640 KB'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final c = PraktikumSyncService.instance.courseById(widget.courseId);
+    _nama = TextEditingController(text: c.tugasTitle);
+    _desk = TextEditingController(text: c.modulDesc);
+  }
 
   @override
   void dispose() {
@@ -49,6 +60,22 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
         ('Berkas_Pengganti_${_files.length + 1}.pdf', 'Diunggah baru saja')));
   }
 
+  Future<void> _save() async {
+    final c = PraktikumSyncService.instance.courseById(widget.courseId);
+    await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
+      courseId: c.id,
+      meetingNumber: 4,
+      dateLabel: 'Sen, 28 Sep 2026 • ${c.jam}',
+      kind: 1,
+      title: _nama.text.trim().isEmpty ? c.tugasTitle : _nama.text.trim(),
+      description: _desk.text.trim(),
+      fileName: _files.isNotEmpty ? _files.first.$1 : null,
+      deadline: _deadline[_dl],
+    );
+    if (!mounted) return;
+    _close('Perubahan tugas disimpan');
+  }
+
   void _close(String message) {
     Navigator.of(context).maybePop();
     labToast(context, message);
@@ -56,10 +83,11 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = PraktikumSyncService.instance.courseById(widget.courseId);
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
-        const AslabEditHeader(title: 'Edit Tugas 4'),
+        AslabEditHeader(title: 'Edit Tugas 4', courseName: c.name),
         const PrakNotice.warn(
           icon: 'info',
           text: '20 praktikan sudah mengumpulkan. Perubahan deadline atau '
@@ -119,7 +147,7 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
               icon: 'check',
               label: 'Simpan Perubahan',
               large: true,
-              onTap: () => _close('Perubahan tugas disimpan'),
+              onTap: _save,
             ),
             LabOutlineButton(
               icon: 'delete_filled',

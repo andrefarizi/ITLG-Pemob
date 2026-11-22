@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -29,45 +30,61 @@ class _AslabDetailPraktikumPageState extends State<AslabDetailPraktikumPage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.course;
     final nav = widget.nav;
-    return LabSubPage(
-      onLogoTap: nav.home,
-      children: [
-        LabCard(
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final c = sync.aslabCourses.firstWhere(
+          (x) => x.id == widget.course.id,
+          orElse: () => widget.course,
+        );
+        return LabSubPage(
+          onLogoTap: nav.home,
           children: [
-            AslabClassTitle(kelas: c.kelas, name: c.name),
-            LabStatRow(
-              gap: 13,
-              stats: [
-                const LabStat(
-                    icon: 'people_group', label: 'Praktikan', value: '24 Orang'),
-                LabStat(icon: 'clock', label: 'Waktu', value: c.jadwal),
+            LabCard(
+              children: [
+                AslabClassTitle(kelas: c.kelas, name: c.name),
+                LabStatRow(
+                  gap: 13,
+                  stats: [
+                    const LabStat(
+                        icon: 'people_group',
+                        label: 'Praktikan',
+                        value: '24 Orang'),
+                    LabStat(icon: 'clock', label: 'Waktu', value: c.jadwal),
+                  ],
+                ),
+                const LabProgress(
+                  label: 'Pertemuan',
+                  value: '4 / 12',
+                  fraction: 113 / 338,
+                  color: ItlgColors.primary,
+                ),
               ],
             ),
-            const LabProgress(
-              label: 'Pertemuan',
-              value: '4 / 12',
-              fraction: 113 / 338,
-              color: ItlgColors.primary,
+            LabPrimaryButton(
+              icon: 'plus',
+              label: 'Tambah Materi Baru',
+              large: true,
+              onTap: () => nav.tambahMateri(context, courseId: c.id),
             ),
+            LabTabs(
+              labels: const ['Semua', 'Modul', 'Tugas', 'Kuis'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            for (final m in c.meetings)
+              if (_tab == 0 || m.items.any((it) => it.kind == _tab - 1))
+                _MeetingCard(
+                  meeting: m,
+                  tab: _tab,
+                  nav: nav,
+                  courseId: c.id,
+                ),
           ],
-        ),
-        LabPrimaryButton(
-          icon: 'plus',
-          label: 'Tambah Materi Baru',
-          large: true,
-          onTap: () => nav.tambahMateri(context),
-        ),
-        LabTabs(
-          labels: const ['Semua', 'Modul', 'Tugas', 'Kuis'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        for (final m in c.meetings)
-          if (_tab == 0 || m.items.any((it) => it.kind == _tab - 1))
-            _MeetingCard(meeting: m, tab: _tab, nav: nav),
-      ],
+        );
+      },
     );
   }
 }
@@ -76,11 +93,13 @@ class _MeetingCard extends StatelessWidget {
   final AslabMeeting meeting;
   final int tab;
   final AslabNav nav;
+  final String courseId;
 
   const _MeetingCard({
     required this.meeting,
     required this.tab,
     required this.nav,
+    required this.courseId,
   });
 
   @override
@@ -106,13 +125,15 @@ class _MeetingCard extends StatelessWidget {
                     child: Text(meeting.title,
                         style: labText(16, w: kBold, c: Colors.black)),
                   ),
-                  const LabIcon('arrow_right', size: 16, color: LabColors.filterIcon),
+                  const LabIcon('arrow_right',
+                      size: 16, color: LabColors.filterIcon),
                 ],
               ),
             ],
           ),
         ),
-        for (final it in items) _ItemBox(item: it, nav: nav),
+        for (final it in items)
+          _ItemBox(item: it, nav: nav, courseId: courseId),
       ],
     );
   }
@@ -122,7 +143,12 @@ class _MeetingCard extends StatelessWidget {
 class _ItemBox extends StatelessWidget {
   final AslabItem item;
   final AslabNav nav;
-  const _ItemBox({required this.item, required this.nav});
+  final String courseId;
+  const _ItemBox({
+    required this.item,
+    required this.nav,
+    required this.courseId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +164,7 @@ class _ItemBox extends StatelessWidget {
         left = LabOutlineButton(
             icon: 'pencil',
             label: 'Edit Modul',
-            onTap: () => nav.editModul(context));
+            onTap: () => nav.editModul(context, courseId: courseId));
         right = LabPrimaryButton(
             icon: 'eye',
             label: 'Detail Modul',
@@ -148,21 +174,22 @@ class _ItemBox extends StatelessWidget {
         left = LabOutlineButton(
             icon: 'pencil',
             label: 'Edit Tugas',
-            onTap: () => nav.editTugas(context));
+            onTap: () => nav.editTugas(context, courseId: courseId));
         right = LabPrimaryButton(
             icon: 'clipboard',
             label: 'Evaluasi Tugas',
-            onTap: () => nav.evaluasiTugas(context));
+            onTap: () => nav.evaluasiTugas(context, courseId: courseId));
         break;
       default:
         left = LabOutlineButton(
             icon: 'pencil',
             label: 'Edit Kuis',
-            onTap: () => nav.tambahMateri(context, kind: 2));
+            onTap: () =>
+                nav.tambahMateri(context, kind: 2, courseId: courseId));
         right = LabPrimaryButton(
             icon: 'eye',
             label: 'Lihat Hasil',
-            onTap: () => nav.hasilKuis(context));
+            onTap: () => nav.hasilKuis(context, courseId: courseId));
     }
     return LabInsetBox(
       child: LabColumn(

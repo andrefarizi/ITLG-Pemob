@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -27,7 +28,19 @@ class _AslabPraktikumSayaPageState extends State<AslabPraktikumSayaPage> {
   int _sort = 0;
 
   @override
+  void initState() {
+    super.initState();
+    PraktikumSyncService.instance.addListener(_onSync);
+    PraktikumSyncService.instance.refreshFromBackend();
+  }
+
+  void _onSync() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    PraktikumSyncService.instance.removeListener(_onSync);
     _search.dispose();
     super.dispose();
   }
@@ -41,7 +54,7 @@ class _AslabPraktikumSayaPageState extends State<AslabPraktikumSayaPage> {
   @override
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase();
-    final courses = widget.nav.store.courses
+    final courses = PraktikumSyncService.instance.aslabCourses
         .where((c) => q.isEmpty || c.name.toLowerCase().contains(q))
         .toList();
     if (_sort == 1) courses.sort((a, b) => a.name.compareTo(b.name));
@@ -92,24 +105,30 @@ class AslabCourseGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < 2; i++) ...[
-            if (i > 0) const SizedBox(width: 14),
-            Expanded(
-              child: i < courses.length
-                  ? _CourseCard(
-                      course: courses[i],
-                      third: thirdMeta(courses[i]),
-                      onTap: () => onTap(courses[i]),
-                    )
-                  : const SizedBox.shrink(),
+    return LabColumn(
+      gap: 14,
+      children: [
+        for (var row = 0; row < courses.length; row += 2)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var col = 0; col < 2; col++) ...[
+                  if (col > 0) const SizedBox(width: 14),
+                  Expanded(
+                    child: (row + col) < courses.length
+                        ? _CourseCard(
+                            course: courses[row + col],
+                            third: thirdMeta(courses[row + col]),
+                            onTap: () => onTap(courses[row + col]),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 }

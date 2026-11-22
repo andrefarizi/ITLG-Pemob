@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
@@ -7,22 +8,33 @@ import '../aslab_nav.dart';
 /// Figma: "Edit Modul-Aslab".
 class AslabEditModulPage extends StatefulWidget {
   final AslabNav nav;
-  const AslabEditModulPage({super.key, required this.nav});
+  final String courseId;
+  const AslabEditModulPage({
+    super.key,
+    required this.nav,
+    this.courseId = 'pemob',
+  });
 
   @override
   State<AslabEditModulPage> createState() => _AslabEditModulPageState();
 }
 
 class _AslabEditModulPageState extends State<AslabEditModulPage> {
-  final TextEditingController _nama =
-      TextEditingController(text: 'Modul 4 : Flutter State Management');
-  final TextEditingController _desk = TextEditingController(
-      text: 'Pengenalan setState, InheritedWidget, dan Provider untuk '
-          'mengelola state aplikasi Flutter.');
-  final List<(String, String)> _files = [
-    ('Modul_4_State_Management.pdf', 'PDF • 3,2 MB'),
-    ('starter_project.zip', 'ZIP • 4,1 MB'),
-  ];
+  late final TextEditingController _nama;
+  late final TextEditingController _desk;
+  late final List<(String, String)> _files;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = PraktikumSyncService.instance.courseById(widget.courseId);
+    _nama = TextEditingController(text: c.materiTitle);
+    _desk = TextEditingController(text: c.modulDesc);
+    _files = [
+      (c.materiFile, 'PDF • 3,2 MB'),
+      ('starter_project.zip', 'ZIP • 4,1 MB'),
+    ];
+  }
 
   @override
   void dispose() {
@@ -36,6 +48,21 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
         ('Berkas_Pengganti_${_files.length + 1}.pdf', 'Diunggah baru saja')));
   }
 
+  Future<void> _save() async {
+    final c = PraktikumSyncService.instance.courseById(widget.courseId);
+    await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
+      courseId: c.id,
+      meetingNumber: 4,
+      dateLabel: 'Sen, 28 Sep 2026 • ${c.jam}',
+      kind: 0,
+      title: _nama.text.trim().isEmpty ? c.materiTitle : _nama.text.trim(),
+      description: _desk.text.trim(),
+      fileName: _files.isNotEmpty ? _files.first.$1 : c.materiFile,
+    );
+    if (!mounted) return;
+    _close('Perubahan modul disimpan');
+  }
+
   void _close(String message) {
     Navigator.of(context).maybePop();
     labToast(context, message);
@@ -43,10 +70,14 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = PraktikumSyncService.instance.courseById(widget.courseId);
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
-        const AslabEditHeader(title: 'Edit Modul 4'),
+        AslabEditHeader(
+          title: 'Edit Modul 4',
+          courseName: c.name,
+        ),
         LabCard(
           children: [
             const Align(
@@ -97,7 +128,7 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
               icon: 'check',
               label: 'Simpan Perubahan',
               large: true,
-              onTap: () => _close('Perubahan modul disimpan'),
+              onTap: _save,
             ),
             LabOutlineButton(
               icon: 'delete_filled',
@@ -116,7 +147,12 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
 /// judul, dan tanggal pertemuan.
 class AslabEditHeader extends StatelessWidget {
   final String title;
-  const AslabEditHeader({super.key, required this.title});
+  final String courseName;
+  const AslabEditHeader({
+    super.key,
+    required this.title,
+    this.courseName = 'Pemrograman Mobile',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +163,7 @@ class AslabEditHeader extends StatelessWidget {
           child: LabChip.live('Sudah Diterbitkan'),
         ),
         LabOverline(
-          overline: 'Praktikum Pemrograman Mobile • Kelas C',
+          overline: 'Praktikum $courseName • Kelas C',
           title: title,
         ),
         const LabMeta(

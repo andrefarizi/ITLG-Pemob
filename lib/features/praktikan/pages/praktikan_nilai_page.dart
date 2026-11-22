@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../shared/profil_data.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
@@ -15,18 +16,38 @@ class PraktikanNilaiPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = PraktikumSyncService.instance;
+    final nim = ProfilData.praktikan.idValue;
     return ListenableBuilder(
       listenable: sync,
       builder: (context, _) {
         final courses = sync.courses;
         final graded = courses.fold<int>(
-            0, (s, c) => s + c.grades.where((g) => g.score != null).length);
+          0,
+          (s, c) =>
+              s +
+              sync
+                  .effectiveGradesForCourse(c, nim)
+                  .where((g) => g.score != null)
+                  .length,
+        );
         final pending = courses.fold<int>(
-            0, (s, c) => s + c.grades.where((g) => g.score == null).length);
+          0,
+          (s, c) =>
+              s +
+              sync
+                  .effectiveGradesForCourse(c, nim)
+                  .where((g) => g.score == null)
+                  .length,
+        );
         final avgSum = courses.fold<double>(
-            0,
-            (s, c) =>
-                s + (double.tryParse(c.nilaiRata.replaceAll(',', '.')) ?? 0));
+          0,
+          (s, c) =>
+              s +
+              (double.tryParse(sync
+                      .effectiveAverageForCourse(c, nim)
+                      .replaceAll(',', '.')) ??
+                  0),
+        );
         final avgText = courses.isEmpty
             ? '0,0'
             : (avgSum / courses.length).toStringAsFixed(1).replaceAll('.', ',');
@@ -116,6 +137,12 @@ class _GradeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sync = PraktikumSyncService.instance;
+    final nim = ProfilData.praktikan.idValue;
+    final grades = sync.effectiveGradesForCourse(course, nim);
+    final gradedCount = grades.where((g) => g.score != null).length;
+    final totalCount = grades.isEmpty ? 4 : grades.length;
+    final avgLabel = sync.effectiveAverageForCourse(course, nim);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -138,7 +165,7 @@ class _GradeCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(course.nilaiRata,
+                    Text(avgLabel,
                         style: labText(22, w: kBold, c: ItlgColors.primary)),
                     Text('rata-rata',
                         style: labText(11,
@@ -155,10 +182,10 @@ class _GradeCard extends StatelessWidget {
             const SizedBox(height: 10),
             LabMeta(icon: 'person', text: course.asisten),
             const SizedBox(height: 10),
-            const LabProgress(
+            LabProgress(
               label: 'Dinilai',
-              value: '3 / 4',
-              fraction: 113 / 150,
+              value: '$gradedCount / $totalCount',
+              fraction: (gradedCount / totalCount).clamp(0.0, 1.0),
               color: ItlgColors.primary,
             ),
           ],

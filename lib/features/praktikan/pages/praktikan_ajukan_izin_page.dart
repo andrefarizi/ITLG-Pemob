@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -47,10 +49,24 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
         PrakFile('lampiran_${_files.length + 1}.pdf', 'PDF • 256 KB')));
   }
 
-  void _kirim() {
+  Future<void> _kirim() async {
+    final auth = AuthController.instance;
+    final jenisLabel = const ['Izin Sakit', 'Izin', 'Kendala QR'][_jenis];
+    final dateShort = widget.meeting.date.split(' • ').first;
+    await PresensiSyncService.instance.submitLeaveRequest(
+      courseId: widget.course.id.isNotEmpty ? widget.course.id : 'pemob',
+      meetingNumber: widget.meeting.number,
+      userIdentifier: auth.userIdentifier,
+      userName: auth.userName,
+      leaveType: jenisLabel,
+      pertemuanLabel: '${widget.meeting.number} • $dateShort',
+      note: _alasan.text.trim(),
+      fileName: _files.isNotEmpty ? _files.first.name : null,
+    );
     if (widget.meeting.status == PrakAttend.upcoming) {
       widget.meeting.status = PrakAttend.pending;
     }
+    if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(context, 'Pengajuan izin terkirim ke asisten');
   }

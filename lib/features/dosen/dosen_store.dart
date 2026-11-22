@@ -144,8 +144,9 @@ class DosenStore {
 
   final List<String> praktikumOptions = const [
     'Pemrograman Mobile • TIF 3001 - Kelas C',
-    'Pemrograman Mobile • TIF 3001 - Kelas A',
-    'Basis Data • TIF 2104 - Kelas B',
+    'Desain Interaksi • TIF 3002 - Kelas C',
+    'Analisis Desain Jaringan • TIF 3003 - Kelas C',
+    'Machine Learning • TIF 3004 - Kelas C',
   ];
 
   final List<String> periodeOptions = const [

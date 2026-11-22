@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -171,51 +173,73 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
 
   // Kartu presensi berlangsung (373 x 258).
   Widget _presensiCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 20, 24),
-      decoration: BoxDecoration(
-        color: ItlgColors.surfaceDark,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: ItlgShadows.outline,
-      ),
-      child: LabColumn(
-        gap: 16,
-        children: [
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: PrakLiveChip24('Presensi Berlangsung'),
+    final presensiSync = PresensiSyncService.instance;
+    return ListenableBuilder(
+      listenable: presensiSync,
+      builder: (context, _) {
+        final session = presensiSync.activeSession;
+        final userId = AuthController.instance.userIdentifier;
+        final myRec = presensiSync.recordFor(
+            session.courseId, session.meetingNumber, userId);
+        final alreadyPresent =
+            myRec != null && myRec.status == PrakAttend.hadir;
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 20, 24),
+          decoration: BoxDecoration(
+            color: ItlgColors.surfaceDark,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: ItlgShadows.outline,
           ),
-          Text('Praktikum \nPemrograman Mobile',
-              style: labText(22, w: kBold, c: Colors.black)),
-          const PrakScheduleMeta(
-            jadwal: 'Senin • 08:00–09:40 WIB',
-            room: 'Lab Komputer 1',
-            asisten: 'Andi Pratama',
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _nav.presensi(context),
-            child: Container(
-              height: 50,
-              decoration: BoxDecoration(
-                color: ItlgColors.primary,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: ItlgShadows.outline,
+          child: LabColumn(
+            gap: 16,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: alreadyPresent
+                    ? const PrakLiveChip24('Sudah Presensi')
+                    : (session.isActive
+                        ? const PrakLiveChip24('Presensi Berlangsung')
+                        : const LabChip.idle('Sesi Ditutup')),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const LabIcon('m_qr', size: 22, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text('Presensi Sekarang',
-                      style:
-                          labText(16, w: kBold, c: ItlgColors.surfaceWhite)),
-                ],
+              Text('Praktikum \nPemrograman Mobile',
+                  style: labText(22, w: kBold, c: Colors.black)),
+              PrakScheduleMeta(
+                jadwal: 'Senin • 08:00–09:40 WIB',
+                room: session.labName,
+                asisten: session.startedBy,
               ),
-            ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => alreadyPresent
+                    ? _nav.pilihMejaFromPresensi()
+                    : _nav.presensi(context),
+                child: Container(
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: ItlgColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: ItlgShadows.outline,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const LabIcon('m_qr', size: 22, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                          alreadyPresent
+                              ? 'Lihat / Pilih Meja'
+                              : 'Presensi Sekarang',
+                          style: labText(16,
+                              w: kBold, c: ItlgColors.surfaceWhite)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

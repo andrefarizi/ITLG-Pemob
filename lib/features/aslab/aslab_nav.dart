@@ -98,26 +98,41 @@ class AslabNav {
       _open(c, AslabDetailModulPage(nav: this), false);
 
   /// [kind]: 0 modul, 1 tugas, 2 kuis.
-  Future<void> tambahMateri(BuildContext c, {int kind = 0}) =>
-      _open(c, AslabTambahMateriPage(nav: this, kind: kind), false);
+  Future<void> tambahMateri(
+    BuildContext c, {
+    int kind = 0,
+    String courseId = 'pemob',
+  }) =>
+      _open(
+        c,
+        AslabTambahMateriPage(nav: this, kind: kind, courseId: courseId),
+        false,
+      );
 
-  Future<void> editModul(BuildContext c) =>
-      _open(c, AslabEditModulPage(nav: this), false);
+  Future<void> editModul(BuildContext c, {String courseId = 'pemob'}) =>
+      _open(c, AslabEditModulPage(nav: this, courseId: courseId), false);
 
-  Future<void> editTugas(BuildContext c) =>
-      _open(c, AslabEditTugasPage(nav: this), false);
+  Future<void> editTugas(BuildContext c, {String courseId = 'pemob'}) =>
+      _open(c, AslabEditTugasPage(nav: this, courseId: courseId), false);
 
-  Future<void> hasilKuis(BuildContext c) =>
-      _open(c, AslabHasilKuisPage(nav: this), false);
+  Future<void> hasilKuis(BuildContext c, {String courseId = 'pemob'}) =>
+      _open(c, AslabHasilKuisPage(nav: this, courseId: courseId), false);
 
   // --- Penilaian -------------------------------------------------------------
 
-  Future<void> evaluasiTugas(BuildContext c) =>
-      _open(c, AslabEvaluasiTugasPage(nav: this), false);
+  Future<void> evaluasiTugas(BuildContext c, {String courseId = 'pemob'}) =>
+      _open(c, AslabEvaluasiTugasPage(nav: this, courseId: courseId), false);
 
-  Future<void> penilaianTugas(BuildContext c,
-          {AslabStudent student = kRina}) =>
-      _open(c, AslabPenilaianTugasPage(nav: this, student: student), false);
+  Future<void> penilaianTugas(
+    BuildContext c, {
+    AslabStudent student = kRina,
+    String courseId = 'pemob',
+  }) =>
+      _open(
+        c,
+        AslabPenilaianTugasPage(nav: this, student: student, courseId: courseId),
+        false,
+      );
 
   // --- Absensi ---------------------------------------------------------------
 

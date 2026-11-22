@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -34,8 +36,17 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
   @override
   Widget build(BuildContext context) {
     final swapBadge = _store.swapAnswer == null ? 1 : 0;
-    final leaves = _store.pendingLeaves;
-    return LabTabBody(
+    final presensiSync = PresensiSyncService.instance;
+    final praktikumSync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([presensiSync, praktikumSync]),
+      builder: (context, _) {
+        final leaves = presensiSync.pendingLeaveCount;
+        final pendingSubs = praktikumSync.allSubmissions
+            .where((s) => s.status != 'graded')
+            .take(2)
+            .toList();
+        return LabTabBody(
       children: [
         _greeting(),
         LabCard(
@@ -129,18 +140,52 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
                 onTap: () => widget.onOpenTab(AslabTab.penilaian),
               ),
             ),
-            for (final s in const [kRina, kDimas])
-              LabListItem(
-                leading: LabAvatar(s.initials),
-                title: s.name,
-                subtitle: 'Tugas 4 • Praktikum Basis Data',
-                trailing: const LabIcon('chevron_right',
-                    size: 16, color: ItlgColors.primary),
-                onTap: () => _nav.penilaianTugas(context, student: s),
-              ),
+            if (pendingSubs.isNotEmpty)
+              for (final rec in pendingSubs)
+                Builder(
+                  builder: (_) {
+                    final parts = rec.userName.trim().split(RegExp(r'\s+'));
+                    final initials = parts.length >= 2
+                        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+                        : (rec.userName.isNotEmpty
+                            ? rec.userName.substring(0, 1).toUpperCase()
+                            : 'PR');
+                    final c = praktikumSync.courseById(rec.courseId);
+                    final st = AslabStudent(
+                        initials, rec.userName, rec.userIdentifier);
+                    return LabListItem(
+                      leading: LabAvatar(st.initials),
+                      title: st.name,
+                      subtitle: 'Tugas ${rec.meetingNumber} • Praktikum ${c.name}',
+                      trailing: const LabIcon('chevron_right',
+                          size: 16, color: ItlgColors.primary),
+                      onTap: () => _nav.penilaianTugas(
+                        context,
+                        student: st,
+                        courseId: c.id,
+                      ),
+                    );
+                  },
+                )
+            else
+              for (final s in const [kRina, kDimas])
+                LabListItem(
+                  leading: LabAvatar(s.initials),
+                  title: s.name,
+                  subtitle: 'Tugas 4 • Praktikum Pemrograman Mobile',
+                  trailing: const LabIcon('chevron_right',
+                      size: 16, color: ItlgColors.primary),
+                  onTap: () => _nav.penilaianTugas(
+                    context,
+                    student: s,
+                    courseId: 'pemob',
+                  ),
+                ),
           ],
         ),
       ],
+    );
+      },
     );
   }
 

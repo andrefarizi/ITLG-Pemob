@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -21,52 +22,86 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
   @override
   Widget build(BuildContext context) {
     final nav = widget.nav;
-    return LabTabBody(
-      children: [
-        const LabTitle(
-          title: 'Penilaian',
-          subtitle: 'Tugas praktikan yang perlu anda evaluasi',
-        ),
-        const LabStatRow(
-          stats: [
-            LabStat(icon: 'clipboard', label: 'Tugas Aktif', value: '3'),
-            LabStat(icon: 'clock', label: 'Menunggu', value: '24'),
-            LabStat(icon: 'circle_check', label: 'Dinilai', value: '40'),
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final courses = sync.courses;
+        final totalPending = courses.fold<int>(0, (sum, c) {
+          final subs = sync.submissionsForCourse(c.id, 4);
+          final pendingExtra = subs.where((s) => s.status != 'graded').length;
+          return sum + 6 + pendingExtra;
+        });
+        final totalGraded = courses.fold<int>(0, (sum, c) {
+          final subs = sync.submissionsForCourse(c.id, 4);
+          final gradedExtra = subs.where((s) => s.status == 'graded').length;
+          return sum + 14 + gradedExtra;
+        });
+
+        return LabTabBody(
+          children: [
+            const LabTitle(
+              title: 'Penilaian',
+              subtitle: 'Tugas praktikan yang perlu anda evaluasi',
+            ),
+            LabStatRow(
+              stats: [
+                LabStat(
+                  icon: 'clipboard',
+                  label: 'Tugas Aktif',
+                  value: '${courses.length}',
+                ),
+                LabStat(
+                  icon: 'clock',
+                  label: 'Menunggu',
+                  value: '$totalPending',
+                ),
+                LabStat(
+                  icon: 'circle_check',
+                  label: 'Dinilai',
+                  value: '$totalGraded',
+                ),
+              ],
+            ),
+            LabTabs(
+              labels: ['Perlu Dinilai (${courses.length})', 'Selesai'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            if (_tab == 0) ...[
+              for (final c in courses)
+                Builder(
+                  builder: (_) {
+                    final subs = sync.submissionsForCourse(c.id, 4);
+                    final gradedExtra =
+                        subs.where((s) => s.status == 'graded').length;
+                    final totalSubs = (20 + subs.length).clamp(1, 24);
+                    final gradedCount = (14 + gradedExtra).clamp(0, totalSubs);
+                    return _TaskCard(
+                      tag: 'Tugas 4',
+                      title: c.tugasTitle.replaceFirst('Tugas 4 : ', ''),
+                      course: 'Praktikum ${c.name} • Kelas C',
+                      deadline: c.tugasDeadline,
+                      done: '$gradedCount / $totalSubs',
+                      fraction: (gradedCount / totalSubs).clamp(0.0, 1.0),
+                      onTap: () => nav.evaluasiTugas(context, courseId: c.id),
+                    );
+                  },
+                ),
+            ] else
+              for (final c in courses.take(2))
+                _TaskCard(
+                  tag: 'Tugas 3',
+                  title: c.grades.length > 1 ? c.grades[1].title : c.modulTitle,
+                  course: 'Praktikum ${c.name} • Kelas C',
+                  done: '24 / 24',
+                  fraction: 1,
+                  finished: true,
+                  onTap: () => nav.evaluasiTugas(context, courseId: c.id),
+                ),
           ],
-        ),
-        LabTabs(
-          labels: const ['Perlu Dinilai (2)', 'Selesai'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        if (_tab == 0) ...[
-          _TaskCard(
-            tag: 'Tugas 4',
-            title: 'Perancangan ERD & Query SQL',
-            course: 'Praktikum Basis Data • Kelas C',
-            done: '14 / 20',
-            fraction: 237 / 338,
-            onTap: () => nav.evaluasiTugas(context),
-          ),
-          _TaskCard(
-            tag: 'Tugas 4',
-            title: 'Aplikasi Counter',
-            course: 'Praktikum Pemrograman Mobile • Kelas C',
-            done: '2 / 20',
-            fraction: 34 / 338,
-            onTap: () => nav.evaluasiTugas(context),
-          ),
-        ] else
-          _TaskCard(
-            tag: 'Tugas 3',
-            title: 'Halaman Login',
-            course: 'Praktikum Pemrograman Mobile • Kelas C',
-            done: '24 / 24',
-            fraction: 1,
-            finished: true,
-            onTap: () => nav.evaluasiTugas(context),
-          ),
-      ],
+        );
+      },
     );
   }
 }
@@ -75,6 +110,7 @@ class _TaskCard extends StatelessWidget {
   final String tag;
   final String title;
   final String course;
+  final String deadline;
   final String done;
   final double fraction;
   final bool finished;
@@ -84,6 +120,7 @@ class _TaskCard extends StatelessWidget {
     required this.tag,
     required this.title,
     required this.course,
+    this.deadline = 'Deadline 29 Sep, 10:30',
     required this.done,
     required this.fraction,
     required this.onTap,
@@ -101,7 +138,7 @@ class _TaskCard extends StatelessWidget {
           ),
           right: finished
               ? const LabChip.live('Selesai Dinilai')
-              : const LabMeta(icon: 'clock', text: 'Deadline 29 Sep, 10:30'),
+              : LabMeta(icon: 'clock', text: deadline),
         ),
         Text(title, style: labText(16, w: kBold, c: Colors.black)),
         LabMeta(icon: 'book_open', text: course),

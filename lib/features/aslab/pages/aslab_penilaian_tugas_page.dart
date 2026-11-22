@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -14,11 +15,13 @@ import '../widgets/aslab_ui.dart';
 class AslabPenilaianTugasPage extends StatefulWidget {
   final AslabNav nav;
   final AslabStudent student;
+  final String courseId;
 
   const AslabPenilaianTugasPage({
     super.key,
     required this.nav,
     this.student = kRina,
+    this.courseId = 'pemob',
   });
 
   @override
@@ -64,7 +67,16 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
     return t;
   }
 
-  void _simpan() {
+  Future<void> _simpan() async {
+    await PraktikumSyncService.instance.gradeTugasSubmission(
+      courseId: widget.courseId,
+      meetingNumber: 4,
+      userIdentifier: widget.student.nim,
+      userName: widget.student.name,
+      score: _total,
+      feedback: _catatan.text.trim(),
+    );
+    if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(context, 'Nilai ${widget.student.name} disimpan: $_total / 100');
   }
@@ -72,23 +84,29 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
   @override
   Widget build(BuildContext context) {
     final s = widget.student;
+    final course = PraktikumSyncService.instance.courseById(widget.courseId);
+    final existing = PraktikumSyncService.instance
+        .submissionFor(course.id, 4, s.nim);
+    final isGraded = existing?.status == 'graded';
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
         LabCard(
           children: [
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
-              child: LabChip.warn('Belum Dinilai'),
+              child: isGraded
+                  ? const LabChip.live('Sudah Dinilai')
+                  : const LabChip.warn('Belum Dinilai'),
             ),
-            const LabOverline(
-              overline: 'Praktikum Basis Data',
-              title: 'Tugas 4 : Perancangan\nERD & Query SQL',
+            LabOverline(
+              overline: 'Praktikum ${course.name}',
+              title: course.tugasTitle,
             ),
             LabPerson(
               initials: s.initials,
               name: s.name,
-              caption: '${s.nim} • TIF 2104 - Kelas C',
+              caption: '${s.nim} • ${course.kelas}',
             ),
             const LabMeta(
               icon: 'clock',

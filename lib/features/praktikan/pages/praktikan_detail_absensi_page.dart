@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
@@ -24,17 +26,36 @@ class PraktikanDetailAbsensiPage extends StatefulWidget {
 
 class _PraktikanDetailAbsensiPageState
     extends State<PraktikanDetailAbsensiPage> {
+  final PresensiSyncService _sync = PresensiSyncService.instance;
+
   /// 0 Semua, 1 Hadir, 2 Izin, 3 Alpa.
   int _tab = 0;
 
-  bool _match(PrakMeeting m) {
+  @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _sync.removeListener(_onSyncChanged);
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _match(PrakAttend status) {
     switch (_tab) {
       case 1:
-        return m.status == PrakAttend.hadir;
+        return status == PrakAttend.hadir;
       case 2:
-        return m.status == PrakAttend.izin || m.status == PrakAttend.pending;
+        return status == PrakAttend.izin || status == PrakAttend.pending;
       case 3:
-        return false; // Belum ada pertemuan alpa.
+        return status == PrakAttend.alpa;
       default:
         return true;
     }
@@ -49,7 +70,12 @@ class _PraktikanDetailAbsensiPageState
   @override
   Widget build(BuildContext context) {
     final c = widget.course;
-    final items = c.meetings.where(_match).toList();
+    final userId = AuthController.instance.userIdentifier;
+    final summary = _sync.summaryForCourse(c, userId);
+    final items = c.meetings
+        .where((m) => _match(_sync.effectiveStatus(c.id, m, userId)))
+        .toList();
+
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -66,15 +92,17 @@ class _PraktikanDetailAbsensiPageState
             ),
             LabStatRow(
               stats: [
-                LabStat(icon: 'check', label: 'Hadir', value: '${c.hadir}'),
-                LabStat(icon: 'file', label: 'Izin', value: '${c.izin}'),
-                LabStat(icon: 'cross', label: 'Alpa', value: '${c.alpa}'),
+                LabStat(
+                    icon: 'check', label: 'Hadir', value: '${summary.hadir}'),
+                LabStat(icon: 'file', label: 'Izin', value: '${summary.izin}'),
+                LabStat(
+                    icon: 'cross', label: 'Alpa', value: '${summary.alpa}'),
               ],
             ),
-            const LabProgress(
+            LabProgress(
               label: 'Pertemuan terlaksana',
-              value: '4 / 12',
-              fraction: 113 / 338,
+              value: '${summary.doneMeetings} / 12',
+              fraction: (summary.doneMeetings / 12).clamp(0.0, 1.0),
             ),
           ],
         ),
@@ -87,7 +115,12 @@ class _PraktikanDetailAbsensiPageState
         LabListCard(
           children: [
             for (final m in items)
-              _MeetingCard(meeting: m, onIzin: () => _ajukanIzin(m)),
+              _MeetingCard(
+                meeting: m,
+                status: _sync.effectiveStatus(c.id, m, userId),
+                notePair: _sync.effectiveNote(c.id, m, userId),
+                onIzin: () => _ajukanIzin(m),
+              ),
             if (items.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -104,11 +137,19 @@ class _PraktikanDetailAbsensiPageState
 
 class _MeetingCard extends StatelessWidget {
   final PrakMeeting meeting;
+  final PrakAttend status;
+  final (String, String) notePair;
   final VoidCallback onIzin;
-  const _MeetingCard({required this.meeting, required this.onIzin});
+
+  const _MeetingCard({
+    required this.meeting,
+    required this.status,
+    required this.notePair,
+    required this.onIzin,
+  });
 
   Widget _chip() {
-    switch (meeting.status) {
+    switch (status) {
       case PrakAttend.upcoming:
         return const LabChip.idle('Akan Datang');
       case PrakAttend.hadir:
@@ -117,11 +158,13 @@ class _MeetingCard extends StatelessWidget {
         return const LabChip.info('Izin Sakit');
       case PrakAttend.pending:
         return const LabChip.warn('Izin Diajukan');
+      case PrakAttend.alpa:
+        return const LabChip.danger('Alpa');
     }
   }
 
   Widget? _extra() {
-    switch (meeting.status) {
+    switch (status) {
       case PrakAttend.upcoming:
         return LabOutlineButton(
           icon: 'h_file',
@@ -130,8 +173,8 @@ class _MeetingCard extends StatelessWidget {
         );
       case PrakAttend.hadir:
         return LabMeta(
-          icon: meeting.noteIcon ?? 'qrcode',
-          text: meeting.note ?? '',
+          icon: notePair.$1,
+          text: notePair.$2,
           color: LabColors.green,
         );
       case PrakAttend.izin:
@@ -158,7 +201,7 @@ class _MeetingCard extends StatelessWidget {
                           size: 12, color: ItlgColors.primary),
                       const SizedBox(width: 6),
                       Flexible(
-                        child: Text(meeting.izinFile ?? '',
+                        child: Text(meeting.izinFile ?? 'surat_izin.pdf',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: labText(11, w: kMedium)),
@@ -175,6 +218,14 @@ class _MeetingCard extends StatelessWidget {
           icon: 'clock',
           text: 'Pengajuan izin sedang diperiksa asisten',
           color: LabColors.warnText,
+        );
+      case PrakAttend.alpa:
+        return LabMeta(
+          icon: 'cross',
+          text: notePair.$2.isNotEmpty
+              ? notePair.$2
+              : 'Tidak hadir tanpa keterangan',
+          color: ItlgColors.primary,
         );
     }
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../widgets/praktikan_ui.dart';
@@ -11,7 +13,19 @@ import '../widgets/praktikan_ui.dart';
 /// lalu praktikan bisa menggambar tanda tangannya sendiri dengan jari.
 class PraktikanTandaTanganPage extends StatefulWidget {
   final PraktikanNav nav;
-  const PraktikanTandaTanganPage({super.key, required this.nav});
+  final String method;
+  final double? lat;
+  final double? lng;
+  final double? distanceMeters;
+
+  const PraktikanTandaTanganPage({
+    super.key,
+    required this.nav,
+    this.method = 'location',
+    this.lat,
+    this.lng,
+    this.distanceMeters,
+  });
 
   @override
   State<PraktikanTandaTanganPage> createState() =>
@@ -19,18 +33,18 @@ class PraktikanTandaTanganPage extends StatefulWidget {
 }
 
 class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
-  bool _sample = true;
   final List<List<Offset>> _strokes = [];
   bool _agree = true;
+  bool _submitting = false;
 
-  bool get _signed => _sample || _strokes.any((s) => s.length > 1);
+  bool get _signed => _strokes.any((s) => s.length > 1);
 
   void _clear() => setState(() {
-        _sample = false;
         _strokes.clear();
       });
 
-  void _kirim() {
+  Future<void> _kirim() async {
+    if (_submitting) return;
     if (!_signed) {
       labToast(context, 'Bubuhkan tanda tangan terlebih dahulu');
       return;
@@ -39,6 +53,22 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
       labToast(context, 'Centang pernyataan kehadiran terlebih dahulu');
       return;
     }
+    setState(() => _submitting = true);
+    final auth = AuthController.instance;
+    final session = PresensiSyncService.instance.activeSession;
+    await PresensiSyncService.instance.submitPresence(
+      courseId: session.courseId,
+      meetingNumber: session.meetingNumber,
+      userIdentifier: auth.userIdentifier,
+      userName: auth.userName,
+      method: widget.method,
+      lat: widget.lat ?? session.lat,
+      lng: widget.lng ?? session.lng,
+      distanceMeters: widget.distanceMeters ?? 12.0,
+      hasSignature: true,
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
     final nav = widget.nav;
     prakShowPresensiBerhasil(
       context,
@@ -61,31 +91,35 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
           children: [
             PrakSpaceRow(
               left: Text('Verifikasi Berhasil', style: labText(14, w: kBold)),
-              right: const LabChip.live('Lokasi Sesuai'),
+              right: LabChip.live(
+                  widget.method == 'qr' ? 'QR Terverifikasi' : 'Lokasi Sesuai'),
             ),
-            const LabColumn(
+            LabColumn(
               gap: 8,
               cross: CrossAxisAlignment.start,
               children: [
-                LabMeta(
+                const LabMeta(
                   icon: 'book_open',
                   text: 'Praktikum Pemrograman Mobile • Pertemuan 5',
                 ),
-                LabMeta(
+                const LabMeta(
                   icon: 'location',
                   text: 'Lab Komputer 1, Gedung C Lantai 2',
                 ),
-                LabMeta(
+                const LabMeta(
                   icon: 'map_marker_radius_outline',
                   text: 'Fasilkom-TI USU, Jl. Alumni, Padang Bulan, Medan',
                 ),
                 LabMeta(
                   icon: 'crosshairs_gps',
-                  text: '3.5621, 98.6600 • 12 meter dari titik presensi',
+                  text: widget.lat != null && widget.lng != null
+                      ? '${widget.lat!.toStringAsFixed(4)}, ${widget.lng!.toStringAsFixed(4)} • ${(widget.distanceMeters ?? 12).toStringAsFixed(0)} meter dari titik presensi'
+                      : '3.5621, 98.6600 • 12 meter dari titik presensi',
                 ),
                 LabMeta(
                   icon: 'clock',
-                  text: 'Senin, 05 Okt 2026 • 08:03 WIB',
+                  text:
+                      'Hari ini • ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')} WIB',
                 ),
               ],
             ),
@@ -147,51 +181,36 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
       radius: 12,
       height: 170,
       color: Colors.white,
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final w = box.maxWidth;
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (d) => setState(() {
-              _sample = false;
-              _strokes.add([d.localPosition]);
-            }),
-            onPanUpdate: (d) =>
-                setState(() => _strokes.last.add(d.localPosition)),
-            child: Stack(
-              children: [
-                if (_sample)
-                  Positioned(
-                    left: (w - 230) / 2,
-                    top: 26,
-                    width: 230,
-                    height: 96,
-                    child: Image.asset('assets/praktikan_signature.png',
-                        fit: BoxFit.fill),
-                  ),
-                Positioned.fill(
-                  child: CustomPaint(painter: _SignaturePainter(_strokes)),
-                ),
-                Positioned(
-                  left: 25,
-                  right: 25,
-                  top: 131.25,
-                  child: Container(height: 1.5, color: LabColors.divider),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 14,
-                  child: Text(
-                    'Tanda tangani di atas garis menggunakan jari',
-                    textAlign: TextAlign.center,
-                    style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
-                  ),
-                ),
-              ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (d) => setState(() {
+          _strokes.add([d.localPosition]);
+        }),
+        onPanUpdate: (d) =>
+            setState(() => _strokes.last.add(d.localPosition)),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(painter: _SignaturePainter(_strokes)),
             ),
-          );
-        },
+            Positioned(
+              left: 25,
+              right: 25,
+              top: 131.25,
+              child: Container(height: 1.5, color: LabColors.divider),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 14,
+              child: Text(
+                'Tanda tangani di atas garis menggunakan jari',
+                textAlign: TextAlign.center,
+                style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -45,39 +46,34 @@ class DosenBerandaPage extends StatelessWidget {
           ],
         ),
         const _PerformaCard(),
-        LabColumn(
-          gap: 12,
-          children: [
-            Row(
+        ListenableBuilder(
+          listenable: PraktikumSyncService.instance,
+          builder: (context, _) {
+            final courses = PraktikumSyncService.instance.courses;
+            return LabColumn(
+              gap: 12,
               children: [
-                const LabHeading(
-                    icon: 'people_group', text: 'Grup Praktikum Diampu'),
-                const Spacer(),
-                Text('4 Grup', style: labText(12, c: ItlgColors.primary)),
+                Row(
+                  children: [
+                    const LabHeading(
+                        icon: 'people_group', text: 'Grup Praktikum Diampu'),
+                    const Spacer(),
+                    Text('${courses.length} Grup',
+                        style: labText(12, c: ItlgColors.primary)),
+                  ],
+                ),
+                for (final c in courses)
+                  _GroupItem(
+                    title: '${c.name} • Kelas C',
+                    assistant: c.asisten,
+                    attendance:
+                        '${((c.hadir / (c.hadir + c.izin + c.alpa == 0 ? 4 : c.hadir + c.izin + c.alpa)) * 100).round()}%',
+                    score: c.nilaiRata.split(',').first,
+                    onTap: toValidasi,
+                  ),
               ],
-            ),
-            _GroupItem(
-              title: 'Pemrograman Mobile • Kelas C',
-              assistant: 'Andi Pratama',
-              attendance: '95%',
-              score: '88',
-              onTap: toValidasi,
-            ),
-            _GroupItem(
-              title: 'Pemrograman Mobile • Kelas A',
-              assistant: 'Feri Gunawan',
-              attendance: '92%',
-              score: '86',
-              onTap: toValidasi,
-            ),
-            _GroupItem(
-              title: 'Basis Data • Kelas B',
-              assistant: 'Sinta Marpaung',
-              attendance: '88%',
-              score: '81',
-              onTap: toValidasi,
-            ),
-          ],
+            );
+          },
         ),
         LabColumn(
           gap: 12,

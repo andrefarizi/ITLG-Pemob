@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
-import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
 /// Figma: "Sesi Aktif & QR Presensi-Aslab".
@@ -34,9 +34,13 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
   int _left = 12;
   int _generation = 0;
 
+  final PresensiSyncService _sync = PresensiSyncService.instance;
+
   @override
   void initState() {
     super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
@@ -52,11 +56,18 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
 
   @override
   void dispose() {
+    _sync.removeListener(_onSyncChanged);
     _timer?.cancel();
     super.dispose();
   }
 
-  void _akhiri() {
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _akhiri() async {
+    await _sync.endActiveSession();
+    if (!mounted) return;
     labToast(context, 'Sesi presensi diakhiri');
     widget.nav.goTab(AslabTab.absensi);
   }
@@ -160,34 +171,48 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
         ),
         LabCard(
           children: [
-            PrakSpaceRow(
-              left: const LabSectionTitle(
-                  icon: 'people_group', text: 'Kehadiran Praktikan'),
-              right: Text('18 / 24',
-                  style: labText(16, w: kBold, c: ItlgColors.primary)),
-            ),
-            const LabProgress(
-              label: 'Rasio Kehadiran',
-              value: '75%',
-              fraction: 254 / 338,
-            ),
-            LabColumn(
-              gap: 8,
-              children: [
-                for (final (s, how) in const [
-                  (kRina, 'QR • 08:02'),
-                  (kDimas, 'Tombol • 08:03'),
-                  (kMaya, 'QR • 08:05'),
-                ])
-                  LabListItem(
-                    leading: LabAvatar(s.initials),
-                    title: s.name,
-                    subtitle: s.nim,
-                    trailing: LabMeta(
-                        icon: 'check', text: how, color: LabColors.green),
-                    onTap: () => nav.buktiPresensi(context),
-                  ),
-              ],
+            Builder(
+              builder: (_) {
+                final session = _sync.activeSession;
+                final liveList = _sync
+                    .recordsForMeeting(session.courseId, session.meetingNumber)
+                    .where((r) => r.status.name == 'hadir')
+                    .toList();
+                final totalHadir = (15 + liveList.length).clamp(0, 24);
+                final pct = ((totalHadir * 100) / 24).round();
+                return LabColumn(
+                  gap: 14,
+                  children: [
+                    PrakSpaceRow(
+                      left: const LabSectionTitle(
+                          icon: 'people_group', text: 'Kehadiran Praktikan'),
+                      right: Text('$totalHadir / 24',
+                          style: labText(16, w: kBold, c: ItlgColors.primary)),
+                    ),
+                    LabProgress(
+                      label: 'Rasio Kehadiran',
+                      value: '$pct%',
+                      fraction: totalHadir / 24,
+                    ),
+                    LabColumn(
+                      gap: 8,
+                      children: [
+                        for (final rec in liveList.take(5))
+                          LabListItem(
+                            leading: LabAvatar(rec.initials),
+                            title: rec.userName,
+                            subtitle: rec.userIdentifier,
+                            trailing: LabMeta(
+                                icon: 'check',
+                                text: rec.shortProofLabel,
+                                color: LabColors.green),
+                            onTap: () => nav.buktiPresensi(context),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),

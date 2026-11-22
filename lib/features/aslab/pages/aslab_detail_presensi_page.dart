@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../shared/lab_actions.dart';
@@ -55,7 +57,14 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
 
   int _count(AslabAttend a) => _list.where((p) => p.status == a).length;
 
-  void _simpan() {
+  Future<void> _simpan() async {
+    await PresensiSyncService.instance.saveManualStatuses(
+      courseId: 'pemob',
+      meetingNumber: 4,
+      presences: _list,
+      updatedBy: AuthController.instance.userName,
+    );
+    if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(context, 'Perubahan presensi Pertemuan 4 disimpan');
   }
