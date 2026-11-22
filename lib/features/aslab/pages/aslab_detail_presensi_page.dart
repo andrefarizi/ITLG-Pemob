@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../praktikan/praktikan_store.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
@@ -16,7 +18,14 @@ import '../widgets/aslab_ui.dart';
 /// ikut berubah.
 class AslabDetailPresensiPage extends StatefulWidget {
   final AslabNav nav;
-  const AslabDetailPresensiPage({super.key, required this.nav});
+  final String courseId;
+  final int meetingNumber;
+  const AslabDetailPresensiPage({
+    super.key,
+    required this.nav,
+    this.courseId = 'pemob',
+    this.meetingNumber = 4,
+  });
 
   @override
   State<AslabDetailPresensiPage> createState() =>
@@ -50,7 +59,66 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
   List<AslabPresence> get _list => widget.nav.store.presences;
 
   @override
+  void initState() {
+    super.initState();
+    _syncLiveRecordsIntoList();
+    PresensiSyncService.instance.addListener(_onPresensiSync);
+  }
+
+  void _onPresensiSync() {
+    _syncLiveRecordsIntoList();
+    if (mounted) setState(() {});
+  }
+
+  void _syncLiveRecordsIntoList() {
+    final records = PresensiSyncService.instance.recordsForMeeting(
+      widget.courseId,
+      widget.meetingNumber,
+    );
+    for (final r in records) {
+      final idx = _list.indexWhere((p) => p.student.nim == r.userIdentifier);
+      final mappedStatus = switch (r.status) {
+        PrakAttend.izin || PrakAttend.pending => AslabAttend.izin,
+        PrakAttend.alpa => AslabAttend.alpa,
+        _ => AslabAttend.hadir,
+      };
+      final clock =
+          '${r.recordedAt.toLocal().hour.toString().padLeft(2, '0')}:${r.recordedAt.toLocal().minute.toString().padLeft(2, '0')}';
+      final methodLabel = r.method == 'qr'
+          ? 'Pindai QR • $clock'
+          : (r.method == 'manual'
+              ? 'Diubah manual oleh asisten'
+              : 'Tombol + Lokasi • $clock');
+      final proofList = <(String, String)>[
+        (r.method == 'qr' ? 'qrcode' : 'location', methodLabel),
+        if (r.hasSignature) ('signature_freehand', 'Bertanda tangan'),
+      ];
+      if (idx != -1) {
+        _list[idx].status = mappedStatus;
+      } else {
+        final parts = r.userName.trim().split(RegExp(r'\s+'));
+        final initials = parts.length >= 2
+            ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+            : (r.userName.isNotEmpty
+                ? r.userName.substring(0, 1).toUpperCase()
+                : 'PR');
+        _list.insert(
+          0,
+          AslabPresence(
+            AslabStudent(initials, r.userName, r.userIdentifier),
+            mappedStatus,
+            proof: proofList,
+            proofLink: true,
+          ),
+        );
+        _initial.insert(0, mappedStatus);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    PresensiSyncService.instance.removeListener(_onPresensiSync);
     _search.dispose();
     super.dispose();
   }
@@ -59,18 +127,30 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
 
   Future<void> _simpan() async {
     await PresensiSyncService.instance.saveManualStatuses(
-      courseId: 'pemob',
-      meetingNumber: 4,
+      courseId: widget.courseId,
+      meetingNumber: widget.meetingNumber,
       presences: _list,
       updatedBy: AuthController.instance.userName,
     );
     if (!mounted) return;
     Navigator.of(context).maybePop();
-    labToast(context, 'Perubahan presensi Pertemuan 4 disimpan');
+    labToast(
+      context,
+      'Perubahan presensi Pertemuan ${widget.meetingNumber} disimpan',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final course = PraktikumSyncService.instance.courseById(widget.courseId);
+    final classShort = course.kelas.contains(' - ')
+        ? course.kelas.split(' - ').last
+        : course.kelas;
+    final meetingObj = course.meetings.firstWhere(
+      (m) => m.number == widget.meetingNumber,
+      orElse: () => course.meetings.first,
+    );
+    final dateShort = meetingObj.date.split(' • ').first;
     final q = _query.trim().toLowerCase();
     final items = [
       for (var i = 0; i < _list.length; i++)
@@ -90,18 +170,20 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
               listenable: PresensiSyncService.instance,
               builder: (_, __) {
                 final active = PresensiSyncService.instance.activeSession;
-                final live = active.meetingNumber == 4 && active.isActive;
+                final live = active.courseId == widget.courseId &&
+                    active.meetingNumber == widget.meetingNumber &&
+                    active.isActive;
                 return PrakSpaceRow(
                   left: live
                       ? const LabChip.live('Sesi Berlangsung')
                       : const LabChip.idle('Sesi Ditutup'),
-                  right: const LabMeta(icon: 'calendar', text: 'Sen, 28 Sep 2026'),
+                  right: LabMeta(icon: 'calendar', text: dateShort),
                 );
               },
             ),
-            const LabOverline(
-              overline: 'Praktikum Pemrograman Mobile • Kelas C',
-              title: 'Presensi\nPertemuan 4',
+            LabOverline(
+              overline: 'Praktikum ${course.name} • $classShort',
+              title: 'Presensi\nPertemuan ${widget.meetingNumber}',
             ),
             AslabRekap(
               hadir: _otherHadir + _count(AslabAttend.hadir),
@@ -140,7 +222,12 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
                     : null,
                 onStatus: (v) =>
                     setState(() => _list[i].status = AslabAttend.values[v]),
-                onProof: () => widget.nav.buktiPresensi(context),
+                onProof: () => widget.nav.buktiPresensi(
+                  context,
+                  presence: _list[i],
+                  courseId: widget.courseId,
+                  meetingNumber: widget.meetingNumber,
+                ),
               ),
           ],
         ),

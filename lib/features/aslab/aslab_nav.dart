@@ -223,11 +223,37 @@ class AslabNav {
   Future<void> sesiAktif(BuildContext c, {bool replace = false}) =>
       _open(c, AslabSesiAktifPage(nav: this), replace);
 
-  Future<void> detailPresensi(BuildContext c) =>
-      _open(c, AslabDetailPresensiPage(nav: this), false);
+  Future<void> detailPresensi(
+    BuildContext c, {
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabDetailPresensiPage(
+          nav: this,
+          courseId: courseId,
+          meetingNumber: meetingNumber,
+        ),
+        false,
+      );
 
-  Future<void> buktiPresensi(BuildContext c) =>
-      _open(c, AslabBuktiPresensiPage(nav: this), false);
+  Future<void> buktiPresensi(
+    BuildContext c, {
+    AslabPresence? presence,
+    String courseId = 'pemob',
+    int meetingNumber = 4,
+  }) =>
+      _open(
+        c,
+        AslabBuktiPresensiPage(
+          nav: this,
+          presence: presence,
+          courseId: courseId,
+          meetingNumber: meetingNumber,
+        ),
+        false,
+      );
 
   // --- Profil ----------------------------------------------------------------
 

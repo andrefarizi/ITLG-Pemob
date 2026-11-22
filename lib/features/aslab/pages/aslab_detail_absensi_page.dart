@@ -101,7 +101,11 @@ class _AslabDetailAbsensiPageState extends State<AslabDetailAbsensiPage> {
                                 courseId: c.id,
                                 meetingNumber: s.number,
                               ),
-                        onDetail: () => nav.detailPresensi(context),
+                        onDetail: () => nav.detailPresensi(
+                          context,
+                          courseId: c.id,
+                          meetingNumber: s.number,
+                        ),
                       );
                     },
                   ),

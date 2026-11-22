@@ -9,6 +9,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
+import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
 /// Figma: "Sesi Aktif & QR Presensi-Aslab".
@@ -239,7 +240,19 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
                                 icon: 'check',
                                 text: rec.shortProofLabel,
                                 color: LabColors.green),
-                            onTap: () => nav.buktiPresensi(context),
+                            onTap: () => nav.buktiPresensi(
+                              context,
+                              presence: AslabPresence(
+                                AslabStudent(
+                                  rec.initials,
+                                  rec.userName,
+                                  rec.userIdentifier,
+                                ),
+                                AslabAttend.hadir,
+                              ),
+                              courseId: session.courseId,
+                              meetingNumber: session.meetingNumber,
+                            ),
                           ),
                       ],
                     ),

@@ -1,30 +1,68 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../praktikan/widgets/prak_google_map.dart';
 import '../aslab_nav.dart';
+import '../aslab_store.dart';
 
 /// Figma: "Bukti Presensi-Aslab".
 class AslabBuktiPresensiPage extends StatelessWidget {
   final AslabNav nav;
-  const AslabBuktiPresensiPage({super.key, required this.nav});
+  final AslabPresence? presence;
+  final String courseId;
+  final int meetingNumber;
+  const AslabBuktiPresensiPage({
+    super.key,
+    required this.nav,
+    this.presence,
+    this.courseId = 'pemob',
+    this.meetingNumber = 4,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final presensi = PresensiSyncService.instance;
+    final course = PraktikumSyncService.instance.courseById(courseId);
+    final classShort = course.kelas.contains(' - ')
+        ? course.kelas.split(' - ').last
+        : course.kelas;
+    final meetingObj = course.meetings.firstWhere(
+      (m) => m.number == meetingNumber,
+      orElse: () => course.meetings.first,
+    );
+    final dateShort = meetingObj.date.split(' • ').first;
+    final st = presence?.student ?? kRina;
+    final rec = presensi.recordFor(courseId, meetingNumber, st.nim) ??
+        presensi.recordFor(courseId, 4, st.nim) ??
+        presensi.recordFor(courseId, 5, st.nim);
+    final lat = rec?.lat ?? 3.5621;
+    final lng = rec?.lng ?? 98.6600;
+    final dist = rec?.distanceMeters != null
+        ? '${rec!.distanceMeters!.round()} meter'
+        : '12 meter';
+    final clock = rec != null
+        ? '${rec.recordedAt.toLocal().hour.toString().padLeft(2, '0')}:${rec.recordedAt.toLocal().minute.toString().padLeft(2, '0')} WIB'
+        : '08:02 WIB';
+    final methodText = rec?.method == 'qr'
+        ? 'Diverifikasi dengan Pindai QR Presensi'
+        : 'Diverifikasi dengan Tombol Hadir + Lokasi';
+
     return LabSubPage(
       onLogoTap: nav.home,
       children: [
-        const LabCard(
+        LabCard(
           children: [
             PrakSpaceRow(
-              left: LabChip.live('Hadir'),
-              right: LabTag.blue('Pertemuan 4'),
+              left: const LabChip.live('Hadir'),
+              right: LabTag.blue('Pertemuan $meetingNumber'),
             ),
             LabPerson(
-              initials: 'RN',
-              name: 'Rina Novita',
-              caption: '231402045 • TIF 3001 - Kelas C',
+              initials: st.initials,
+              name: st.name,
+              caption: '${st.nim} • ${course.kelas}',
             ),
             LabColumn(
               gap: 8,
@@ -32,12 +70,12 @@ class AslabBuktiPresensiPage extends StatelessWidget {
               children: [
                 LabMeta(
                   icon: 'book_open',
-                  text: 'Praktikum Pemrograman Mobile • Kelas C',
+                  text: 'Praktikum ${course.name} • $classShort',
                 ),
-                LabMeta(icon: 'clock', text: 'Sen, 28 Sep 2026 • 08:02 WIB'),
+                LabMeta(icon: 'clock', text: '$dateShort • $clock'),
                 LabMeta(
                   icon: 'gesture_tap_button',
-                  text: 'Diverifikasi dengan Tombol Hadir + Lokasi',
+                  text: methodText,
                 ),
               ],
             ),
@@ -67,7 +105,7 @@ class AslabBuktiPresensiPage extends StatelessWidget {
                             Text('Lokasi Saat Presensi',
                                 style: labText(11,
                                     w: kMedium, c: const Color(0xFF6B7280))),
-                            Text('Lab Komputer 1, Gedung C Lantai 2',
+                            Text('${course.room}, Gedung C Lantai 2',
                                 style: labText(12, w: kBold)),
                             Text(
                                 'Fasilkom-TI USU, Jl. Alumni, Padang Bulan, '
@@ -80,23 +118,25 @@ class AslabBuktiPresensiPage extends StatelessWidget {
                     ],
                   ),
                   const PrakDivider(),
-                  const PrakSpaceRow(
-                    left:
-                        LabMeta(icon: 'crosshairs_gps', text: '3.5621, 98.6600'),
-                    right: LabMeta(icon: 'clock', text: 'Tercatat 08:02 WIB'),
+                  PrakSpaceRow(
+                    left: LabMeta(
+                        icon: 'crosshairs_gps',
+                        text:
+                            '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'),
+                    right: LabMeta(icon: 'clock', text: 'Tercatat $clock'),
                   ),
                 ],
               ),
             ),
-            const LabStatRow(
+            LabStatRow(
               gap: 13,
               stats: [
                 LabStat(
                   icon: 'map_marker_radius_outline',
                   label: 'Jarak dari Lab',
-                  value: '12 meter',
+                  value: dist,
                 ),
-                LabStat(
+                const LabStat(
                   icon: 'crosshairs_gps',
                   label: 'Akurasi GPS',
                   value: '± 5 meter',
@@ -107,10 +147,10 @@ class AslabBuktiPresensiPage extends StatelessWidget {
         ),
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabSectionTitle(
+            PrakSpaceRow(
+              left: const LabSectionTitle(
                   icon: 'signature_freehand', text: 'Tanda Tangan'),
-              right: LabMeta(icon: 'clock', text: '08:02 WIB'),
+              right: LabMeta(icon: 'clock', text: clock),
             ),
             SizedBox(
               height: 170,
@@ -138,7 +178,7 @@ class AslabBuktiPresensiPage extends StatelessWidget {
                       right: 0,
                       top: 144,
                       child: Text(
-                        'Ditandatangani oleh Rina Novita',
+                        'Ditandatangani oleh ${st.name}',
                         textAlign: TextAlign.center,
                         style: labText(11,
                             w: kMedium, c: const Color(0xFF6B7280)),
