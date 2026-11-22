@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/widgets/itlg_ui.dart';
 import '../laboran/widgets/laboran_ui.dart';
@@ -264,9 +265,14 @@ Future<void> labShowQr(
           radius: 12,
           color: Colors.white,
           padding: const EdgeInsets.all(20),
-          child: Column(
+            child: Column(
             children: [
-              Image.asset('assets/aslab_qr.png', width: 220, height: 220),
+              QrImageView(
+                data: code,
+                version: QrVersions.auto,
+                size: 220,
+                backgroundColor: Colors.white,
+              ),
               const SizedBox(height: 12),
               Text(code,
                   style: labText(22, w: kBold, c: ItlgColors.primary)),

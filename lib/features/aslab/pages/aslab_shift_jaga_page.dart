@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/device_calendar_service.dart';
 import '../../../core/services/jadwal_sync_service.dart';
+import '../../../core/services/shift_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
@@ -27,11 +29,19 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
     ('Sab', '03', 'Okt'),
   ];
 
+  final ShiftSyncService _shiftSync = ShiftSyncService.instance;
+  final JadwalSyncService _jadwalSync = JadwalSyncService.instance;
   int _day = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _shiftSync.refreshFromBackend();
+  }
 
   Future<void> _syncCalendar() async {
     final res = await DeviceCalendarService.instance.syncSchedules(
-      JadwalSyncService.instance.schedules,
+      _jadwalSync.schedules,
       askPermission: true,
     );
     if (!mounted) return;
@@ -43,25 +53,32 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
     }
   }
 
-  void _answer(bool accept) {
-    setState(() => widget.nav.store.swapAnswer = accept);
+  Future<void> _answer(ShiftSwapRecord swap, bool accept) async {
+    widget.nav.store.swapAnswer = accept;
+    await _shiftSync.decideSwap(
+      swapCode: swap.swapCode,
+      accept: accept,
+      decidedByName: AuthController.instance.userName,
+    );
+    if (!mounted) return;
     labToast(
       context,
       accept
-          ? 'Tukar shift dengan Feri Gunawan diterima'
-          : 'Permintaan tukar shift ditolak',
+          ? 'Tukar shift dengan ${swap.requesterName} diterima & jadwal diperbarui'
+          : 'Permintaan tukar shift dari ${swap.requesterName} ditolak',
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final nav = widget.nav;
-    final answer = nav.store.swapAnswer;
-    final jadwalSync = JadwalSyncService.instance;
     return ListenableBuilder(
-      listenable: jadwalSync,
+      listenable: Listenable.merge([_shiftSync, _jadwalSync]),
       builder: (context, _) {
-        final daySchedules = jadwalSync.schedulesForDay(_day);
+        final dayShifts = _shiftSync.shiftsForDay(_day);
+        final featuredSwap = _shiftSync.featuredIncomingSwap;
+        final pendingCount = _shiftSync.pendingSwapCount;
+
         return LabSubPage(
           onLogoTap: nav.home,
           children: [
@@ -88,19 +105,18 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                 ),
               ],
             ),
-            if (daySchedules.isNotEmpty)
+            if (dayShifts.isNotEmpty)
               LabColumn(
                 gap: 16,
                 children: [
-                  for (final s in daySchedules)
+                  for (final s in dayShifts)
                     _ShiftCard(
-                      shift: int.tryParse(s.startTime.split(':').first) != null &&
-                              int.parse(s.startTime.split(':').first) < 12
-                          ? 'Shift Pagi'
-                          : 'Shift Siang',
-                      partner: 'Bersama ${s.asisten}',
-                      course: 'Praktikum ${s.courseName}',
-                      time: s.jadwalShort,
+                      shift: s.shiftLabel,
+                      partner: s.partnerName.isNotEmpty
+                          ? '${s.asistenName} • ${s.partnerName}'
+                          : 'Bersama ${s.asistenName}',
+                      course: s.courseName,
+                      time: '${s.dayLabel} • ${s.timeRange}',
                       room: s.room,
                     ),
                 ],
@@ -118,67 +134,78 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                     textAlign: TextAlign.center,
                     style: labText(12, c: ItlgColors.textSubtle)),
               ),
-        LabCard(
-          children: [
-            PrakSpaceRow(
-              left: const LabSectionTitle(
-                  icon: 'arrow_right_left', text: 'Permintaan Tukar Shift'),
-              right: answer == null
-                  ? const LabTag.red('1 Baru')
-                  : (answer
-                      ? const LabChip.live('Diterima')
-                      : const LabChip.danger('Ditolak')),
-            ),
-            const LabInsetBox(
-              child: LabColumn(
-                gap: 10,
+            if (featuredSwap != null)
+              LabCard(
                 children: [
-                  LabPerson(
-                    initials: 'FG',
-                    name: 'Feri Gunawan',
-                    caption: 'Meminta bertukar shift dengan anda',
+                  PrakSpaceRow(
+                    left: const LabSectionTitle(
+                        icon: 'arrow_right_left',
+                        text: 'Permintaan Tukar Shift'),
+                    right: featuredSwap.isPending
+                        ? LabTag.red(
+                            '${pendingCount > 0 ? pendingCount : 1} Baru')
+                        : (featuredSwap.isApproved
+                            ? const LabChip.live('Diterima')
+                            : const LabChip.danger('Ditolak')),
                   ),
-                  AslabSwapRow(
-                    left: ('Shift Feri', 'Rab, 30 Sep • 13:00'),
-                    right: ('Shift Anda', 'Kam, 01 Okt • 08:00'),
+                  LabInsetBox(
+                    child: LabColumn(
+                      gap: 10,
+                      children: [
+                        LabPerson(
+                          initials: featuredSwap.requesterInitials,
+                          name: featuredSwap.requesterName,
+                          caption: featuredSwap.reason.isNotEmpty
+                              ? featuredSwap.reason
+                              : 'Meminta bertukar shift dengan anda',
+                        ),
+                        AslabSwapRow(
+                          left: (
+                            'Shift ${featuredSwap.requesterFirstName}',
+                            featuredSwap.fromShiftLabel
+                          ),
+                          right: (
+                            'Shift ${featuredSwap.isIncoming ? 'Anda' : featuredSwap.targetFirstName}',
+                            featuredSwap.toShiftLabel
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  if (featuredSwap.isPending)
+                    LabButtonPair(
+                      left: LabOutlineButton(
+                        icon: 'cross',
+                        label: 'Tolak',
+                        onTap: () => _answer(featuredSwap, false),
+                      ),
+                      right: LabPrimaryButton(
+                        icon: 'check',
+                        label: 'Terima',
+                        onTap: () => _answer(featuredSwap, true),
+                      ),
+                    ),
                 ],
               ),
-            ),
-            if (answer == null)
-              LabButtonPair(
-                left: LabOutlineButton(
-                  icon: 'cross',
-                  label: 'Tolak',
-                  onTap: () => _answer(false),
+            LabColumn(
+              gap: 12,
+              children: [
+                LabPrimaryButton(
+                  icon: 'arrow_right_left',
+                  label: 'Ajukan Tukar Shift',
+                  large: true,
+                  onTap: () => nav.ajukanTukarShift(context),
                 ),
-                right: LabPrimaryButton(
-                  icon: 'check',
-                  label: 'Terima',
-                  onTap: () => _answer(true),
+                LabOutlineButton(
+                  icon: 'clock',
+                  label: 'Riwayat Tukar Shift',
+                  large: true,
+                  onTap: () => nav.riwayatTukarShift(context),
                 ),
-              ),
-          ],
-        ),
-        LabColumn(
-          gap: 12,
-          children: [
-            LabPrimaryButton(
-              icon: 'arrow_right_left',
-              label: 'Ajukan Tukar Shift',
-              large: true,
-              onTap: () => nav.ajukanTukarShift(context),
-            ),
-            LabOutlineButton(
-              icon: 'clock',
-              label: 'Riwayat Tukar Shift',
-              large: true,
-              onTap: () => nav.riwayatTukarShift(context),
+              ],
             ),
           ],
-        ),
-      ],
-    );
+        );
       },
     );
   }

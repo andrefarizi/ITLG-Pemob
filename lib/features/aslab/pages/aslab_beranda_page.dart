@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
+import '../../../core/services/shift_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -27,7 +28,6 @@ class AslabBerandaPage extends StatefulWidget {
 
 class _AslabBerandaPageState extends State<AslabBerandaPage> {
   AslabNav get _nav => widget.nav;
-  AslabStore get _store => widget.nav.store;
 
   void _refresh(void _) {
     if (mounted) setState(() {});
@@ -35,12 +35,13 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
 
   @override
   Widget build(BuildContext context) {
-    final swapBadge = _store.swapAnswer == null ? 1 : 0;
     final presensiSync = PresensiSyncService.instance;
     final praktikumSync = PraktikumSyncService.instance;
+    final shiftSync = ShiftSyncService.instance;
     return ListenableBuilder(
-      listenable: Listenable.merge([presensiSync, praktikumSync]),
+      listenable: Listenable.merge([presensiSync, praktikumSync, shiftSync]),
       builder: (context, _) {
+        final swapBadge = shiftSync.pendingSwapCount;
         final leaves = presensiSync.pendingLeaveCount;
         final session = presensiSync.activeSession;
         final activeCourse = praktikumSync.courseById(session.courseId);
@@ -109,7 +110,7 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
                 icon: 'calendar',
                 title: 'Shift Jaga',
                 subtitle: swapBadge > 0
-                    ? '1 permintaan tukar shift'
+                    ? '$swapBadge permintaan tukar shift'
                     : 'Tidak ada permintaan baru',
                 badge: swapBadge,
                 onTap: () => _nav.shiftJaga(context).then(_refresh),

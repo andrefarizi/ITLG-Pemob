@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
+import '../../../core/services/shift_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../praktikan/praktikan_store.dart';
 import '../../shared/profil_data.dart';
@@ -98,11 +99,18 @@ class LaboranBerandaPage extends StatelessWidget {
             _MenuRow(
               children: [
                 Expanded(
-                  child: _MenuCard(
-                    icon: 'key',
-                    title: 'Presensi Asisten',
-                    subtitle: '4 dari 6 sudah hadir',
-                    onTap: onOpenPresensi,
+                  child: ListenableBuilder(
+                    listenable: ShiftSyncService.instance,
+                    builder: (_, __) {
+                      final shift = ShiftSyncService.instance;
+                      return _MenuCard(
+                        icon: 'key',
+                        title: 'Presensi Asisten',
+                        subtitle:
+                            '${shift.attendedShiftCount} dari ${shift.totalShifts} sudah hadir',
+                        onTap: onOpenPresensi,
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -232,8 +240,9 @@ class _MonitoringCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presensi = PresensiSyncService.instance;
+    final shift = ShiftSyncService.instance;
     return ListenableBuilder(
-      listenable: presensi,
+      listenable: Listenable.merge([presensi, shift]),
       builder: (_, __) {
         final session = presensi.activeSession;
         final extraHadir = presensi
@@ -265,10 +274,10 @@ class _MonitoringCard extends StatelessWidget {
                   label: 'Terpakai',
                   value: session.isActive ? '3 / 5 Lab' : '2 / 5 Lab',
                 ),
-                const LabStat(
+                LabStat(
                   icon: 'shield_check_outline',
                   label: 'On-Duty',
-                  value: '6 Aslab',
+                  value: '${shift.totalShifts} Aslab',
                 ),
                 LabStat(
                   icon: 'people_group',
