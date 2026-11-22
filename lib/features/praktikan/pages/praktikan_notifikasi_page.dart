@@ -47,6 +47,8 @@ class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
         return PrakNotifTarget.kuis;
       case 'detailNilai':
         return PrakNotifTarget.detailNilai;
+      case 'laporkanKerusakan':
+        return PrakNotifTarget.laporkanKerusakan;
       default:
         return PrakNotifTarget.pengumuman;
     }

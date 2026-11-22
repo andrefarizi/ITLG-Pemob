@@ -137,9 +137,36 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
     }
   }
 
+  List<LabReportDetailItem> _buildLiveItems() {
+    final live = _sync.allTickets
+        .map(
+          (t) => LabReportDetailItem(
+            icon: t.icon,
+            title: t.title,
+            meta: '${t.labName} • ${t.formattedDateShort}',
+            status: t.status,
+            ticketCode: t.ticketCode,
+            description: t.description,
+            photoName: t.photoName,
+            handlingNote: t.handlingNote,
+          ),
+        )
+        .toList();
+    if (live.isNotEmpty) return live;
+    return [
+      for (final r in _sync.reportsForAslab())
+        LabReportDetailItem(
+          icon: r.icon,
+          title: r.title,
+          meta: r.meta,
+          status: r.status,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final reports = _sync.reportsForAslab();
+    final reports = _buildLiveItems();
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -212,10 +239,8 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
                 onTap: () => labPush(
                   context,
                   LabRiwayatLaporanPage(
-                    reports: [
-                      for (final r in reports)
-                        (r.icon, r.title, r.meta, r.status),
-                    ],
+                    listenable: _sync,
+                    liveItemsBuilder: _buildLiveItems,
                     onLogoTap: widget.nav.home,
                   ),
                 ),
@@ -237,6 +262,10 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
                       title: r.title,
                       meta: r.meta,
                       status: r.status,
+                      ticketCode: r.ticketCode,
+                      description: r.description,
+                      photoName: r.photoName,
+                      handlingNote: r.handlingNote,
                     ),
                   ),
               ],

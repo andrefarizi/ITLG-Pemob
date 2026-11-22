@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -20,20 +21,24 @@ class PraktikanMejaKamuPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = LabDeskSyncService.instance;
+    final presensi = PresensiSyncService.instance;
     final s = nav.store;
 
     return ListenableBuilder(
-      listenable: sync,
+      listenable: Listenable.merge([sync, presensi]),
       builder: (context, _) {
+        final labName = presensi.activeSession.labName;
         final userKey = AuthController.instance.userIdentifier;
-        final n = sync.bookedDeskForUser(userKey) ??
+        final n = sync.bookedDeskForUser(userKey, labName: labName) ??
             s.bookedDesk ??
             s.selectedDesk;
         final pc = n.toString().padLeft(2, '0');
-        final liveMap = sync.deskStatusMap();
-        final taken = sync.takenCount();
-        final spec = sync.deskRecord(n)?.spec ??
-            'Core i5-12400 • 16 GB • SSD 512 GB';
+        final liveMap = sync.deskStatusMap(labName: labName);
+        final taken = sync.takenCount(labName: labName);
+        final deskRec = sync.deskRecord(n, labName: labName);
+        final spec = deskRec?.spec ?? 'Core i5-12400 • 16 GB • SSD 512 GB';
+        final hasActiveTicket =
+            sync.activeTicketForDesk(n, labName: labName) != null;
 
         return LabSubPage(
           onLogoTap: nav.home,
@@ -42,8 +47,7 @@ class PraktikanMejaKamuPage extends StatelessWidget {
           children: [
             LabCard(
               children: [
-                const LabOverline(
-                    overline: 'Lab Komputer 1', title: 'Meja Kamu'),
+                LabOverline(overline: labName, title: 'Meja Kamu'),
                 Row(
                   children: [
                     const Flexible(
@@ -75,7 +79,7 @@ class PraktikanMejaKamuPage extends StatelessWidget {
               title: 'Meja $n • PC-$pc',
               subtitle: spec,
               titleSize: 12,
-              trailing: sync.deskRecord(n)?.status == PrakDesk.broken
+              trailing: (deskRec?.status == PrakDesk.broken || hasActiveTicket)
                   ? const LabChip.danger('Dilaporkan Rusak')
                   : const LabChip.live('Terbooking'),
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -25,8 +26,6 @@ class PraktikanLaporkanKerusakanPage extends StatefulWidget {
 
 class _PraktikanLaporkanKerusakanPageState
     extends State<PraktikanLaporkanKerusakanPage> {
-  static const String _lab = 'Lab Komputer 1';
-
   static const List<(String, String)> _kategori = [
     ('desktop_device', 'PC / Monitor'),
     ('chip', 'Keyboard & Mouse'),
@@ -35,10 +34,13 @@ class _PraktikanLaporkanKerusakanPageState
   ];
 
   final LabDeskSyncService _sync = LabDeskSyncService.instance;
+  final PresensiSyncService _presensi = PresensiSyncService.instance;
   final TextEditingController _deskripsi = TextEditingController();
   int _kat = 0;
   String? _photoName;
   bool _submitting = false;
+
+  String get _lab => _presensi.activeSession.labName;
 
   Future<void> _pickPhoto() async {
     final picked = await FileUploadService.instance.pickAndUpload(
@@ -58,7 +60,10 @@ class _PraktikanLaporkanKerusakanPageState
   PraktikanStore get _s => widget.nav.store;
 
   int get _meja =>
-      _sync.bookedDeskForUser(AuthController.instance.userIdentifier) ??
+      _sync.bookedDeskForUser(
+        AuthController.instance.userIdentifier,
+        labName: _lab,
+      ) ??
       _s.bookedDesk ??
       _s.selectedDesk;
 
@@ -70,12 +75,14 @@ class _PraktikanLaporkanKerusakanPageState
   void initState() {
     super.initState();
     _sync.addListener(_onSyncChanged);
+    _presensi.addListener(_onSyncChanged);
     _sync.refreshFromBackend();
   }
 
   @override
   void dispose() {
     _sync.removeListener(_onSyncChanged);
+    _presensi.removeListener(_onSyncChanged);
     _deskripsi.dispose();
     super.dispose();
   }
@@ -96,7 +103,7 @@ class _PraktikanLaporkanKerusakanPageState
         ? '${k.$2} mengalami kendala pada $_mejaLabel di $_lab.'
         : desc;
 
-    await _sync.createTicket(
+    final ticket = await _sync.createTicket(
       labName: _lab,
       deskNumber: _meja,
       pcCode: _pcCode,
@@ -113,7 +120,7 @@ class _PraktikanLaporkanKerusakanPageState
     if (!mounted) return;
     setState(() => _submitting = false);
     Navigator.of(context).maybePop();
-    labToast(context, 'Laporan diteruskan ke Laboran');
+    labToast(context, 'Laporan ${ticket.ticketCode} diteruskan ke Laboran & Aslab');
   }
 
   Widget _chip(int status) {
@@ -229,10 +236,24 @@ class _PraktikanLaporkanKerusakanPageState
                 onTap: () => labPush(
                   context,
                   LabRiwayatLaporanPage(
-                    reports: [
-                      for (final r in reports)
-                        (r.icon, r.title, r.meta, r.status),
-                    ],
+                    listenable: _sync,
+                    liveItemsBuilder: () => _sync
+                        .reportsForPraktikan(
+                          reporterId: AuthController.instance.userIdentifier,
+                        )
+                        .map(
+                          (r) => LabReportDetailItem(
+                            icon: r.icon,
+                            title: r.title,
+                            meta: r.meta,
+                            status: r.status,
+                            ticketCode: r.ticketCode,
+                            description: r.description,
+                            photoName: r.photoName,
+                            handlingNote: r.handlingNote,
+                          ),
+                        )
+                        .toList(),
                     onLogoTap: widget.nav.home,
                   ),
                 ),
@@ -254,6 +275,10 @@ class _PraktikanLaporkanKerusakanPageState
                       title: r.title,
                       meta: r.meta,
                       status: r.status,
+                      ticketCode: r.ticketCode,
+                      description: r.description,
+                      photoName: r.photoName,
+                      handlingNote: r.handlingNote,
                     ),
                   ),
               ],

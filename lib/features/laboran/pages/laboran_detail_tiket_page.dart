@@ -26,11 +26,10 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
   @override
   void initState() {
     super.initState();
-    _status = widget.ticket.status;
+    final live = LabDeskSyncService.instance.ticketByCode(widget.ticket.id);
+    _status = live?.status ?? widget.ticket.status;
     _note = TextEditingController(
-      text: widget.ticket.handlingNote.isNotEmpty
-          ? widget.ticket.handlingNote
-          : 'Power supply diganti, menunggu pengujian ulang.',
+      text: live?.handlingNote ?? widget.ticket.handlingNote,
     );
   }
 
@@ -65,7 +64,17 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.ticket;
+    final t =
+        LabDeskSyncService.instance.ticketByCode(widget.ticket.id)?.toLabTicket() ??
+            widget.ticket;
+    final reporterRoleLabel =
+        t.reporterRole == 'praktikan' ? 'Praktikan' : 'Asisten Lab';
+    final hasPhoto = t.photo.trim().isNotEmpty && t.photo != 'tanpa_foto.jpg';
+    final photoCaption = hasPhoto
+        ? 'Lampiran dari ${reporterRoleLabel.toLowerCase()} • 1 foto'
+        : 'Tidak ada foto yang dilampirkan';
+    final liveNote = _note.text.trim();
+
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
       children: [
@@ -98,7 +107,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
             LabPerson(
               initials: t.initials,
               name: t.reporter,
-              caption: 'Asisten Lab • ${t.reportedAt}',
+              caption: '$reporterRoleLabel • ${t.reportedAt}',
             ),
           ],
         ),
@@ -115,9 +124,10 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
                 children: [
                   const LabIconTile('camera'),
                   const SizedBox(height: 7),
-                  Text(t.photo, style: labText(12, w: kBold)),
+                  Text(hasPhoto ? t.photo : 'Tanpa lampiran foto',
+                      style: labText(12, w: kBold)),
                   const SizedBox(height: 7),
-                  Text('Lampiran dari asisten • 1 foto',
+                  Text(photoCaption,
                       style:
                           labText(11, w: kMedium, c: ItlgColors.textSubtle)),
                 ],
@@ -135,10 +145,10 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
             LabColumn(
               gap: 14,
               children: [
-                const _Step(
+                _Step(
                   state: _StepState.done,
                   title: 'Reported',
-                  caption: 'Laporan diterima • 08:15 WIB',
+                  caption: t.reportedAt,
                 ),
                 _Step(
                   state: _status >= 2
@@ -146,14 +156,16 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
                       : (_status == 1 ? _StepState.active : _StepState.idle),
                   title: 'In Progress',
                   caption: _status >= 1
-                      ? 'Sedang ditangani teknisi • 08:40 WIB'
+                      ? (liveNote.isNotEmpty
+                          ? liveNote
+                          : 'Sedang ditangani teknisi laboratorium')
                       : 'Menunggu penanganan',
                 ),
                 _Step(
                   state: _status == 2 ? _StepState.done : _StepState.idle,
                   title: 'Resolved',
                   caption: _status == 2
-                      ? 'Perbaikan selesai'
+                      ? 'Perbaikan selesai • perangkat siap digunakan'
                       : 'Menunggu penyelesaian',
                 ),
               ],

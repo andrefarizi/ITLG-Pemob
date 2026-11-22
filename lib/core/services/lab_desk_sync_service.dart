@@ -161,6 +161,7 @@ class LabTicketRecord {
       summary: description,
       detail: description,
       reporter: reporterName,
+      reporterRole: reporterRole,
       initials: initials,
       time: timeLabel,
       reportedAt: reportedAtLabel,
@@ -173,8 +174,16 @@ class LabTicketRecord {
     );
   }
 
-  PrakReport toPrakReport() =>
-      PrakReport(icon, title, '$labName • $formattedDateShort', status);
+  PrakReport toPrakReport() => PrakReport(
+        icon,
+        title,
+        '$labName • $formattedDateShort',
+        status,
+        ticketCode: ticketCode,
+        description: description,
+        photoName: photoName,
+        handlingNote: handlingNote,
+      );
 
   AslabReport toAslabReport() =>
       AslabReport(icon, title, '$labName • $formattedDateShort', status);
@@ -376,7 +385,7 @@ class LabDeskSyncService extends ChangeNotifier {
           final rec = LabDeskRecord.fromJson(Map<String, dynamic>.from(row));
           loadedByLab.putIfAbsent(rec.labName, () => {})[rec.deskNumber] = rec;
           if (rec.labName == defaultLab &&
-              rec.status == PrakDesk.taken &&
+              (rec.status == PrakDesk.taken || rec.status == PrakDesk.broken) &&
               rec.bookedByUserId != null &&
               rec.bookedByUserId!.isNotEmpty) {
             _bookedDeskByUser[rec.bookedByUserId!] = rec.deskNumber;
@@ -466,7 +475,8 @@ class LabDeskSyncService extends ChangeNotifier {
     final map = _desksByLab[labName];
     if (map == null) return null;
     for (final d in map.values) {
-      if (d.status == PrakDesk.taken && d.bookedByUserId == userKey) {
+      if ((d.status == PrakDesk.taken || d.status == PrakDesk.broken) &&
+          d.bookedByUserId == userKey) {
         return d.deskNumber;
       }
     }
@@ -516,6 +526,18 @@ class LabDeskSyncService extends ChangeNotifier {
   }
 
   List<LabTicketRecord> get allTickets => List.unmodifiable(_tickets);
+
+  LabTicketRecord? ticketByCode(String code) {
+    for (final t in _tickets) {
+      if (t.ticketCode == code) return t;
+    }
+    return null;
+  }
+
+  /// Daftar tiket mentah milik Aslab (untuk menampilkan detail & catatan live).
+  List<LabTicketRecord> ticketRecordsForAslab() {
+    return _tickets.where((t) => t.reporterRole == 'aslab').toList();
+  }
 
   List<LabTicket> ticketsByStatus(int status) {
     return _tickets
@@ -705,28 +727,39 @@ class LabDeskSyncService extends ChangeNotifier {
     return DeskBookingResult(success: true, syncedToBackend: synced);
   }
 
-  /// Ubah kesiapan meja (Siap / Rusak) dari Inventaris Laboran.
-  /// Sinkron langsung ke Denah Meja Laboran & Pilih Meja Praktikan.
+  /// Ubah kesiapan meja (Siap / Rusak) dari Inventaris Laboran atau
+  /// otomatis saat Praktikan/Aslab melapor kerusakan meja.
+  /// Sinkron langsung ke Denah Meja Laboran, Inventaris & Pilih Meja Praktikan.
   Future<void> setDeskReadiness({
     required String labName,
     required int deskNumber,
     required bool ready,
+    bool preserveBooker = false,
   }) async {
     final rec = _desksByLab[labName]?[deskNumber];
     if (rec == null) return;
 
     final now = DateTime.now();
     if (!ready) {
+      rec.status = PrakDesk.broken;
+      if (!preserveBooker) {
+        if (rec.bookedByUserId != null &&
+            _bookedDeskByUser[rec.bookedByUserId] == deskNumber) {
+          _bookedDeskByUser.remove(rec.bookedByUserId);
+        }
+        rec.bookedByUserId = null;
+        rec.bookedByName = null;
+        rec.bookedAt = null;
+      }
+    } else {
       if (rec.bookedByUserId != null &&
           _bookedDeskByUser[rec.bookedByUserId] == deskNumber) {
         _bookedDeskByUser.remove(rec.bookedByUserId);
       }
-      rec.status = PrakDesk.broken;
+      rec.status = PrakDesk.available;
       rec.bookedByUserId = null;
       rec.bookedByName = null;
       rec.bookedAt = null;
-    } else {
-      rec.status = PrakDesk.available;
     }
     notifyListeners();
 
@@ -847,6 +880,16 @@ class LabDeskSyncService extends ChangeNotifier {
     _tickets.insert(0, rec);
     notifyListeners();
 
+    // Otomatis tandai meja rusak di Denah Meja, Inventaris & Pilih Meja
+    if (deskNumber != null) {
+      await setDeskReadiness(
+        labName: labName,
+        deskNumber: deskNumber,
+        ready: false,
+        preserveBooker: reporterRole == 'praktikan',
+      );
+    }
+
     NotificationSyncService.instance.push(
       role: 'laboran',
       icon: 'wrench_outline',
@@ -855,6 +898,17 @@ class LabDeskSyncService extends ChangeNotifier {
       targetKey: 'tiket',
       important: true,
     );
+
+    if (reporterRole == 'praktikan') {
+      NotificationSyncService.instance.push(
+        role: 'aslab',
+        icon: 'triangle_alert',
+        title: 'Kerusakan Meja Dilaporkan ($code)',
+        body: '$labName • $title (oleh $reporterName)',
+        targetKey: 'laporKendala',
+        important: true,
+      );
+    }
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -905,16 +959,24 @@ class LabDeskSyncService extends ChangeNotifier {
     target.status = status;
     target.handlingNote = handlingNote;
 
-    // Jika tiket selesai (Resolved) dan terkait meja rusak, kembalikan jadi tersedia
-    if (status == 2 && target.deskNumber != null) {
+    // Sinkronkan kondisi meja di Denah & Inventaris berdasarkan status tiket
+    if (target.deskNumber != null) {
       final desk = _desksByLab[target.labName]?[target.deskNumber!];
-      if (desk != null && desk.status == PrakDesk.broken) {
-        desk.status = PrakDesk.available;
-        await setDeskReadiness(
-          labName: target.labName,
-          deskNumber: target.deskNumber!,
-          ready: true,
-        );
+      if (desk != null) {
+        if (status == 2 && desk.status == PrakDesk.broken) {
+          await setDeskReadiness(
+            labName: target.labName,
+            deskNumber: target.deskNumber!,
+            ready: true,
+          );
+        } else if (status < 2 && desk.status != PrakDesk.broken) {
+          await setDeskReadiness(
+            labName: target.labName,
+            deskNumber: target.deskNumber!,
+            ready: false,
+            preserveBooker: target.reporterRole == 'praktikan',
+          );
+        }
       }
     }
 
@@ -922,14 +984,28 @@ class LabDeskSyncService extends ChangeNotifier {
 
     final statusLabel =
         status == 2 ? 'Resolved' : (status == 1 ? 'In Progress' : 'Reported');
+    final noteSuffix = handlingNote.isNotEmpty ? ' • $handlingNote' : '';
     NotificationSyncService.instance.push(
       role: target.reporterRole == 'aslab' ? 'aslab' : 'praktikan',
       icon: status == 2 ? 'circle_check' : 'wrench_outline',
       title: 'Tiket $ticketCode: $statusLabel',
-      body: '${target.title} (${target.labName})${handlingNote.isNotEmpty ? ' • $handlingNote' : ''}',
-      targetKey: target.reporterRole == 'aslab' ? 'laporKendala' : 'pengumuman',
+      body: '${target.title} (${target.labName})$noteSuffix',
+      targetKey: target.reporterRole == 'aslab'
+          ? 'laporKendala'
+          : 'laporkanKerusakan',
       important: status == 2,
     );
+
+    if (target.reporterRole == 'praktikan' && status == 2) {
+      NotificationSyncService.instance.push(
+        role: 'aslab',
+        icon: 'circle_check',
+        title: 'Perbaikan Meja Selesai ($ticketCode)',
+        body: '${target.title} (${target.labName}) siap digunakan kembali$noteSuffix',
+        targetKey: 'laporKendala',
+        important: false,
+      );
+    }
 
     final client = SupabaseService.instance.client;
     if (client != null) {

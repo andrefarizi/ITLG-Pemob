@@ -273,6 +273,9 @@ class PraktikanNav {
       case PrakNotifTarget.detailNilai:
         detailNilai(c, store.mobile);
         break;
+      case PrakNotifTarget.laporkanKerusakan:
+        laporkanKerusakan(c);
+        break;
     }
   }
 }

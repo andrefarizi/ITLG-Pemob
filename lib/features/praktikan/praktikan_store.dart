@@ -137,6 +137,7 @@ enum PrakNotifTarget {
   detailAbsensi,
   kuis,
   detailNilai,
+  laporkanKerusakan,
 }
 
 class PrakNotif {
@@ -208,7 +209,21 @@ class PrakReport {
 
   /// 0 Reported, 1 In Progress, 2 Resolved.
   final int status;
-  const PrakReport(this.icon, this.title, this.meta, this.status);
+  final String? ticketCode;
+  final String? description;
+  final String? photoName;
+  final String? handlingNote;
+
+  const PrakReport(
+    this.icon,
+    this.title,
+    this.meta,
+    this.status, {
+    this.ticketCode,
+    this.description,
+    this.photoName,
+    this.handlingNote,
+  });
 }
 
 class PraktikanStore {

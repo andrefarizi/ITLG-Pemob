@@ -52,7 +52,7 @@ class _LaboranTiketPageState extends State<LaboranTiketPage> {
       children: [
         const LabTitle(
           title: 'Tiket Perbaikan',
-          subtitle: 'Laporan kendala perangkat dari Asisten Lab',
+          subtitle: 'Laporan kendala perangkat dari Praktikan & Asisten Lab',
         ),
         LabStatRow(
           stats: [

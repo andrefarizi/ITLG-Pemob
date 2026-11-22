@@ -12,6 +12,7 @@ class LabTicket {
   final String summary;
   final String detail;
   final String reporter;
+  final String reporterRole;
   final String initials;
   final String time;
   final String reportedAt;
@@ -33,6 +34,7 @@ class LabTicket {
     required this.summary,
     required this.detail,
     required this.reporter,
+    this.reporterRole = 'aslab',
     required this.initials,
     required this.time,
     required this.reportedAt,

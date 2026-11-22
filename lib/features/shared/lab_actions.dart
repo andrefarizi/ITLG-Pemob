@@ -326,6 +326,29 @@ Widget labReportChip(int status) {
   }
 }
 
+/// Model ringkas satu baris laporan untuk Riwayat Laporan & Detail Laporan.
+class LabReportDetailItem {
+  final String icon;
+  final String title;
+  final String meta;
+  final int status;
+  final String? ticketCode;
+  final String? description;
+  final String? photoName;
+  final String? handlingNote;
+
+  const LabReportDetailItem({
+    required this.icon,
+    required this.title,
+    required this.meta,
+    required this.status,
+    this.ticketCode,
+    this.description,
+    this.photoName,
+    this.handlingNote,
+  });
+}
+
 /// Detail satu laporan kendala.
 Future<void> labShowReportDetail(
   BuildContext context, {
@@ -333,12 +356,34 @@ Future<void> labShowReportDetail(
   required String title,
   required String meta,
   required int status,
+  String? ticketCode,
+  String? description,
+  String? photoName,
+  String? handlingNote,
 }) {
   const steps = [
     'Laporan diterima Laboran.',
     'Laboran sedang menangani kendala.',
     'Kendala selesai ditangani.',
   ];
+  final hasPhoto = photoName != null &&
+      photoName.trim().isNotEmpty &&
+      photoName != 'tanpa_foto.jpg';
+  final rows = <LabInfoRow>[
+    if (ticketCode != null && ticketCode.isNotEmpty)
+      ('ticket', 'Kode Tiket', ticketCode),
+    ('location', 'Lokasi & Tanggal', meta),
+    ('wrench_outline', 'Status', kLabReportStatus[status.clamp(0, 2)]),
+    if (hasPhoto) ('camera', 'Lampiran', photoName),
+    if (handlingNote != null && handlingNote.trim().isNotEmpty)
+      ('file', 'Catatan Laboran', handlingNote.trim()),
+  ];
+  final noteText = (description != null &&
+          description.trim().isNotEmpty &&
+          description.trim() != title.trim())
+      ? '${description.trim()}\n\n${steps[status.clamp(0, 2)]}'
+      : steps[status.clamp(0, 2)];
+
   return labShowInfoSheet(
     context,
     title: 'Detail Laporan',
@@ -351,11 +396,8 @@ Future<void> labShowReportDetail(
         labReportChip(status),
       ],
     ),
-    rows: [
-      ('location', 'Lokasi & Tanggal', meta),
-      ('ticket', 'Status', kLabReportStatus[status.clamp(0, 2)]),
-    ],
-    note: steps[status.clamp(0, 2)],
+    rows: rows,
+    note: noteText,
   );
 }
 
@@ -363,11 +405,15 @@ Future<void> labShowReportDetail(
 class LabRiwayatLaporanPage extends StatefulWidget {
   /// (icon, judul, meta, status)
   final List<(String, String, String, int)> reports;
+  final Listenable? listenable;
+  final List<LabReportDetailItem> Function()? liveItemsBuilder;
   final VoidCallback? onLogoTap;
 
   const LabRiwayatLaporanPage({
     super.key,
-    required this.reports,
+    this.reports = const [],
+    this.listenable,
+    this.liveItemsBuilder,
     this.onLogoTap,
   });
 
@@ -379,10 +425,37 @@ class _LabRiwayatLaporanPageState extends State<LabRiwayatLaporanPage> {
   int _tab = 0;
 
   @override
+  void initState() {
+    super.initState();
+    widget.listenable?.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.listenable?.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  List<LabReportDetailItem> _resolveItems() {
+    if (widget.liveItemsBuilder != null) {
+      return widget.liveItemsBuilder!();
+    }
+    return [
+      for (final r in widget.reports)
+        LabReportDetailItem(icon: r.$1, title: r.$2, meta: r.$3, status: r.$4),
+    ];
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final all = widget.reports;
-    final shown = _tab == 0 ? all : all.where((r) => r.$4 == _tab - 1).toList();
-    int count(int s) => all.where((r) => r.$4 == s).length;
+    final all = _resolveItems();
+    final shown =
+        _tab == 0 ? all : all.where((r) => r.status == _tab - 1).toList();
+    int count(int s) => all.where((r) => r.status == s).length;
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
       children: [
@@ -419,17 +492,21 @@ class _LabRiwayatLaporanPageState extends State<LabRiwayatLaporanPage> {
             children: [
               for (final r in shown)
                 LabListItem(
-                  leading: LabIconTile(r.$1),
-                  title: r.$2,
-                  subtitle: r.$3,
+                  leading: LabIconTile(r.icon),
+                  title: r.title,
+                  subtitle: r.meta,
                   titleSize: 12,
-                  trailing: labReportChip(r.$4),
+                  trailing: labReportChip(r.status),
                   onTap: () => labShowReportDetail(
                     context,
-                    icon: r.$1,
-                    title: r.$2,
-                    meta: r.$3,
-                    status: r.$4,
+                    icon: r.icon,
+                    title: r.title,
+                    meta: r.meta,
+                    status: r.status,
+                    ticketCode: r.ticketCode,
+                    description: r.description,
+                    photoName: r.photoName,
+                    handlingNote: r.handlingNote,
                   ),
                 ),
             ],
