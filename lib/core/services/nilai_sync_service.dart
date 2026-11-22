@@ -102,6 +102,15 @@ class NilaiSyncService extends ChangeNotifier {
 
   final Map<String, GradeValidationRecord> _validations = {};
   final List<GradeAppealRecord> _appeals = [];
+  String _selectedCourseId = 'pemob';
+
+  String get selectedCourseId => _selectedCourseId;
+
+  void selectCourse(String courseId) {
+    if (_selectedCourseId == courseId) return;
+    _selectedCourseId = courseId;
+    notifyListeners();
+  }
 
   RealtimeChannel? _channel;
   bool _initialized = false;

@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/nilai_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../widgets/dosen_ui.dart';
 
 /// Figma: "Minta Revisi-Dosen" (dari tombol "Minta Revisi ke Asisten").
 class DosenMintaRevisiPage extends StatefulWidget {
+  final String courseId;
   final VoidCallback? onLogoTap;
-  const DosenMintaRevisiPage({super.key, this.onLogoTap});
+  const DosenMintaRevisiPage({
+    super.key,
+    this.courseId = 'pemob',
+    this.onLogoTap,
+  });
 
   @override
   State<DosenMintaRevisiPage> createState() => _DosenMintaRevisiPageState();
@@ -21,8 +27,8 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
     text: 'Mohon periksa kembali nilai tugas Modul 3 dan 4. Ada selisih antara '
         'nilai tugas dan rekap presensi.',
   );
-  bool _andi = true;
-  bool _feri = true;
+  bool _primaryAsst = true;
+  bool _partnerAsst = true;
   int _part = 0;
 
   @override
@@ -31,14 +37,14 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
     super.dispose();
   }
 
-  Future<void> _send() async {
+  Future<void> _send(String primaryName, String partnerName) async {
     FocusScope.of(context).unfocus();
     final targets = <String>[
-      if (_andi) 'Andi Pratama',
-      if (_feri) 'Feri Gunawan',
+      if (_primaryAsst) primaryName,
+      if (_partnerAsst) partnerName,
     ];
     await NilaiSyncService.instance.requestRevision(
-      courseId: 'pemob',
+      courseId: widget.courseId,
       part: _bagian[_part],
       note: _note.text.trim(),
       assistants: targets.isEmpty ? ['Asisten Lab'] : targets,
@@ -58,6 +64,10 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
 
   @override
   Widget build(BuildContext context) {
+    final course = PraktikumSyncService.instance.courseById(widget.courseId);
+    final primaryName = course.asisten;
+    final partnerName =
+        primaryName == 'Feri Gunawan' ? 'Abbil Rizki' : 'Feri Gunawan';
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
       children: [
@@ -65,12 +75,12 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
           title: 'Minta Revisi',
           subtitle: 'Kirim catatan revisi nilai ke asisten penilai',
         ),
-        const LabCard(
+        LabCard(
           children: [
-            DosenClassTitle(),
+            DosenClassTitle(code: course.kelas, courseName: course.name),
             LabMeta(
               icon: 'people_group',
-              text: 'Dinilai oleh Andi Pratama & Feri Gunawan',
+              text: 'Dinilai oleh $primaryName & $partnerName',
             ),
           ],
         ),
@@ -85,16 +95,16 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
               children: [
                 Text('Kirim Ke', style: labText(14)),
                 DosenCheckOption(
-                  title: 'Andi Pratama',
-                  subtitle: 'Asisten Lab • Penilai Kelas C',
-                  checked: _andi,
-                  onTap: () => setState(() => _andi = !_andi),
+                  title: primaryName,
+                  subtitle: 'Asisten Lab • Penilai ${course.kelas}',
+                  checked: _primaryAsst,
+                  onTap: () => setState(() => _primaryAsst = !_primaryAsst),
                 ),
                 DosenCheckOption(
-                  title: 'Feri Gunawan',
-                  subtitle: 'Asisten Lab • Penilai Kelas C',
-                  checked: _feri,
-                  onTap: () => setState(() => _feri = !_feri),
+                  title: partnerName,
+                  subtitle: 'Asisten Lab • Penilai ${course.kelas}',
+                  checked: _partnerAsst,
+                  onTap: () => setState(() => _partnerAsst = !_partnerAsst),
                 ),
               ],
             ),
@@ -123,7 +133,7 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
           icon: 'send',
           label: 'Kirim Permintaan',
           large: true,
-          onTap: _send,
+          onTap: () => _send(primaryName, partnerName),
         ),
       ],
     );

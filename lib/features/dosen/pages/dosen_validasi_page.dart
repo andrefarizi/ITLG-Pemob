@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_download_service.dart';
 import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 import 'dosen_minta_revisi_page.dart';
@@ -30,10 +32,32 @@ class DosenValidasiPage extends StatefulWidget {
 }
 
 class _DosenValidasiPageState extends State<DosenValidasiPage> {
-  Future<void> _validate() async {
+  @override
+  void initState() {
+    super.initState();
+    NilaiSyncService.instance.refreshFromBackend();
+    PraktikumSyncService.instance.refreshFromBackend();
+  }
+
+  Future<void> _pickCourse() async {
+    final courses = PraktikumSyncService.instance.courses;
+    final currentId = NilaiSyncService.instance.selectedCourseId;
+    final currentIdx = courses.indexWhere((c) => c.id == currentId);
+    final picked = await dosenShowPicker(
+      context,
+      title: 'Pilih Praktikum',
+      options: [for (final c in courses) '${c.name} (${c.kelas})'],
+      selected: currentIdx < 0 ? 0 : currentIdx,
+    );
+    if (picked != null && picked < courses.length) {
+      NilaiSyncService.instance.selectCourse(courses[picked].id);
+    }
+  }
+
+  Future<void> _validate(String courseId, String kelasLabel) async {
     widget.store.validated = true;
     await NilaiSyncService.instance.validateCourse(
-      courseId: 'pemob',
+      courseId: courseId,
       validatedBy: AuthController.instance.userName,
     );
     if (!mounted) return;
@@ -41,9 +65,57 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
       context,
       icon: 'circle_check',
       title: 'Nilai Tervalidasi',
-      message: 'Nilai akhir TIF 3001 - Kelas C berhasil disinkronkan ke '
+      message: 'Nilai akhir $kelasLabel berhasil disinkronkan ke '
           'Portal Akademik.',
       button: 'Selesai',
+    );
+  }
+
+  void _showGradeDetail(
+    DosenGrade g,
+    String courseId,
+    String courseName,
+    String kelas,
+    List<DosenGrade> allGrades,
+  ) {
+    final val = NilaiSyncService.instance.validationFor(courseId);
+    final statusVal = val.isValidated
+        ? 'Tervalidasi'
+        : (val.isRevisionRequested ? 'Revisi Diminta' : 'Menunggu Validasi');
+    labShowInfoSheet(
+      context,
+      title: 'Detail Nilai • ${g.name}',
+      rows: [
+        ('card_account_details_outline', 'NIM', g.nim),
+        ('book_open', 'Praktikum', '$courseName ($kelas)'),
+        ('clipboard', 'Nilai Tugas', g.tugas),
+        ('people_group', 'Presensi', g.presensi),
+        ('trophy', 'Nilai Akhir', '${g.akhir} (${g.huruf})'),
+        ('circle_check', 'Status', g.lulus ? 'Lulus • $statusVal' : 'Tidak Lulus • $statusVal'),
+      ],
+      primary: (
+        'download',
+        'Unduh Rekap Kelas (.xlsx)',
+        () async {
+          final fname = 'Rekap_Nilai_${courseId.toUpperCase()}.xlsx';
+          final res = await FileDownloadService.instance.downloadFile(
+            fileName: fname,
+            source: 'Rekap Nilai Akhir • $courseName',
+            spreadsheetRows: [
+              ['NIM', 'Nama Praktikan', 'Tugas', 'Presensi', 'Nilai Akhir', 'Huruf', 'Status'],
+              for (final r in allGrades)
+                [r.nim, r.name, r.tugas, r.presensi, r.akhir, r.huruf, r.lulus ? 'Lulus' : 'Tidak Lulus'],
+            ],
+          );
+          if (!mounted) return;
+          labToast(
+            context,
+            res.success
+                ? 'Tersimpan di ${res.location}'
+                : 'Gagal mengunduh $fname',
+          );
+        },
+      ),
     );
   }
 
@@ -57,9 +129,12 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
     return ListenableBuilder(
       listenable: Listenable.merge([nilaiSync, praktikumSync, presensiSync]),
       builder: (context, _) {
-        final valRec = nilaiSync.validationFor('pemob');
+        final courseId = nilaiSync.selectedCourseId;
+        final course = praktikumSync.courseById(courseId);
+        final valRec = nilaiSync.validationFor(courseId);
         final done = valRec.isValidated;
-        final liveAll = nilaiSync.liveDosenGrades(store.grades, courseId: 'pemob');
+        final liveAll =
+            nilaiSync.liveDosenGrades(store.grades, courseId: courseId);
         final livePreview = liveAll.take(5).toList();
         final summary = nilaiSync.summarizeGrades(liveAll);
         final othersCount = (liveAll.length - livePreview.length).clamp(0, 999);
@@ -81,7 +156,14 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                                 key: ValueKey('wait'))),
                   ),
                 ),
-                const DosenClassTitle(),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _pickCourse,
+                  child: DosenClassTitle(
+                    code: course.kelas,
+                    courseName: course.name,
+                  ),
+                ),
                 LabStatRow(
                   stats: [
                     LabStat(
@@ -101,9 +183,9 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                     ),
                   ],
                 ),
-                const LabMeta(
+                LabMeta(
                   icon: 'people_group',
-                  text: 'Dinilai oleh Andi Pratama & Feri Gunawan',
+                  text: 'Dinilai oleh ${course.asisten} & Tim Asisten',
                 ),
               ],
             ),
@@ -114,17 +196,29 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                     const LabSectionTitle(
                         icon: 'clipboard', text: 'Rekap Nilai Akhir'),
                     const Spacer(),
-                    Text('12 Modul',
-                        style: labText(12, c: ItlgColors.primary)),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _pickCourse,
+                      child: Text('${course.meetings.length} / 12 Modul',
+                          style: labText(12, c: ItlgColors.primary)),
+                    ),
                   ],
                 ),
-                DosenGradeTable(grades: livePreview),
+                DosenGradeTable(
+                  grades: livePreview,
+                  onTapGrade: (g) => _showGradeDetail(
+                      g, courseId, course.name, course.kelas, liveAll),
+                ),
                 LabOutlineButton(
                   icon: 'chevron_down',
                   label: 'Lihat $othersCount Praktikan Lainnya',
                   onTap: () => labPush(
                     context,
-                    DosenRekapNilaiPage(store: store, onLogoTap: widget.onHome),
+                    DosenRekapNilaiPage(
+                      store: store,
+                      courseId: courseId,
+                      onLogoTap: widget.onHome,
+                    ),
                   ),
                 ),
               ],
@@ -151,7 +245,7 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                     icon: 'check',
                     label: 'Validasi & Sinkronkan Nilai',
                     large: true,
-                    onTap: _validate,
+                    onTap: () => _validate(courseId, course.kelas),
                   ),
                   LabOutlineButton(
                     icon: 'pencil',
@@ -159,7 +253,10 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                     large: true,
                     onTap: () => labPush(
                       context,
-                      DosenMintaRevisiPage(onLogoTap: widget.onHome),
+                      DosenMintaRevisiPage(
+                        courseId: courseId,
+                        onLogoTap: widget.onHome,
+                      ),
                     ),
                   ),
                 ],

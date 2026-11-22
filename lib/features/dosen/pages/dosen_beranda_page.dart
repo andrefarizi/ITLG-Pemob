@@ -182,7 +182,10 @@ class DosenBerandaPage extends StatelessWidget {
                             : c.asisten,
                         attendance: '$pct%',
                         score: avg,
-                        onTap: toValidasi,
+                        onTap: () {
+                          nilaiSync.selectCourse(c.id);
+                          toValidasi();
+                        },
                       );
                     },
                   ),

@@ -203,16 +203,23 @@ Future<int?> dosenShowPicker(
 /// "TIF 3001 - Kelas C" (Bold 16 merah tua) + judul praktikum Bold 22.
 class DosenClassTitle extends StatelessWidget {
   final String kelas;
-  const DosenClassTitle({super.key, this.kelas = 'Kelas C'});
+  final String? code;
+  final String courseName;
+  const DosenClassTitle({
+    super.key,
+    this.kelas = 'Kelas C',
+    this.code,
+    this.courseName = 'Pemrograman Mobile',
+  });
 
   @override
   Widget build(BuildContext context) {
     return LabColumn(
       gap: 6,
       children: [
-        Text('TIF 3001 - $kelas',
+        Text(code ?? 'TIF 3001 - $kelas',
             style: labText(16, w: kBold, c: ItlgColors.primaryDark)),
-        Text('Praktikum\nPemrograman Mobile',
+        Text('Praktikum\n$courseName',
             style: labText(22, w: kBold, c: Colors.black)),
       ],
     );
@@ -561,10 +568,11 @@ class DosenDisabledButton extends StatelessWidget {
 /// Huruf mutu "D" (tidak lulus) memakai tag merah.
 class DosenGradeTable extends StatelessWidget {
   final List<DosenGrade> grades;
-  const DosenGradeTable({super.key, required this.grades});
+  final ValueChanged<DosenGrade>? onTapGrade;
+  const DosenGradeTable({super.key, required this.grades, this.onTapGrade});
 
-  Widget _row(List<Widget> cells) {
-    return Padding(
+  Widget _row(List<Widget> cells, {VoidCallback? onTap}) {
+    final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
@@ -577,6 +585,12 @@ class DosenGradeTable extends StatelessWidget {
           Expanded(flex: 60, child: cells[3]),
         ],
       ),
+    );
+    if (onTap == null) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: row,
     );
   }
 
@@ -595,32 +609,35 @@ class DosenGradeTable extends StatelessWidget {
             Text('Akhir', textAlign: TextAlign.right, style: head),
           ]),
           for (final g in grades)
-            _row([
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(g.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: labText(12, w: kBold)),
-                  const SizedBox(height: 2),
-                  Text(g.nim,
-                      style:
-                          labText(11, w: kMedium, c: ItlgColors.textSubtle)),
-                ],
-              ),
-              Text(g.tugas, textAlign: TextAlign.center, style: cell),
-              Text(g.presensi, textAlign: TextAlign.center, style: cell),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(g.akhir,
-                      style: labText(14, w: kBold, c: ItlgColors.primary)),
-                  const SizedBox(width: 4),
-                  g.lulus ? LabTag.blue(g.huruf) : LabTag.red(g.huruf),
-                ],
-              ),
-            ]),
+            _row(
+              [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(g.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: labText(12, w: kBold)),
+                    const SizedBox(height: 2),
+                    Text(g.nim,
+                        style: labText(11,
+                            w: kMedium, c: ItlgColors.textSubtle)),
+                  ],
+                ),
+                Text(g.tugas, textAlign: TextAlign.center, style: cell),
+                Text(g.presensi, textAlign: TextAlign.center, style: cell),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(g.akhir,
+                        style: labText(14, w: kBold, c: ItlgColors.primary)),
+                    const SizedBox(width: 4),
+                    g.lulus ? LabTag.blue(g.huruf) : LabTag.red(g.huruf),
+                  ],
+                ),
+              ],
+              onTap: onTapGrade != null ? () => onTapGrade!(g) : null,
+            ),
         ],
       ),
     );
