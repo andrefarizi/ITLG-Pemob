@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/shift_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../../shared/profil_data.dart';
@@ -110,35 +112,52 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
             ],
           ),
         ),
-        LabCard(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabSectionTitle(icon: 'person', text: 'Data Diri'),
-            ),
-            _DataRow(
-                icon: 'card_account_details_outline',
-                label: 'NIM',
-                value: _p.idValue),
-            _DataRow(
-                icon: 'school_outline',
-                label: 'Program Studi',
-                value: 'Teknologi Informasi'),
-            _DataRow(
-                icon: 'book_open',
-                label: 'Praktikum Diampu',
-                value: '2 Praktikum'),
-            _DataRow(
-                icon: 'calendar', label: 'Shift Jaga', value: 'Senin & Rabu'),
-            _DataRow(
-                icon: 'envelope',
-                label: 'Email',
-                value: _p.email),
-            _DataRow(
-                icon: 'phone_outline',
-                label: 'No. HP',
-                value: _p.phone),
-          ],
+        ListenableBuilder(
+          listenable: Listenable.merge([
+            PraktikumSyncService.instance,
+            ShiftSyncService.instance,
+          ]),
+          builder: (_, __) {
+            final prak = PraktikumSyncService.instance;
+            final shift = ShiftSyncService.instance;
+            final myShifts = shift.allShifts
+                .where((s) => s.asistenName == _p.name)
+                .map((s) => s.dayLabel.split(',').first)
+                .toSet()
+                .toList();
+            final shiftText = myShifts.isNotEmpty
+                ? myShifts.join(' & ')
+                : 'Senin & Kamis';
+            return LabCard(
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(icon: 'person', text: 'Data Diri'),
+                ),
+                _DataRow(
+                    icon: 'card_account_details_outline',
+                    label: 'NIM',
+                    value: _p.idValue),
+                const _DataRow(
+                    icon: 'school_outline',
+                    label: 'Program Studi',
+                    value: 'Teknologi Informasi'),
+                _DataRow(
+                    icon: 'book_open',
+                    label: 'Praktikum Diampu',
+                    value: '${prak.courses.length} Praktikum'),
+                _DataRow(
+                    icon: 'star',
+                    label: 'Rating Asisten',
+                    value: '★ ${prak.overallAsistenRatingLabel()} / 5,0'),
+                _DataRow(
+                    icon: 'calendar', label: 'Shift Jaga', value: shiftText),
+                _DataRow(icon: 'envelope', label: 'Email', value: _p.email),
+                _DataRow(
+                    icon: 'phone_outline', label: 'No. HP', value: _p.phone),
+              ],
+            );
+          },
         ),
         LabCard(
           children: [

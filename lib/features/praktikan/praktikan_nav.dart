@@ -146,7 +146,7 @@ class PraktikanNav {
   Future<void> penilaianAsisten(
     BuildContext c,
     PrakCourse course, {
-    bool open = false,
+    bool open = true,
     bool replace = false,
   }) =>
       _open(

@@ -112,24 +112,44 @@ class _PraktikanDetailPraktikumPageState
             ),
           ],
         ),
-        LabCard(
-          children: [
-            PrakSpaceRow(
-              left: const LabSectionTitle(icon: 'star', text: 'Rating Asisten'),
-              right: LabTag.grey('$doneCount / 12 pertemuan'),
-            ),
-            Text(
-              'Penilaian asisten dibuka setelah seluruh pertemuan praktikum '
-              'selesai.',
-              style: labText(12, c: ItlgColors.textMuted),
-            ),
-            LabOutlineButton(
-              icon: 'star',
-              label: 'Beri Rating Asisten',
-              large: true,
-              onTap: () => nav.penilaianAsisten(context, c),
-            ),
-          ],
+        Builder(
+          builder: (_) {
+            final myRating = _sync.ratingFor(
+              c.id,
+              AuthController.instance.userIdentifier,
+            );
+            final count = _sync.ratingCountForCourse(c.id);
+            final avgLabel = _sync.averageRatingLabelForCourse(c.id);
+            return LabCard(
+              children: [
+                PrakSpaceRow(
+                  left: const LabSectionTitle(
+                      icon: 'star', text: 'Rating Asisten'),
+                  right: myRating != null
+                      ? LabChip.live('Dinilai • ${myRating.averageLabel} ★')
+                      : (count > 0
+                          ? LabTag.blue('$avgLabel ★ ($count ulasan)')
+                          : LabTag.blue('Evaluasi Aktif')),
+                ),
+                Text(
+                  myRating != null
+                      ? 'Anda telah memberi penilaian (${myRating.averageLabel}/5) '
+                          'untuk ${c.asisten}. Anda masih dapat memperbaruinya.'
+                      : 'Beri penilaian kinerja untuk ${c.asisten} secara anonim '
+                          'dan tersinkron langsung ke sistem.',
+                  style: labText(12, c: ItlgColors.textMuted),
+                ),
+                LabOutlineButton(
+                  icon: 'star',
+                  label: myRating != null
+                      ? 'Ubah Rating Asisten'
+                      : 'Beri Rating Asisten',
+                  large: true,
+                  onTap: () => nav.penilaianAsisten(context, c, open: true),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );

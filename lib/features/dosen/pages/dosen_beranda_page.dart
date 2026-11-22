@@ -100,9 +100,15 @@ class DosenBerandaPage extends StatelessWidget {
                           .effectiveAverageForCourse(c, nim)
                           .split(',')
                           .first;
+                      final ratingCount =
+                          praktikumSync.ratingCountForCourse(c.id);
+                      final ratingLabel =
+                          praktikumSync.averageRatingLabelForCourse(c.id);
                       return _GroupItem(
                         title: '${c.name} • Kelas C',
-                        assistant: c.asisten,
+                        assistant: ratingCount > 0
+                            ? '${c.asisten} • ★ $ratingLabel'
+                            : c.asisten,
                         attendance: '$pct%',
                         score: avg,
                         onTap: toValidasi,

@@ -121,6 +121,51 @@ class KuisAttemptRecord {
   }
 }
 
+/// Penilaian kinerja asisten oleh praktikan (tersinkron ke Supabase).
+class AsistenRatingRecord {
+  final String courseId;
+  final String asistenName;
+  final String userIdentifier;
+  final List<int> ratings; // [materi, penjelasan, waktu, kesigapan]
+  final String comment;
+  final DateTime createdAt;
+
+  const AsistenRatingRecord({
+    required this.courseId,
+    required this.asistenName,
+    required this.userIdentifier,
+    required this.ratings,
+    required this.comment,
+    required this.createdAt,
+  });
+
+  double get average {
+    if (ratings.isEmpty) return 0;
+    final sum = ratings.fold<int>(0, (a, b) => a + b);
+    return sum / ratings.length;
+  }
+
+  String get averageLabel => average.toStringAsFixed(1).replaceAll('.', ',');
+
+  factory AsistenRatingRecord.fromJson(Map<String, dynamic> json) {
+    return AsistenRatingRecord(
+      courseId: (json['course_id'] ?? 'pemob').toString(),
+      asistenName: (json['asisten_name'] ?? 'Asisten Lab').toString(),
+      userIdentifier: (json['user_identifier'] ?? '').toString(),
+      ratings: [
+        ((json['rating_materi'] as num?)?.toInt() ?? 5).clamp(1, 5),
+        ((json['rating_penjelasan'] as num?)?.toInt() ?? 4).clamp(1, 5),
+        ((json['rating_waktu'] as num?)?.toInt() ?? 5).clamp(1, 5),
+        ((json['rating_kesigapan'] as num?)?.toInt() ?? 4).clamp(1, 5),
+      ],
+      comment: (json['comment'] ?? '').toString(),
+      createdAt: json['created_at'] != null
+          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+    );
+  }
+}
+
 /// Service backend & sinkronisasi real-time untuk fitur Praktikum (4 mata
 /// kuliah Semester Ganjil 2026/2027: Pemrograman Mobile, Desain Interaksi,
 /// Analisis Desain Jaringan, dan Machine Learning) antar Praktikan & Aslab.
@@ -134,6 +179,7 @@ class PraktikumSyncService extends ChangeNotifier {
   final Map<String, TugasSubmissionRecord> _submissions = {};
   final Map<String, KuisAttemptRecord> _quizAttempts = {};
   final Map<String, List<int>> _ratingsByCourse = {};
+  final Map<String, AsistenRatingRecord> _ratingRecords = {};
   final Map<String, List<PrakQuestion>> _customQuestionsByCourse = {};
 
   RealtimeChannel? _channel;
@@ -369,6 +415,44 @@ class PraktikumSyncService extends ChangeNotifier {
 
   List<int> ratingsForCourse(String courseId) {
     return _ratingsByCourse[courseId] ?? [5, 4, 5, 4];
+  }
+
+  String _ratingKey(String courseId, String userIdentifier) =>
+      '$courseId:$userIdentifier';
+
+  AsistenRatingRecord? ratingFor(String courseId, String userIdentifier) {
+    return _ratingRecords[_ratingKey(courseId, userIdentifier)];
+  }
+
+  List<AsistenRatingRecord> allRatingsForCourse(String courseId) {
+    return _ratingRecords.values
+        .where((r) => r.courseId == courseId)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  int ratingCountForCourse(String courseId) =>
+      allRatingsForCourse(courseId).length;
+
+  double averageRatingForCourse(String courseId) {
+    final list = allRatingsForCourse(courseId);
+    if (list.isEmpty) return 0;
+    final sum = list.fold<double>(0, (acc, r) => acc + r.average);
+    return sum / list.length;
+  }
+
+  String averageRatingLabelForCourse(String courseId) {
+    final avg = averageRatingForCourse(courseId);
+    if (avg <= 0) return '4,8';
+    return avg.toStringAsFixed(1).replaceAll('.', ',');
+  }
+
+  /// Rata-rata penilaian seluruh praktikum yang diterima asisten.
+  String overallAsistenRatingLabel() {
+    if (_ratingRecords.isEmpty) return '4,8';
+    final sum = _ratingRecords.values
+        .fold<double>(0, (acc, r) => acc + r.average);
+    return (sum / _ratingRecords.length).toStringAsFixed(1).replaceAll('.', ',');
   }
 
   /// Jumlah item yang belum selesai pada pertemuan aktif (Tugas + Kuis).
@@ -1214,6 +1298,14 @@ class PraktikumSyncService extends ChangeNotifier {
             _subKey(rec.courseId, rec.meetingNumber, rec.userIdentifier)] = rec;
       }
 
+      // Ambil penilaian asisten dari praktikan
+      final ratingRows = await client.from('asisten_ratings').select();
+      for (final r in ratingRows) {
+        final rec = AsistenRatingRecord.fromJson(Map<String, dynamic>.from(r));
+        _ratingRecords[_ratingKey(rec.courseId, rec.userIdentifier)] = rec;
+        _ratingsByCourse[rec.courseId] = rec.ratings;
+      }
+
       notifyListeners();
       debugPrint(
           '[PraktikumSync] Berhasil sinkronisasi ${_courses.length} praktikum dari Supabase.');
@@ -1253,6 +1345,12 @@ class PraktikumSyncService extends ChangeNotifier {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'kuis_attempts',
+            callback: (_) => refreshFromBackend(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'asisten_ratings',
             callback: (_) => refreshFromBackend(),
           )
           .subscribe();
@@ -1417,7 +1515,7 @@ class PraktikumSyncService extends ChangeNotifier {
     return rec;
   }
 
-  Future<void> submitAsistenRating({
+  Future<AsistenRatingRecord> submitAsistenRating({
     required String courseId,
     required String asistenName,
     required String userIdentifier,
@@ -1430,8 +1528,39 @@ class PraktikumSyncService extends ChangeNotifier {
       ratings.length > 2 ? ratings[2].clamp(1, 5) : 5,
       ratings.length > 3 ? ratings[3].clamp(1, 5) : 4,
     ];
+    final now = DateTime.now();
+    final rec = AsistenRatingRecord(
+      courseId: courseId,
+      asistenName: asistenName,
+      userIdentifier: userIdentifier,
+      ratings: normalized,
+      comment: comment,
+      createdAt: now,
+    );
     _ratingsByCourse[courseId] = normalized;
+    _ratingRecords[_ratingKey(courseId, userIdentifier)] = rec;
     notifyListeners();
+
+    final cName = courseById(courseId).name;
+    final avgLabel = rec.averageLabel;
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'star',
+      title: 'Evaluasi Kinerja Baru ($avgLabel/5 ★)',
+      body:
+          'Praktikum $cName menerima penilaian anonim baru${comment.isNotEmpty ? ' • "$comment"' : ''}',
+      targetKey: 'evaluasi',
+      important: false,
+    );
+    NotificationSyncService.instance.push(
+      role: 'dosen',
+      icon: 'star',
+      title: 'Evaluasi Asisten: $asistenName ($avgLabel/5 ★)',
+      body:
+          'Praktikum $cName${comment.isNotEmpty ? ' • $comment' : ' • Penilaian kinerja asisten diperbarui'}',
+      targetKey: 'laporan',
+      important: false,
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -1446,7 +1575,7 @@ class PraktikumSyncService extends ChangeNotifier {
             'rating_waktu': normalized[2],
             'rating_kesigapan': normalized[3],
             'comment': comment,
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': now.toIso8601String(),
           },
           onConflict: 'course_id,user_identifier',
         );
@@ -1455,6 +1584,7 @@ class PraktikumSyncService extends ChangeNotifier {
         debugPrint('[PraktikumSync] submitAsistenRating error: $e');
       }
     }
+    return rec;
   }
 
   /// Simpan soal kuis kustom yang dibuat Aslab agar langsung muncul di sisi

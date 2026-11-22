@@ -29,7 +29,10 @@ class PraktikanPenilaianAsistenPage extends StatefulWidget {
 
 class _PraktikanPenilaianAsistenPageState
     extends State<PraktikanPenilaianAsistenPage> {
-  final TextEditingController _saran = TextEditingController();
+  final PraktikumSyncService _sync = PraktikumSyncService.instance;
+  late final TextEditingController _saran;
+  late final List<int> _ratings;
+  bool _submitting = false;
 
   static const List<String> _criteria = [
     'Penguasaan Materi',
@@ -38,9 +41,19 @@ class _PraktikanPenilaianAsistenPageState
     'Kesigapan Membantu',
   ];
 
-  late final List<int> _ratings = List<int>.from(
-    PraktikumSyncService.instance.ratingsForCourse(widget.course.id),
-  );
+  @override
+  void initState() {
+    super.initState();
+    final existing = _sync.ratingFor(
+      widget.course.id,
+      AuthController.instance.userIdentifier,
+    );
+    _ratings = List<int>.from(
+      existing?.ratings ?? _sync.ratingsForCourse(widget.course.id),
+    );
+    _saran = TextEditingController(text: existing?.comment ?? '');
+    _sync.refreshFromBackend();
+  }
 
   @override
   void dispose() {
@@ -49,7 +62,10 @@ class _PraktikanPenilaianAsistenPageState
   }
 
   Future<void> _kirim() async {
-    await PraktikumSyncService.instance.submitAsistenRating(
+    if (_submitting) return;
+    setState(() => _submitting = true);
+
+    final rec = await _sync.submitAsistenRating(
       courseId: widget.course.id,
       asistenName: widget.course.asisten,
       userIdentifier: AuthController.instance.userIdentifier,
@@ -57,100 +73,123 @@ class _PraktikanPenilaianAsistenPageState
       comment: _saran.text.trim(),
     );
     if (!mounted) return;
+    setState(() => _submitting = false);
     Navigator.of(context).maybePop();
-    labToast(context, 'Penilaian asisten terkirim');
+    labToast(
+      context,
+      'Penilaian untuk ${widget.course.asisten} (${rec.averageLabel}/5 ★) tersimpan ke BE',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.course;
-    final open = widget.open;
-    final person = LabPerson(
-      initials: c.asistenInitials,
-      name: c.asisten,
-      caption: 'Asisten Lab • ${c.name} Kelas C',
-    );
+    return ListenableBuilder(
+      listenable: _sync,
+      builder: (context, _) {
+        final c = widget.course.id.isNotEmpty
+            ? _sync.courseById(widget.course.id)
+            : widget.course;
+        final open = widget.open;
+        final existing = _sync.ratingFor(
+          c.id,
+          AuthController.instance.userIdentifier,
+        );
+        final avgLabel = _sync.averageRatingLabelForCourse(c.id);
+        final count = _sync.ratingCountForCourse(c.id);
+        final doneCount = c.meetings.where((m) => m.number <= 4).length;
 
-    return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        if (!open)
-          const PrakNotice.warn(
-            icon: 'triangle_alert',
-            text: 'Penilaian baru bisa diisi ketika masa praktikum sudah '
-                'selesai. Saat ini baru pertemuan 4 dari 12.',
-          ),
-        LabCard(
+        final person = LabPerson(
+          initials: c.asistenInitials,
+          name: c.asisten,
+          caption: 'Asisten Lab • ${c.name} (${c.kelas})',
+        );
+
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
           children: [
-            const LabOverline(
-              overline: 'Evaluasi Kinerja Asisten',
-              title: 'Beri Penilaian\nAsisten',
-            ),
-            person,
-            if (open)
-              const LabMeta(
-                  icon: 'lock_on', text: 'Penilaian bersifat anonim')
-            else
-              // Prototipe: ketuk progress untuk melihat versi yang sudah
-              // dibuka (masa praktikum selesai).
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => widget.nav.penilaianAsisten(context, c,
-                    open: true, replace: true),
-                child: const LabProgress(
-                  label: 'Masa praktikum',
-                  value: '4 / 12 pertemuan',
-                  fraction: 113 / 338,
-                  color: ItlgColors.primary,
+            if (!open)
+              PrakNotice.warn(
+                icon: 'triangle_alert',
+                text: 'Penilaian baru bisa diisi ketika masa praktikum sudah '
+                    'selesai. Saat ini baru pertemuan $doneCount dari 12.',
+              ),
+            LabCard(
+              children: [
+                const LabOverline(
+                  overline: 'Evaluasi Kinerja Asisten',
+                  title: 'Beri Penilaian\nAsisten',
                 ),
-              ),
-          ],
-        ),
-        LabCard(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabSectionTitle(icon: 'star', text: 'Penilaian'),
+                person,
+                if (open)
+                  LabMeta(
+                    icon: 'lock_on',
+                    text: count > 0
+                        ? 'Penilaian bersifat anonim • Rata-rata $avgLabel ★ ($count ulasan)'
+                        : 'Penilaian bersifat anonim',
+                  )
+                else
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => widget.nav.penilaianAsisten(context, c,
+                        open: true, replace: true),
+                    child: LabProgress(
+                      label: 'Masa praktikum',
+                      value: '$doneCount / 12 pertemuan',
+                      fraction: (doneCount / 12).clamp(0.0, 1.0),
+                      color: ItlgColors.primary,
+                    ),
+                  ),
+              ],
             ),
-            for (var i = 0; i < _criteria.length; i++)
-              PrakRatingRow(
-                label: _criteria[i],
-                value: open ? _ratings[i] : 0,
-                onChanged:
-                    open ? (v) => setState(() => _ratings[i] = v) : null,
-              ),
-          ],
-        ),
-        LabCard(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabSectionTitle(
-                  icon: 'chat_bubble', text: 'Saran untuk Asisten'),
+            LabCard(
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(icon: 'star', text: 'Penilaian'),
+                ),
+                for (var i = 0; i < _criteria.length; i++)
+                  PrakRatingRow(
+                    label: _criteria[i],
+                    value: open ? _ratings[i] : 0,
+                    onChanged:
+                        open ? (v) => setState(() => _ratings[i] = v) : null,
+                  ),
+              ],
             ),
-            PrakField(
-              label: 'Komentar (Opsional) :',
-              child: PrakTextArea(
-                controller: _saran,
-                height: 96,
-                enabled: open,
-                hint: open
-                    ? 'Tulis saran atau apresiasi anda...'
-                    : 'Dapat diisi setelah masa praktikum selesai',
-              ),
+            LabCard(
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(
+                      icon: 'chat_bubble', text: 'Saran untuk Asisten'),
+                ),
+                PrakField(
+                  label: 'Komentar (Opsional) :',
+                  child: PrakTextArea(
+                    controller: _saran,
+                    height: 96,
+                    enabled: open,
+                    hint: open
+                        ? 'Tulis saran atau apresiasi anda...'
+                        : 'Dapat diisi setelah masa praktikum selesai',
+                  ),
+                ),
+              ],
             ),
+            if (open)
+              LabPrimaryButton(
+                icon: 'send',
+                label: existing != null
+                    ? 'Perbarui Penilaian'
+                    : 'Kirim Penilaian',
+                large: true,
+                onTap: _kirim,
+              )
+            else
+              const PrakDisabledButton('Kirim Penilaian'),
           ],
-        ),
-        if (open)
-          LabPrimaryButton(
-            icon: 'send',
-            label: 'Kirim Penilaian',
-            large: true,
-            onTap: _kirim,
-          )
-        else
-          const PrakDisabledButton('Kirim Penilaian'),
-      ],
+        );
+      },
     );
   }
 }
