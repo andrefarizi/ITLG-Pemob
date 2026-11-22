@@ -39,6 +39,11 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
 
   Future<void> _send(String primaryName, String partnerName) async {
     FocusScope.of(context).unfocus();
+    final noteText = _note.text.trim();
+    if (noteText.isEmpty) {
+      labToast(context, 'Catatan revisi tidak boleh kosong');
+      return;
+    }
     final targets = <String>[
       if (_primaryAsst) primaryName,
       if (_partnerAsst) partnerName,
@@ -46,7 +51,7 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
     await NilaiSyncService.instance.requestRevision(
       courseId: widget.courseId,
       part: _bagian[_part],
-      note: _note.text.trim(),
+      note: noteText,
       assistants: targets.isEmpty ? ['Asisten Lab'] : targets,
       requestedBy: AuthController.instance.userName,
     );

@@ -92,6 +92,46 @@ class GradeAppealRecord {
   }
 }
 
+/// Catatan pesan tindak lanjut Dosen ke Asisten (Dosen ↔ Aslab ↔ Praktikan).
+class AssistantFollowUpRecord {
+  final String id;
+  final String studentNim;
+  final String studentName;
+  final String assistantName;
+  final String followUpType;
+  final String message;
+  final DateTime createdAt;
+
+  const AssistantFollowUpRecord({
+    required this.id,
+    required this.studentNim,
+    required this.studentName,
+    required this.assistantName,
+    required this.followUpType,
+    required this.message,
+    required this.createdAt,
+  });
+
+  String get formattedClock {
+    final local = createdAt.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')} WIB';
+  }
+
+  factory AssistantFollowUpRecord.fromJson(Map<String, dynamic> json) {
+    return AssistantFollowUpRecord(
+      id: (json['id'] ?? '').toString(),
+      studentNim: (json['student_nim'] ?? '').toString(),
+      studentName: (json['student_name'] ?? 'Praktikan').toString(),
+      assistantName: (json['assistant_name'] ?? 'Asisten Lab').toString(),
+      followUpType: (json['followup_type'] ?? 'Konsultasi').toString(),
+      message: (json['message'] ?? '').toString(),
+      createdAt: json['created_at'] != null
+          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+    );
+  }
+}
+
 /// Service pusat sinkronisasi Nilai Akhir, Validasi Dosen, Revisi Asisten,
 /// Sanggahan Nilai Praktikan, dan Tindak Lanjut lintas role via Supabase.
 class NilaiSyncService extends ChangeNotifier {
@@ -102,9 +142,100 @@ class NilaiSyncService extends ChangeNotifier {
 
   final Map<String, GradeValidationRecord> _validations = {};
   final List<GradeAppealRecord> _appeals = [];
+  final List<AssistantFollowUpRecord> _followUps = [];
   String _selectedCourseId = 'pemob';
 
   String get selectedCourseId => _selectedCourseId;
+
+  List<AssistantFollowUpRecord> get allFollowUps =>
+      List.unmodifiable(_followUps);
+
+  List<AssistantFollowUpRecord> followUpsForStudent(String studentNim) {
+    return _followUps.where((f) => f.studentNim == studentNim).toList();
+  }
+
+  AssistantFollowUpRecord? latestFollowUpForStudent(String studentNim) {
+    for (final f in _followUps) {
+      if (f.studentNim == studentNim) return f;
+    }
+    return null;
+  }
+
+  /// Gabungkan daftar praktikan berisiko dasar dengan nilai & presensi live BE.
+  List<DosenStudent> liveAtRiskStudents(List<DosenStudent> baseStudents) {
+    final prak = PraktikumSyncService.instance;
+    final presensi = PresensiSyncService.instance;
+    final pemob = prak.courseById('pemob');
+    final result = <DosenStudent>[];
+
+    for (final s in baseStudents) {
+      final sub = prak.submissionFor('pemob', 4, s.nim);
+      final liveScore =
+          (sub != null && sub.status == 'graded' && sub.score != null)
+              ? sub.score!
+              : s.score;
+      final liveHighRisk = s.attendance < 75 && liveScore < 70;
+      result.add(
+        DosenStudent(
+          initials: s.initials,
+          name: s.name,
+          nim: s.nim,
+          kelas: s.kelas,
+          attendance: s.attendance,
+          score: liveScore,
+          highRisk: liveHighRisk || s.highRisk,
+          hadir: s.hadir,
+          izin: s.izin,
+          alpa: s.alpa,
+          meetings: s.meetings,
+          asisten: s.asisten,
+          asistenInitials: s.asistenInitials,
+          followUp: s.followUp,
+          message: s.message,
+        ),
+      );
+    }
+
+    // Jika praktikan utama yang login saat ini nilainya < 70 atau hadir < 75%,
+    // otomatis muncul di Peringatan Dini Dosen secara real-time!
+    final mainNim = ProfilData.praktikan.idValue;
+    final mainName = ProfilData.praktikan.name;
+    final mainAvg = double.tryParse(
+            prak.effectiveAverageForCourse(pemob, mainNim).replaceAll(',', '.')) ??
+        88.0;
+    final mainSum = presensi.summaryForCourse(pemob, mainNim);
+    final denom = mainSum.doneMeetings > 0 ? mainSum.doneMeetings : 4;
+    final mainAtt = ((mainSum.hadir * 100) / denom).round().clamp(0, 100);
+    if ((mainAtt < 75 || mainAvg < 70) &&
+        !result.any((x) => x.nim == mainNim)) {
+      final parts = mainName.trim().split(RegExp(r'\s+'));
+      final init = parts.length >= 2
+          ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+          : 'PR';
+      result.insert(
+        0,
+        DosenStudent(
+          initials: init,
+          name: mainName,
+          nim: mainNim,
+          kelas: 'Kelas C',
+          attendance: mainAtt,
+          score: mainAvg.round(),
+          highRisk: mainAtt < 75 && mainAvg < 70,
+          hadir: mainSum.hadir,
+          izin: mainSum.izin,
+          alpa: mainSum.alpa,
+          meetings: const [],
+          asisten: pemob.asisten,
+          asistenInitials: pemob.asistenInitials,
+          followUp: mainAtt < 75 ? 0 : 2,
+          message:
+              'Halo ${pemob.asisten.split(' ').first}, mohon bantu tindak lanjut untuk $mainName ($mainNim) terkait capaian praktikum.',
+        ),
+      );
+    }
+    return result;
+  }
 
   void selectCourse(String courseId) {
     if (_selectedCourseId == courseId) return;
@@ -248,6 +379,20 @@ class NilaiSyncService extends ChangeNotifier {
         ..addAll(appRows
             .map((r) => GradeAppealRecord.fromJson(Map<String, dynamic>.from(r))));
 
+      try {
+        final followRows = await client
+            .from('assistant_followups')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(50);
+        _followUps
+          ..clear()
+          ..addAll(followRows.map((r) =>
+              AssistantFollowUpRecord.fromJson(Map<String, dynamic>.from(r))));
+      } catch (e) {
+        debugPrint('[NilaiSync] Load assistant_followups dilewati: $e');
+      }
+
       _backendAvailable = true;
       notifyListeners();
       debugPrint(
@@ -276,6 +421,12 @@ class NilaiSyncService extends ChangeNotifier {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'grade_appeals',
+            callback: (_) => refreshFromBackend(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'assistant_followups',
             callback: (_) => refreshFromBackend(),
           )
           .subscribe();
@@ -590,7 +741,7 @@ class NilaiSyncService extends ChangeNotifier {
     }
   }
 
-  Future<void> sendAssistantFollowUp({
+  Future<AssistantFollowUpRecord> sendAssistantFollowUp({
     required String studentNim,
     required String studentName,
     required String assistantName,
@@ -598,12 +749,33 @@ class NilaiSyncService extends ChangeNotifier {
     required String message,
   }) async {
     final now = DateTime.now();
+    final rec = AssistantFollowUpRecord(
+      id: 'local-fu-${now.millisecondsSinceEpoch}',
+      studentNim: studentNim,
+      studentName: studentName,
+      assistantName: assistantName,
+      followUpType: followUpType,
+      message: message,
+      createdAt: now,
+    );
+    _followUps.insert(0, rec);
+    notifyListeners();
+
+    final isAttendance = followUpType.toLowerCase().contains('hadir');
     NotificationSyncService.instance.push(
       role: 'aslab',
       icon: 'chat_bubble',
       title: 'Tindak Lanjut Dosen: $followUpType',
-      body: 'Untuk $studentName ($studentNim): $message',
-      targetKey: 'detailPresensi',
+      body: 'Untuk $studentName ($studentNim) • ke $assistantName: $message',
+      targetKey: isAttendance ? 'detailPresensi' : 'evaluasi',
+      important: true,
+    );
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'chat_bubble',
+      title: 'Arahan Dosen: $followUpType',
+      body: 'Koordinasi dengan $assistantName: $message',
+      targetKey: isAttendance ? 'detailAbsensi' : 'detailNilai',
       important: true,
     );
 
@@ -623,5 +795,6 @@ class NilaiSyncService extends ChangeNotifier {
         debugPrint('[NilaiSync] sendAssistantFollowUp error: $e');
       }
     }
+    return rec;
   }
 }

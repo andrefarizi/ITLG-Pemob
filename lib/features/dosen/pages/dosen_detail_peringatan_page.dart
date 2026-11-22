@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
+import 'dosen_hubungi_page.dart';
 import 'dosen_peringatan_page.dart';
 
 /// Figma: "Detail Peringatan-Dosen" (Yoga), "(Lia)", dan "(Bagas)".
@@ -42,54 +45,69 @@ class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.student;
-    final shown = s.meetings.where(_match).toList();
+    final nilaiSync = NilaiSyncService.instance;
+    final prakSync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([nilaiSync, prakSync]),
+      builder: (context, _) {
+        final s = widget.student;
+        final latestFu = nilaiSync.latestFollowUpForStudent(s.nim);
+        final shown = s.meetings.where(_match).toList();
 
-    return LabSubPage(
-      onLogoTap: widget.onLogoTap,
-      children: [
-        const LabTitle(
-          title: 'Detail Peringatan',
-          subtitle: 'Ringkasan kehadiran dan nilai praktikan berisiko',
-        ),
-        DosenStudentCard(student: s),
-        LabCard(
+        return LabSubPage(
+          onLogoTap: widget.onLogoTap,
           children: [
-            DosenClassTitle(kelas: s.kelas),
-            LabStatRow(
-              stats: [
-                LabStat(icon: 'check', label: 'Hadir', value: '${s.hadir}'),
-                LabStat(icon: 'file', label: 'Izin', value: '${s.izin}'),
-                LabStat(icon: 'cross', label: 'Alpa', value: '${s.alpa}'),
+            const LabTitle(
+              title: 'Detail Peringatan',
+              subtitle: 'Ringkasan kehadiran dan nilai praktikan berisiko',
+            ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => labPush(
+                context,
+                DosenHubungiPage(student: s, onLogoTap: widget.onLogoTap),
+              ),
+              child: DosenStudentCard(student: s, latestFollowUp: latestFu),
+            ),
+            LabCard(
+              children: [
+                DosenClassTitle(kelas: s.kelas),
+                LabStatRow(
+                  stats: [
+                    LabStat(icon: 'check', label: 'Hadir', value: '${s.hadir}'),
+                    LabStat(icon: 'file', label: 'Izin', value: '${s.izin}'),
+                    LabStat(icon: 'cross', label: 'Alpa', value: '${s.alpa}'),
+                  ],
+                ),
+                const LabProgress(
+                  label: 'Pertemuan terlaksana',
+                  value: '4 / 12',
+                  fraction: 113 / 338,
+                ),
               ],
             ),
-            const LabProgress(
-              label: 'Pertemuan terlaksana',
-              value: '4 / 12',
-              fraction: 113 / 338,
+            LabTabs(
+              labels: const ['Semua', 'Hadir', 'Izin', 'Alpa'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
             ),
+            if (shown.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'Tidak ada pertemuan dengan status ini.',
+                  textAlign: TextAlign.center,
+                  style: labText(12, c: ItlgColors.textSubtle),
+                ),
+              )
+            else
+              LabColumn(
+                gap: 16,
+                children: [for (final m in shown) _MeetingCard(meeting: m)],
+              ),
           ],
-        ),
-        LabTabs(
-          labels: const ['Semua', 'Hadir', 'Izin', 'Alpa'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        if (shown.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text(
-              'Tidak ada pertemuan dengan status ini.',
-              textAlign: TextAlign.center,
-              style: labText(12, c: ItlgColors.textSubtle),
-            ),
-          )
-        else
-          LabColumn(
-            gap: 16,
-            children: [for (final m in shown) _MeetingCard(meeting: m)],
-          ),
-      ],
+        );
+      },
     );
   }
 }
