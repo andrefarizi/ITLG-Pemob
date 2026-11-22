@@ -19,6 +19,11 @@ class LabTicket {
   final String kategori;
   final String photo;
 
+  /// 0 = Reported, 1 = In Progress, 2 = Resolved.
+  final int status;
+  final String handlingNote;
+  final int? deskNumber;
+
   const LabTicket({
     required this.id,
     required this.icon,
@@ -34,6 +39,9 @@ class LabTicket {
     required this.lokasi,
     required this.kategori,
     required this.photo,
+    this.status = 0,
+    this.handlingNote = '',
+    this.deskNumber,
   });
 }
 

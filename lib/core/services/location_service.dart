@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../config/app_config.dart';
@@ -13,59 +16,131 @@ const double kLabLng = 98.6600;
 /// Radius area presensi dalam meter.
 const double kLabRadius = 50.0;
 
-/// Service GPS dan Geocoding perangkat aktual.
+/// Service GPS real-time dan Reverse Geocoding perangkat aktual.
 class LocationService {
   static final LocationService instance = LocationService._();
   LocationService._();
 
-  static const String _mapsApiKey = AppConfig.googleMapsApiKey;
+  static const MethodChannel _configChannel =
+      MethodChannel('com.example.itlg_mobile/config');
 
-  /// Mengambil posisi GPS aktual dari perangkat dengan akurasi tertinggi.
-  Future<Position?> getCurrentPosition() async {
+  String? _resolvedMapsApiKey;
+
+  Future<String> _getMapsApiKey() async {
+    if (_resolvedMapsApiKey != null) return _resolvedMapsApiKey!;
+    if (AppConfig.googleMapsApiKey.isNotEmpty &&
+        AppConfig.googleMapsApiKey != 'YOUR_GOOGLE_MAPS_API_KEY') {
+      _resolvedMapsApiKey = AppConfig.googleMapsApiKey;
+      return _resolvedMapsApiKey!;
+    }
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final key =
+            await _configChannel.invokeMethod<String>('getMapsApiKey');
+        if (key != null &&
+            key.isNotEmpty &&
+            key != 'YOUR_GOOGLE_MAPS_API_KEY') {
+          _resolvedMapsApiKey = key;
+          return key;
+        }
+      } catch (e) {
+        debugPrint('[LocationService] Gagal membaca Maps API Key native: $e');
+      }
+    }
+    _resolvedMapsApiKey = '';
+    return '';
+  }
+
+  /// Pastikan layanan lokasi aktif dan izin diberikan.
+  Future<bool> ensurePermission() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         debugPrint('[LocationService] Layanan lokasi (GPS) tidak aktif.');
-        return null;
+        return false;
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           debugPrint('[LocationService] Izin lokasi ditolak oleh pengguna.');
-          return null;
+          return false;
         }
       }
       if (permission == LocationPermission.deniedForever) {
         debugPrint('[LocationService] Izin lokasi ditolak permanen.');
-        return null;
+        return false;
       }
+      return true;
+    } catch (e) {
+      debugPrint('[LocationService] ensurePermission error: $e');
+      return false;
+    }
+  }
 
-      // 1. Ambil posisi GPS terbaru dengan akurasi tinggi
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: AndroidSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 0,
-          forceLocationManager: false,
-          intervalDuration: const Duration(seconds: 1),
-          timeLimit: const Duration(seconds: 8),
-        ),
+  LocationSettings _locationSettings({int distanceFilter = 0}) {
+    if (!kIsWeb && Platform.isAndroid) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: distanceFilter,
+        forceLocationManager: false,
+        intervalDuration: const Duration(seconds: 2),
       );
-      debugPrint('[LocationService] GPS aktual: ${pos.latitude}, ${pos.longitude} (Akurasi: ±${pos.accuracy}m)');
+    }
+    return LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: distanceFilter,
+    );
+  }
+
+  /// Mengambil posisi GPS aktual terbaru dari perangkat dengan akurasi tertinggi.
+  Future<Position?> getCurrentPosition() async {
+    final allowed = await ensurePermission();
+    if (!allowed) return null;
+
+    try {
+      final settings = (!kIsWeb && Platform.isAndroid)
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 0,
+              forceLocationManager: false,
+              intervalDuration: const Duration(seconds: 1),
+              timeLimit: const Duration(seconds: 10),
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.bestForNavigation,
+              timeLimit: Duration(seconds: 10),
+            );
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: settings,
+      );
+      debugPrint(
+          '[LocationService] GPS aktual: ${pos.latitude}, ${pos.longitude} (Akurasi: ±${pos.accuracy}m)');
       return pos;
     } catch (e) {
-      debugPrint('[LocationService] getCurrentPosition error: $e. Fallback ke lastKnownPosition...');
+      debugPrint(
+          '[LocationService] getCurrentPosition error: $e. Fallback ke lastKnownPosition...');
       try {
         final last = await Geolocator.getLastKnownPosition();
         if (last != null) {
-          debugPrint('[LocationService] Menggunakan lastKnownPosition: ${last.latitude}, ${last.longitude}');
+          debugPrint(
+              '[LocationService] Menggunakan lastKnownPosition: ${last.latitude}, ${last.longitude}');
         }
         return last;
       } catch (_) {
         return null;
       }
     }
+  }
+
+  /// Stream lokasi real-time: otomatis memancarkan posisi baru setiap perangkat
+  /// berpindah tempat (minimal 3 meter) agar map dan alamat selalu akurat.
+  Stream<Position> getPositionStream() {
+    return Geolocator.getPositionStream(
+      locationSettings: _locationSettings(distanceFilter: 3),
+    );
   }
 
   /// Hitung jarak (meter) antara dua titik koordinat menggunakan formula Haversine.
@@ -105,72 +180,99 @@ class LocationService {
     }
 
     // 2. Real-time Geocoding via Google Maps Geocoding API
-    try {
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$_mapsApiKey&language=id',
-      );
-      final client = HttpClient();
-      final request = await client.getUrl(url);
-      final response =
-          await request.close().timeout(const Duration(seconds: 4));
+    final apiKey = await _getMapsApiKey();
+    if (apiKey.isNotEmpty) {
+      try {
+        final url = Uri.parse(
+          'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey&language=id',
+        );
+        final client = HttpClient();
+        final request = await client.getUrl(url);
+        final response =
+            await request.close().timeout(const Duration(seconds: 5));
 
-      if (response.statusCode == 200) {
-        final body = await response.transform(utf8.decoder).join();
-        final data = jsonDecode(body) as Map<String, dynamic>;
-        if (data['status'] == 'OK' &&
-            (data['results'] as List?)?.isNotEmpty == true) {
-          final results = data['results'] as List;
-          final first = results.first as Map<String, dynamic>;
-          final formatted = first['formatted_address'] as String? ?? '';
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final data = jsonDecode(body) as Map<String, dynamic>;
+          if (data['status'] == 'OK' &&
+              (data['results'] as List?)?.isNotEmpty == true) {
+            final results = data['results'] as List;
+            final first = results.first as Map<String, dynamic>;
+            final formatted = first['formatted_address'] as String? ?? '';
 
-          String street = '';
-          String subdistrict = '';
-          String district = '';
-          String city = '';
-          final components = first['address_components'] as List? ?? [];
-          for (final c in components) {
-            final types = (c['types'] as List).cast<String>();
-            if (types.contains('route') || types.contains('point_of_interest')) {
-              street = c['long_name'] as String;
+            String poi = '';
+            String street = '';
+            String streetNumber = '';
+            String subdistrict = '';
+            String district = '';
+            String city = '';
+            final components = first['address_components'] as List? ?? [];
+            for (final c in components) {
+              final types = (c['types'] as List).cast<String>();
+              if (types.contains('point_of_interest') ||
+                  types.contains('establishment') ||
+                  types.contains('premise')) {
+                if (poi.isEmpty) poi = c['long_name'] as String;
+              }
+              if (types.contains('route')) {
+                street = c['long_name'] as String;
+              }
+              if (types.contains('street_number')) {
+                streetNumber = c['long_name'] as String;
+              }
+              if (types.contains('administrative_area_level_4') ||
+                  types.contains('sublocality')) {
+                if (subdistrict.isEmpty) subdistrict = c['long_name'] as String;
+              }
+              if (types.contains('administrative_area_level_3')) {
+                district = c['long_name'] as String;
+              }
+              if (types.contains('administrative_area_level_2')) {
+                city = c['long_name'] as String;
+              }
             }
-            if (types.contains('administrative_area_level_4') ||
-                types.contains('sublocality')) {
-              subdistrict = c['long_name'] as String;
+
+            final streetFull = street.isNotEmpty
+                ? (streetNumber.isNotEmpty ? '$street No. $streetNumber' : street)
+                : '';
+            final title = poi.isNotEmpty
+                ? poi
+                : (streetFull.isNotEmpty
+                    ? streetFull
+                    : (subdistrict.isNotEmpty
+                        ? subdistrict
+                        : 'Lokasi Terdeteksi'));
+            final details = <String>[];
+            if (poi.isNotEmpty && streetFull.isNotEmpty) {
+              details.add(streetFull);
             }
-            if (types.contains('administrative_area_level_3')) {
-              district = c['long_name'] as String;
+            if (subdistrict.isNotEmpty && subdistrict != title) {
+              details.add(subdistrict);
             }
-            if (types.contains('administrative_area_level_2')) {
-              city = c['long_name'] as String;
-            }
+            if (district.isNotEmpty) details.add(district);
+            if (city.isNotEmpty) details.add(city);
+            final detailText =
+                details.isNotEmpty ? details.join(', ') : formatted;
+
+            debugPrint('[LocationService] Google Geocoded: $title • $detailText');
+            return (title: title, detail: detailText);
           }
-
-          final title = street.isNotEmpty ? street : 'Lokasi Terdeteksi';
-          final details = <String>[];
-          if (subdistrict.isNotEmpty) details.add(subdistrict);
-          if (district.isNotEmpty) details.add(district);
-          if (city.isNotEmpty) details.add(city);
-          final detailText =
-              details.isNotEmpty ? details.join(', ') : formatted;
-
-          debugPrint('[LocationService] Google Geocoded: $title • $detailText');
-          return (title: title, detail: detailText);
         }
+      } catch (e) {
+        debugPrint('[LocationService] Google Geocoding error: $e');
       }
-    } catch (e) {
-      debugPrint('[LocationService] Google Geocoding error: $e');
     }
 
     // 3. Fallback ke Nominatim OpenStreetMap
     try {
       final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json&accept-language=id',
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json&accept-language=id&zoom=18',
       );
       final client = HttpClient();
       final request = await client.getUrl(uri);
       request.headers.set('User-Agent', 'ITLGMobileApp/1.0');
       final response =
-          await request.close().timeout(const Duration(seconds: 4));
+          await request.close().timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
@@ -178,19 +280,24 @@ class LocationService {
         final address = data['address'] as Map<String, dynamic>?;
 
         if (address != null) {
-          final road = address['road'] as String? ??
-              address['amenity'] as String? ??
+          final road = address['amenity'] as String? ??
+              address['building'] as String? ??
+              address['road'] as String? ??
               address['suburb'] as String? ??
               'Lokasi Terdeteksi';
 
-          final sub = address['suburb'] as String?;
+          final sub = address['suburb'] as String? ??
+              address['village'] as String? ??
+              address['neighbourhood'] as String?;
           final district = address['city_district'] as String?;
-          final city = address['city'] as String? ?? 'Kota Medan';
+          final city = address['city'] as String? ??
+              address['town'] as String? ??
+              'Kota Medan';
           final state = address['state'] as String? ?? 'Sumatera Utara';
 
           final details = <String>[];
           if (sub != null && sub != road) details.add(sub);
-          if (district != null) details.add(district);
+          if (district != null && district != sub) details.add(district);
           details.add(city);
           details.add(state);
 

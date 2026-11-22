@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
@@ -20,26 +21,54 @@ class LaboranTiketPage extends StatefulWidget {
 }
 
 class _LaboranTiketPageState extends State<LaboranTiketPage> {
+  final LabDeskSyncService _sync = LabDeskSyncService.instance;
   int _tab = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _sync.removeListener(_onSyncChanged);
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final tickets = _tab == 0 ? widget.store.tickets : const <LabTicket>[];
+    final reportedCount = _sync.ticketCountByStatus(0);
+    final inProgressCount = _sync.ticketCountByStatus(1);
+    final resolvedCount = _sync.ticketCountByStatus(2);
+    final tickets = _sync.ticketsByStatus(_tab);
+
     return LabTabBody(
       children: [
         const LabTitle(
           title: 'Tiket Perbaikan',
           subtitle: 'Laporan kendala perangkat dari Asisten Lab',
         ),
-        const LabStatRow(
+        LabStatRow(
           stats: [
-            LabStat(icon: 'triangle_alert', label: 'Reported', value: '3'),
-            LabStat(icon: 'wrench_outline', label: 'In Progress', value: '2'),
-            LabStat(icon: 'check', label: 'Resolved', value: '12'),
+            LabStat(
+                icon: 'triangle_alert',
+                label: 'Reported',
+                value: '$reportedCount'),
+            LabStat(
+                icon: 'wrench_outline',
+                label: 'In Progress',
+                value: '$inProgressCount'),
+            LabStat(icon: 'check', label: 'Resolved', value: '$resolvedCount'),
           ],
         ),
         LabTabs(
-          labels: const ['Reported (3)', 'In Progress', 'Resolved'],
+          labels: ['Reported ($reportedCount)', 'In Progress', 'Resolved'],
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
@@ -64,6 +93,17 @@ class _TicketCard extends StatelessWidget {
   final VoidCallback onOpen;
   const _TicketCard({required this.ticket, required this.onOpen});
 
+  Widget _statusChip() {
+    switch (ticket.status) {
+      case 1:
+        return const LabChip.warn('In Progress');
+      case 2:
+        return const LabChip.live('Resolved');
+      default:
+        return const LabChip.danger('Reported');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LabCard(
@@ -72,7 +112,7 @@ class _TicketCard extends StatelessWidget {
           children: [
             LabTag.grey(ticket.id),
             const Spacer(),
-            const LabChip.danger('Reported'),
+            _statusChip(),
           ],
         ),
         Row(

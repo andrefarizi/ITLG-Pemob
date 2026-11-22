@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../laboran_store.dart';
@@ -46,7 +47,12 @@ class _LaboranTambahPerangkatPageState
 
   /// Isi nomor meja berikutnya otomatis (bisa diubah).
   void _suggestNumber() {
-    final next = (widget.store.desks[_lab].length + 1).toString().padLeft(2, '0');
+    final labName = LaboranStore.inventoryLabs[_lab];
+    final existing = LabDeskSyncService.instance.inventoryDesks(labName);
+    final maxNum = existing.isEmpty
+        ? 0
+        : existing.map((e) => e.deskNumber).reduce((a, b) => a > b ? a : b);
+    final next = (maxNum + 1).toString().padLeft(2, '0');
     _meja.text = next;
     _pc.text = 'PC-$next';
   }
@@ -74,7 +80,7 @@ class _LaboranTambahPerangkatPageState
     }
   }
 
-  void _simpan() {
+  Future<void> _simpan() async {
     final meja = _meja.text.trim();
     final pc = _pc.text.trim();
     final spec = _spec.text.trim();
@@ -82,20 +88,31 @@ class _LaboranTambahPerangkatPageState
       labToast(context, 'Nomor meja dan kode PC wajib diisi');
       return;
     }
+    final deskNumber = int.tryParse(meja);
+    if (deskNumber == null || deskNumber <= 0) {
+      labToast(context, 'Nomor meja harus berupa angka positif');
+      return;
+    }
     if (spec.isEmpty) {
       labToast(context, 'Spesifikasi PC wajib diisi');
       return;
     }
+    final labName = LaboranStore.inventoryLabs[_lab];
     final name = 'Meja ${meja.padLeft(2, '0')} • ${pc.toUpperCase()}';
-    final list = widget.store.desks[_lab];
-    if (list.any((d) => d.name == name)) {
+    final ok = await LabDeskSyncService.instance.addDeskDevice(
+      labName: labName,
+      deskNumber: deskNumber,
+      pcCode: pc.toUpperCase(),
+      spec: spec,
+      ready: _st == 0,
+    );
+    if (!mounted) return;
+    if (!ok) {
       labToast(context, '$name sudah terdaftar');
       return;
     }
-    list.add(LabDesk(name, spec, _st == 0));
     Navigator.of(context).maybePop(true);
-    labToast(context,
-        '$name ditambahkan ke ${LaboranStore.inventoryLabs[_lab]}');
+    labToast(context, '$name ditambahkan ke $labName');
   }
 
   @override

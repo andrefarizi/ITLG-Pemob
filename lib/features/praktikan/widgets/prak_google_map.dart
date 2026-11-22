@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -54,34 +56,28 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
         ),
       );
     } else {
-      // Tampilkan area yang mencakup posisi pengguna dan titik lab
-      final midLat = (_labCoords.latitude + user.latitude) / 2;
-      final midLng = (_labCoords.longitude + user.longitude) / 2;
-      final dist = LocationService.distanceInMeters(
-        user.latitude,
-        user.longitude,
-        _labCoords.latitude,
-        _labCoords.longitude,
-      );
+      // Sesuaikan kamera otomatis dengan LatLngBounds agar titik lokasi user
+      // dan titik Lab Komputer 1 selalu terlihat jelas berapa pun jaraknya.
+      final swLat = math.min(_labCoords.latitude, user.latitude);
+      final swLng = math.min(_labCoords.longitude, user.longitude);
+      final neLat = math.max(_labCoords.latitude, user.latitude);
+      final neLng = math.max(_labCoords.longitude, user.longitude);
 
-      // Sesuaikan zoom level berdasarkan jarak
-      double zoom = 16.0;
-      if (dist > 5000) {
-        zoom = 12.0;
-      } else if (dist > 2000) {
-        zoom = 13.5;
-      } else if (dist > 500) {
-        zoom = 15.0;
-      }
-
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: LatLng(midLat, midLng),
-            zoom: zoom,
+      if ((neLat - swLat).abs() < 0.0005 && (neLng - swLng).abs() < 0.0005) {
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: user, zoom: 17.5),
           ),
-        ),
-      );
+        );
+      } else {
+        final bounds = LatLngBounds(
+          southwest: LatLng(swLat, swLng),
+          northeast: LatLng(neLat, neLng),
+        );
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngBounds(bounds, 42),
+        );
+      }
     }
   }
 

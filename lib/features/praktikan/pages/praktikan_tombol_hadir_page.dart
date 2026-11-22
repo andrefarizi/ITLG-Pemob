@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
-import '../widgets/praktikan_ui.dart';
 import '../widgets/prak_google_map.dart';
+import '../widgets/praktikan_ui.dart';
 
 /// Figma: "Tombol Hadir & Lokasi-Praktikan" dan "(Di Luar Area)".
-/// Mengambil lokasi GPS aktual perangkat secara presisi menggunakan sensor GPS perangkat bawaan.
+/// Mengambil dan memantau lokasi GPS aktual perangkat secara real-time.
 class PraktikanTombolHadirPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanTombolHadirPage({super.key, required this.nav});
@@ -22,6 +25,7 @@ class PraktikanTombolHadirPage extends StatefulWidget {
 class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
   bool _inside = false;
   LatLng? _userPos;
+  LatLng? _lastGeocodedPos;
   double? _distance;
   double? _accuracy;
   String _timeText = '--:-- WIB';
@@ -29,10 +33,18 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
   String _addressTitle = 'Mendeteksi lokasi...';
   String _addressDetail = 'Mengambil data GPS perangkat';
 
+  StreamSubscription<Position>? _posSub;
+
   @override
   void initState() {
     super.initState();
-    _checkLocation();
+    _initLocationTracking();
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    super.dispose();
   }
 
   void _updateCurrentTime() {
@@ -40,6 +52,72 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
     final h = now.hour.toString().padLeft(2, '0');
     final m = now.minute.toString().padLeft(2, '0');
     _timeText = '$h:$m WIB';
+  }
+
+  Future<void> _initLocationTracking() async {
+    await _checkLocation();
+    if (!mounted) return;
+    final allowed = await LocationService.instance.ensurePermission();
+    if (!allowed || !mounted) return;
+
+    await _posSub?.cancel();
+    _posSub = LocationService.instance.getPositionStream().listen(
+      (pos) => _applyPosition(pos, forceGeocode: false),
+      onError: (Object e) {
+        debugPrint('[TombolHadir] Stream lokasi error: $e');
+      },
+    );
+  }
+
+  Future<void> _applyPosition(
+    Position pos, {
+    required bool forceGeocode,
+    bool showToast = false,
+  }) async {
+    if (!mounted) return;
+    final dist = LocationService.distanceToLab(pos);
+    final isInside = dist <= kLabRadius;
+    final nextPos = LatLng(pos.latitude, pos.longitude);
+    _updateCurrentTime();
+
+    final needGeocode = forceGeocode ||
+        _lastGeocodedPos == null ||
+        LocationService.distanceInMeters(
+              _lastGeocodedPos!.latitude,
+              _lastGeocodedPos!.longitude,
+              nextPos.latitude,
+              nextPos.longitude,
+            ) >=
+            15.0;
+
+    setState(() {
+      _userPos = nextPos;
+      _distance = dist;
+      _accuracy = pos.accuracy;
+      _inside = isInside;
+      _loading = false;
+    });
+
+    if (needGeocode) {
+      _lastGeocodedPos = nextPos;
+      final addr = await LocationService.instance
+          .getAddress(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      setState(() {
+        _addressTitle = addr.title;
+        _addressDetail = addr.detail;
+      });
+    }
+
+    if (!mounted) return;
+    if (showToast) {
+      labToast(
+        context,
+        isInside
+            ? 'Terverifikasi di Lab Komputer 1 (${dist.toStringAsFixed(0)} m)'
+            : 'Lokasi: $_addressTitle (${dist.toStringAsFixed(0)} m dari lab)',
+      );
+    }
   }
 
   Future<void> _checkLocation({bool showToast = false}) async {
@@ -50,30 +128,7 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
     if (!mounted) return;
 
     if (pos != null) {
-      final dist = LocationService.distanceToLab(pos);
-      final isInside = dist <= kLabRadius;
-      final addr = await LocationService.instance
-          .getAddress(pos.latitude, pos.longitude);
-
-      setState(() {
-        _userPos = LatLng(pos.latitude, pos.longitude);
-        _distance = dist;
-        _accuracy = pos.accuracy;
-        _inside = isInside;
-        _addressTitle = addr.title;
-        _addressDetail = addr.detail;
-        _loading = false;
-      });
-
-      if (!mounted) return;
-      if (showToast) {
-        labToast(
-          context,
-          isInside
-              ? 'Terverifikasi di Lab Komputer 1 (${dist.toStringAsFixed(0)} m)'
-              : 'Lokasi: $_addressTitle (${dist.toStringAsFixed(0)} m dari lab)',
-        );
-      }
+      await _applyPosition(pos, forceGeocode: true, showToast: showToast);
     } else {
       // Jika GPS perangkat tidak aktif / izin belum diberikan
       setState(() {
@@ -83,7 +138,8 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
         _addressDetail = 'Aktifkan GPS perangkat dan izinkan akses lokasi';
       });
       if (showToast) {
-        labToast(context, 'Gagal mengambil GPS. Pastikan lokasi perangkat aktif.');
+        labToast(
+            context, 'Gagal mengambil GPS. Pastikan lokasi perangkat aktif.');
       }
     }
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../laboran_store.dart';
@@ -37,12 +38,31 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
     'Rusak',
   ];
 
+  final LabDeskSyncService _sync = LabDeskSyncService.instance;
   final TextEditingController _search = TextEditingController();
   int _tab = 0;
   String _query = '';
 
   /// 0 Semua, 1 Siap, 2 Rusak.
   int _status = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _sync.removeListener(_onSyncChanged);
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _openFilter() async {
     final i = await prakShowPicker(
@@ -54,19 +74,23 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
     if (i != null && mounted) setState(() => _status = i);
   }
 
-  Future<void> _changeStatus(LabDesk d) async {
+  Future<void> _changeStatus(LabDeskRecord d) async {
     final i = await prakShowPicker(
       context,
-      title: 'Status ${d.name}',
+      title: 'Status ${d.displayName}',
       options: const ['Siap digunakan', 'Rusak / perlu perbaikan'],
-      selected: d.ready ? 0 : 1,
+      selected: d.isReady ? 0 : 1,
     );
     if (i == null || !mounted) return;
     final ready = i == 0;
-    if (ready == d.ready) return;
-    setState(() => d.ready = ready);
-    labToast(context,
-        '${d.name} ditandai ${ready ? 'siap' : 'rusak'}');
+    if (ready == d.isReady) return;
+    await _sync.setDeskReadiness(
+      labName: d.labName,
+      deskNumber: d.deskNumber,
+      ready: ready,
+    );
+    if (!mounted) return;
+    labToast(context, '${d.displayName} ditandai ${ready ? 'siap' : 'rusak'}');
   }
 
   Future<void> _tambah() async {
@@ -82,20 +106,19 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
   }
 
   @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final lab = _labs[_tab];
     final q = _query.trim().toLowerCase();
-    final desks = widget.store.desks[_tab]
+    final allLabDesks = _sync.inventoryDesks(lab.name);
+    final totalDesks = allLabDesks.length;
+    final brokenCount = allLabDesks.where((d) => !d.isReady).length;
+    final readyCount = totalDesks - brokenCount;
+
+    final desks = allLabDesks
         .where((d) =>
-            (_status == 0 || d.ready == (_status == 1)) &&
+            (_status == 0 || d.isReady == (_status == 1)) &&
             (q.isEmpty ||
-                d.name.toLowerCase().contains(q) ||
+                d.displayName.toLowerCase().contains(q) ||
                 d.spec.toLowerCase().contains(q)))
         .toList();
 
@@ -177,12 +200,17 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
         LabCard(
           children: [
             LabOverline(overline: lab.place, title: lab.name),
-            const LabStatRow(
+            LabStatRow(
               stats: [
-                LabStat(icon: 'grid', label: 'Meja', value: '30'),
-                LabStat(icon: 'desktop_device', label: 'PC Siap', value: '28'),
+                LabStat(icon: 'grid', label: 'Meja', value: '$totalDesks'),
                 LabStat(
-                    icon: 'triangle_alert', label: 'Perlu Cek', value: '2'),
+                    icon: 'desktop_device',
+                    label: 'PC Siap',
+                    value: '$readyCount'),
+                LabStat(
+                    icon: 'triangle_alert',
+                    label: 'Perlu Cek',
+                    value: '$brokenCount'),
               ],
             ),
             const LabProgress(
@@ -238,10 +266,10 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                   for (final d in desks)
                     LabListItem(
                       leading: const LabIconTile('chip'),
-                      title: d.name,
+                      title: d.displayName,
                       subtitle: d.spec,
                       titleSize: 12,
-                      trailing: d.ready
+                      trailing: d.isReady
                           ? const LabChip.live('Siap')
                           : const LabChip.danger('Rusak'),
                       onTap: () => _changeStatus(d),

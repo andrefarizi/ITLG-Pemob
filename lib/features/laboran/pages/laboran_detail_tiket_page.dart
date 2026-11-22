@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
@@ -18,11 +19,20 @@ class LaboranDetailTiketPage extends StatefulWidget {
 class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
   static const List<String> _statuses = ['Reported', 'In Progress', 'Resolved'];
 
-  /// 0 Reported, 1 In Progress, 2 Resolved (desain: In Progress).
-  int _status = 1;
-  final TextEditingController _note = TextEditingController(
-    text: 'Power supply diganti, menunggu pengujian ulang.',
-  );
+  /// 0 Reported, 1 In Progress, 2 Resolved.
+  late int _status;
+  late final TextEditingController _note;
+
+  @override
+  void initState() {
+    super.initState();
+    _status = widget.ticket.status;
+    _note = TextEditingController(
+      text: widget.ticket.handlingNote.isNotEmpty
+          ? widget.ticket.handlingNote
+          : 'Power supply diganti, menunggu pengujian ulang.',
+    );
+  }
 
   @override
   void dispose() {
@@ -41,8 +51,14 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     FocusScope.of(context).unfocus();
+    await LabDeskSyncService.instance.updateTicketStatus(
+      ticketCode: widget.ticket.id,
+      status: _status,
+      handlingNote: _note.text.trim(),
+    );
+    if (!mounted) return;
     labToast(context, 'Status tiket ${widget.ticket.id} disimpan');
     Navigator.of(context).maybePop();
   }

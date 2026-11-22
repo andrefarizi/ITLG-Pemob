@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
-import '../../shared/lab_actions.dart';
 
 /// Figma: "Laporkan Kerusakan Meja-Praktikan".
 ///
@@ -31,35 +33,69 @@ class _PraktikanLaporkanKerusakanPageState
     ('code_tags', 'Software'),
   ];
 
+  final LabDeskSyncService _sync = LabDeskSyncService.instance;
   final TextEditingController _deskripsi = TextEditingController();
   int _kat = 0;
   bool _foto = false;
+  bool _submitting = false;
 
   PraktikanStore get _s => widget.nav.store;
 
-  int get _meja => _s.bookedDesk ?? _s.selectedDesk;
+  int get _meja =>
+      _sync.bookedDeskForUser(AuthController.instance.userIdentifier) ??
+      _s.bookedDesk ??
+      _s.selectedDesk;
 
-  String get _mejaLabel =>
-      'Meja $_meja • PC-${_meja.toString().padLeft(2, '0')}';
+  String get _pcCode => 'PC-${_meja.toString().padLeft(2, '0')}';
+
+  String get _mejaLabel => 'Meja $_meja • $_pcCode';
+
+  @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
 
   @override
   void dispose() {
+    _sync.removeListener(_onSyncChanged);
     _deskripsi.dispose();
     super.dispose();
   }
 
-  void _kirim() {
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _kirim() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+
     final k = _kategori[_kat];
     final desc = _deskripsi.text.trim();
-    _s.reports.insert(
-      0,
-      PrakReport(
-        k.$1,
-        desc.isEmpty ? '${k.$2} bermasalah • $_mejaLabel' : desc,
-        '$_lab • 05 Okt',
-        0,
-      ),
+    final auth = AuthController.instance;
+    final title = desc.isEmpty ? '${k.$2} bermasalah • $_mejaLabel' : desc;
+    final detail = desc.isEmpty
+        ? '${k.$2} mengalami kendala pada $_mejaLabel di $_lab.'
+        : desc;
+
+    await _sync.createTicket(
+      labName: _lab,
+      deskNumber: _meja,
+      pcCode: _pcCode,
+      icon: k.$1,
+      category: '${k.$2} • Meja $_meja',
+      title: title,
+      description: detail,
+      reporterId: auth.userIdentifier,
+      reporterName: auth.userName,
+      reporterRole: 'praktikan',
+      photoName: _foto ? 'foto_kendala.jpg' : 'tanpa_foto.jpg',
     );
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
     Navigator.of(context).maybePop();
     labToast(context, 'Laporan diteruskan ke Laboran');
   }
@@ -77,6 +113,9 @@ class _PraktikanLaporkanKerusakanPageState
 
   @override
   Widget build(BuildContext context) {
+    final reports = _sync.reportsForPraktikan(
+      reporterId: AuthController.instance.userIdentifier,
+    );
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -175,7 +214,7 @@ class _PraktikanLaporkanKerusakanPageState
                   context,
                   LabRiwayatLaporanPage(
                     reports: [
-                      for (final r in _s.reports)
+                      for (final r in reports)
                         (r.icon, r.title, r.meta, r.status),
                     ],
                     onLogoTap: widget.nav.home,
@@ -186,7 +225,7 @@ class _PraktikanLaporkanKerusakanPageState
             LabColumn(
               gap: 8,
               children: [
-                for (final r in _s.reports.take(3))
+                for (final r in reports.take(3))
                   LabListItem(
                     leading: LabIconTile(r.icon),
                     title: r.title,

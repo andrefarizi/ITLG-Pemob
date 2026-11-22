@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
-import '../aslab_nav.dart';
-import '../aslab_store.dart';
 import '../../shared/lab_actions.dart';
+import '../aslab_nav.dart';
 
 /// Figma: "Lapor Kendala-Aslab".
 class AslabLaporKendalaPage extends StatefulWidget {
@@ -32,19 +33,31 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
     ('code_tags', 'Software'),
   ];
 
+  final LabDeskSyncService _sync = LabDeskSyncService.instance;
   final TextEditingController _pc = TextEditingController();
   final TextEditingController _deskripsi = TextEditingController();
   int _lab = 0;
   int _kat = 0;
   bool _foto = false;
+  bool _submitting = false;
 
-  AslabStore get _s => widget.nav.store;
+  @override
+  void initState() {
+    super.initState();
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
+  }
 
   @override
   void dispose() {
+    _sync.removeListener(_onSyncChanged);
     _pc.dispose();
     _deskripsi.dispose();
     super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickLab() async {
@@ -53,21 +66,46 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
     if (i != null && mounted) setState(() => _lab = i);
   }
 
-  void _kirim() {
+  int? _extractDeskNumber(String raw) {
+    final m = RegExp(r'(\d+)').firstMatch(raw);
+    if (m == null) return null;
+    final v = int.tryParse(m.group(1)!);
+    if (v == null || v < 1 || v > 30) return null;
+    return v;
+  }
+
+  Future<void> _kirim() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+
     final k = _kategori[_kat];
     final desc = _deskripsi.text.trim();
     final pc = _pc.text.trim();
-    _s.reports.insert(
-      0,
-      AslabReport(
-        k.$1,
-        desc.isEmpty
-            ? '${k.$2} bermasalah${pc.isEmpty ? '' : ' • $pc'}'
-            : desc,
-        '${_labs[_lab]} • 05 Okt',
-        0,
-      ),
+    final deskNum = _extractDeskNumber(pc);
+    final auth = AuthController.instance;
+    final labName = _labs[_lab];
+    final title = desc.isEmpty
+        ? '${k.$2} bermasalah${pc.isEmpty ? '' : ' • $pc'}'
+        : desc;
+
+    await _sync.createTicket(
+      labName: labName,
+      deskNumber: deskNum,
+      pcCode: deskNum != null
+          ? 'PC-${deskNum.toString().padLeft(2, '0')}'
+          : (pc.isNotEmpty ? pc.toUpperCase() : null),
+      icon: k.$1,
+      category: deskNum != null ? '${k.$2} • Meja $deskNum' : k.$2,
+      title: title,
+      description: desc.isEmpty ? title : desc,
+      reporterId: auth.userIdentifier,
+      reporterName: auth.userName,
+      reporterRole: 'aslab',
+      photoName: _foto ? 'foto_kendala.jpg' : 'tanpa_foto.jpg',
     );
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
     Navigator.of(context).maybePop();
     labToast(context, 'Laporan diteruskan ke Laboran');
   }
@@ -85,6 +123,7 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
 
   @override
   Widget build(BuildContext context) {
+    final reports = _sync.reportsForAslab();
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
@@ -158,7 +197,7 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
                   context,
                   LabRiwayatLaporanPage(
                     reports: [
-                      for (final r in _s.reports)
+                      for (final r in reports)
                         (r.icon, r.title, r.meta, r.status),
                     ],
                     onLogoTap: widget.nav.home,
@@ -169,7 +208,7 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
             LabColumn(
               gap: 8,
               children: [
-                for (final r in _s.reports.take(3))
+                for (final r in reports.take(3))
                   LabListItem(
                     leading: LabIconTile(r.icon),
                     title: r.title,

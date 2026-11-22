@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/profil_data.dart';
 import '../laboran_shell.dart';
@@ -78,12 +79,19 @@ class LaboranBerandaPage extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: _MenuCard(
-                    icon: 'wrench_outline',
-                    badge: '3',
-                    title: 'Tiket Perbaikan',
-                    subtitle: '3 laporan baru',
-                    onTap: () => onOpenTab(LaboranShell.tabTiket),
+                  child: ListenableBuilder(
+                    listenable: LabDeskSyncService.instance,
+                    builder: (_, __) {
+                      final count =
+                          LabDeskSyncService.instance.ticketCountByStatus(0);
+                      return _MenuCard(
+                        icon: 'wrench_outline',
+                        badge: count > 0 ? '$count' : null,
+                        title: 'Tiket Perbaikan',
+                        subtitle: '$count laporan baru',
+                        onTap: () => onOpenTab(LaboranShell.tabTiket),
+                      );
+                    },
                   ),
                 ),
               ],

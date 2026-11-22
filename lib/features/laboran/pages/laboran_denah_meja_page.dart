@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../praktikan/praktikan_store.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 import 'laboran_detail_tiket_page.dart';
@@ -32,51 +34,88 @@ class LaboranDenahMejaPage extends StatefulWidget {
 }
 
 class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
+  final LabDeskSyncService _sync = LabDeskSyncService.instance;
   int _selectedDesk = 12;
-
-  // Status awal 30 meja sesuai Figma
-  late final Map<int, LabDeskStatus> _deskStatuses = {
-    for (int i = 1; i <= 30; i++) i: LabDeskStatus.terisi,
-  };
-
-  // Meja yang memiliki laporan kendala aktif
-  final Set<int> _reportedDesks = {12, 14};
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi status meja sesuai data Figma
-    // Tersedia (putih): 3, 8, 17, 25, 27, 30
-    const tersedia = [3, 8, 17, 25, 27, 30];
-    for (final d in tersedia) {
-      _deskStatuses[d] = LabDeskStatus.tersedia;
-    }
-    // Rusak (merah muda #eddada): 23
-    _deskStatuses[23] = LabDeskStatus.rusak;
-    // Dipilih: 12
-    _deskStatuses[12] = LabDeskStatus.dipilih;
+    _sync.addListener(_onSyncChanged);
+    _sync.refreshFromBackend();
   }
 
-  void _selectDesk(int number) {
-    setState(() {
-      if (_selectedDesk > 0) {
-        if (_deskStatuses[_selectedDesk] == LabDeskStatus.dipilih) {
-          if (_selectedDesk == 23) {
-            _deskStatuses[_selectedDesk] = LabDeskStatus.rusak;
-          } else if ([3, 8, 17, 25, 27, 30].contains(_selectedDesk)) {
-            _deskStatuses[_selectedDesk] = LabDeskStatus.tersedia;
-          } else {
-            _deskStatuses[_selectedDesk] = LabDeskStatus.terisi;
-          }
-        }
+  @override
+  void dispose() {
+    _sync.removeListener(_onSyncChanged);
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (mounted) setState(() {});
+  }
+
+  LabDeskStatus _statusFor(int number, Map<int, PrakDesk> liveMap) {
+    if (number == _selectedDesk) return LabDeskStatus.dipilih;
+    switch (liveMap[number]) {
+      case PrakDesk.available:
+        return LabDeskStatus.tersedia;
+      case PrakDesk.broken:
+        return LabDeskStatus.rusak;
+      default:
+        return LabDeskStatus.terisi;
+    }
+  }
+
+  String _subtitleForDesk(LabDeskRecord? rec, LabTicketRecord? ticket) {
+    if (ticket != null) {
+      final booker = rec?.bookedByName;
+      if (booker != null && booker.isNotEmpty) {
+        return 'Dibooking $booker • dilaporkan ${ticket.formattedClock}';
       }
-      _selectedDesk = number;
-      _deskStatuses[number] = LabDeskStatus.dipilih;
-    });
+      return 'Dilaporkan ${ticket.reporterName} • ${ticket.formattedClock}';
+    }
+    if (rec == null) return 'Kondisi perangkat normal';
+    if (rec.status == PrakDesk.broken) {
+      return 'Perangkat rusak • perlu perbaikan';
+    }
+    if (rec.status == PrakDesk.available) {
+      return 'Meja tersedia • kondisi perangkat normal';
+    }
+    if (rec.bookedByName != null && rec.bookedByName!.isNotEmpty) {
+      return 'Dibooking ${rec.bookedByName}';
+    }
+    return 'Kondisi perangkat normal';
+  }
+
+  String _badgeForDesk(LabDeskRecord? rec, LabTicketRecord? ticket) {
+    if (ticket != null) {
+      if (ticket.deskNumber == 12 &&
+          ticket.title.toLowerCase().contains('menyala')) {
+        return 'PC mati';
+      }
+      return ticket.status == 1 ? 'Proses' : 'Kendala';
+    }
+    if (rec?.status == PrakDesk.broken) return 'Rusak';
+    return 'Kendala';
   }
 
   @override
   Widget build(BuildContext context) {
+    final liveMap = _sync.deskStatusMap();
+    final taken = _sync.takenCount();
+    final reportedDesks = _sync.activeReportedDesks();
+    final selectedRec = _sync.deskRecord(_selectedDesk);
+    final selectedTicket = _sync.activeTicketForDesk(_selectedDesk);
+    final hasReport = selectedTicket != null ||
+        selectedRec?.status == PrakDesk.broken;
+    final pcLabel = _selectedDesk.toString().padLeft(2, '0');
+
+    // Tiket untuk tombol utama: tiket meja terpilih, atau tiket terbaru
+    final primaryTicketRecord = selectedTicket ??
+        (_sync.allTickets.isNotEmpty ? _sync.allTickets.first : null);
+    final primaryTicket =
+        primaryTicketRecord?.toLabTicket() ?? widget.store.tickets.first;
+
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
       children: [
@@ -93,7 +132,8 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                 const SizedBox(height: 6),
                 Text(
                   'Denah Meja\nLab',
-                  style: labText(22, w: kBold, c: Colors.black).copyWith(height: 1.2),
+                  style: labText(22, w: kBold, c: Colors.black)
+                      .copyWith(height: 1.2),
                 ),
               ],
             ),
@@ -106,7 +146,8 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                     const SizedBox(width: 6),
                     Text(
                       'Senin • 08:00–09:40 WIB',
-                      style: labText(11, w: kMedium, c: const Color(0xFF6B7280)),
+                      style:
+                          labText(11, w: kMedium, c: const Color(0xFF6B7280)),
                     ),
                   ],
                 ),
@@ -114,11 +155,13 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const LabIcon('people_group', size: 12, color: Color(0xFF6B7280)),
+                    const LabIcon('people_group',
+                        size: 12, color: Color(0xFF6B7280)),
                     const SizedBox(width: 6),
                     Text(
-                      '23 / 30 terisi',
-                      style: labText(11, w: kMedium, c: const Color(0xFF6B7280)),
+                      '$taken / 30 terisi',
+                      style:
+                          labText(11, w: kMedium, c: const Color(0xFF6B7280)),
                     ),
                   ],
                 ),
@@ -143,21 +186,25 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                         color: ItlgColors.primary,
                         borderRadius: BorderRadius.circular(7),
                       ),
-                      child: const LabIcon('desktop_device', size: 15, color: Colors.white),
+                      child: const LabIcon('desktop_device',
+                          size: 15, color: Colors.white),
                     ),
                     const SizedBox(width: 9),
-                    Text('Denah Meja', style: labText(14, w: kSemiBold, c: Colors.black)),
+                    Text('Denah Meja',
+                        style: labText(14, w: kSemiBold, c: Colors.black)),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFFDEE9F4),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     '30 PC',
-                    style: labText(10, w: kSemiBold, c: const Color(0xFF2369B7)),
+                    style:
+                        labText(10, w: kSemiBold, c: const Color(0xFF2369B7)),
                   ),
                 ),
               ],
@@ -180,7 +227,8 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                     ),
                     child: Text(
                       'Meja Asisten & Layar Proyektor',
-                      style: labText(11, w: kMedium, c: const Color(0xFF6B7280)),
+                      style:
+                          labText(11, w: kMedium, c: const Color(0xFF6B7280)),
                     ),
                   ),
                   for (var row = 0; row < 5; row++) ...[
@@ -197,9 +245,11 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                               const SizedBox(width: 8),
                             _LabDeskTile(
                               number: row * 6 + col + 1,
-                              status: _deskStatuses[row * 6 + col + 1] ?? LabDeskStatus.terisi,
-                              hasReport: _reportedDesks.contains(row * 6 + col + 1),
-                              onTap: () => _selectDesk(row * 6 + col + 1),
+                              status: _statusFor(row * 6 + col + 1, liveMap),
+                              hasReport:
+                                  reportedDesks.contains(row * 6 + col + 1),
+                              onTap: () =>
+                                  setState(() => _selectedDesk = row * 6 + col + 1),
                             ),
                           ],
                         ],
@@ -234,7 +284,8 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                   color: const Color(0xFFEEF0F3),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const LabIcon('desktop_device', size: 20, color: Color(0xFF0A0B0C)),
+                child: const LabIcon('desktop_device',
+                    size: 20, color: Color(0xFF0A0B0C)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -242,31 +293,29 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Meja $_selectedDesk • PC-$_selectedDesk',
+                      'Meja $_selectedDesk • PC-$pcLabel',
                       style: labText(12, w: kBold, c: const Color(0xFF0A0B0C)),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _selectedDesk == 12
-                          ? 'Dibooking Rina Novita • dilaporkan 08:15'
-                          : (_reportedDesks.contains(_selectedDesk)
-                              ? 'Ada kendala dilaporkan asisten'
-                              : 'Kondisi perangkat normal'),
-                      style: labText(11, w: kMedium, c: const Color(0xFF6B7280)),
+                      _subtitleForDesk(selectedRec, selectedTicket),
+                      style:
+                          labText(11, w: kMedium, c: const Color(0xFF6B7280)),
                     ),
                   ],
                 ),
               ),
-              if (_reportedDesks.contains(_selectedDesk))
+              if (hasReport)
                 Container(
                   height: 22,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3E6E6),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Text(
-                    _selectedDesk == 12 ? 'PC mati' : 'Kendala',
+                    _badgeForDesk(selectedRec, selectedTicket),
                     style: labText(12, w: kBold, c: ItlgColors.primary),
                   ),
                 ),
@@ -280,17 +329,13 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
           children: [
             LabPrimaryButton(
               icon: 'circle_check',
-              label: 'Lihat Tiket #TK-0921',
+              label: 'Lihat Tiket ${primaryTicket.id}',
               large: true,
               onTap: () {
-                final ticket = widget.store.tickets.firstWhere(
-                  (t) => t.id == '#TK-0921',
-                  orElse: () => widget.store.tickets.first,
-                );
                 labPush(
                   context,
                   LaboranDetailTiketPage(
-                    ticket: ticket,
+                    ticket: primaryTicket,
                     onLogoTap: widget.onLogoTap,
                   ),
                 );
@@ -432,7 +477,9 @@ class _LabDeskTile extends StatelessWidget {
                 width: 9,
                 height: 9,
                 decoration: BoxDecoration(
-                  color: status == LabDeskStatus.dipilih ? Colors.white : const Color(0xFF850909),
+                  color: status == LabDeskStatus.dipilih
+                      ? Colors.white
+                      : const Color(0xFF850909),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -499,7 +546,8 @@ class _LabDeskLegend extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text('Rusak', style: labText(11, w: kMedium, c: const Color(0xFF6B7280))),
+              Text('Rusak',
+                  style: labText(11, w: kMedium, c: const Color(0xFF6B7280))),
               const SizedBox(width: 8),
               Container(
                 width: 9,
@@ -510,7 +558,8 @@ class _LabDeskLegend extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Text('Ada Laporan', style: labText(11, w: kMedium, c: const Color(0xFF6B7280))),
+              Text('Ada Laporan',
+                  style: labText(11, w: kMedium, c: const Color(0xFF6B7280))),
             ],
           ),
           null,
