@@ -24,25 +24,31 @@ class PraktikanDetailMateriPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = course ?? PraktikumSyncService.instance.courses.first;
-    final m = meeting ??
-        c.meetings.firstWhere(
-          (e) => e.number == 4,
-          orElse: () => c.meetings.first,
+    final sync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final c = course != null
+            ? sync.courseById(course!.id)
+            : sync.courses.first;
+        final targetNum = meeting?.number ?? 4;
+        final m = c.meetings.firstWhere(
+          (e) => e.number == targetNum,
+          orElse: () => meeting ?? c.meetings.first,
         );
-    final modTitle = m.module.replaceFirst(' • ', ' :\n');
-    final dateText = m.date.split(' • ').first;
-    final desc = m.description.isNotEmpty ? m.description : c.modulDesc;
-    final pdfName = m.materiFile.isNotEmpty
-        ? m.materiFile
-        : (c.materiFile.isNotEmpty
-            ? c.materiFile
-            : '${c.materiTitle}.pdf');
-    final tugasTitle = m.tugasTitle.isNotEmpty ? m.tugasTitle : c.tugasTitle;
-    final deadline =
-        m.tugasDeadline.isNotEmpty ? m.tugasDeadline : c.tugasDeadline;
+        final modTitle = m.module.replaceFirst(' • ', ' :\n');
+        final dateText = m.date.split(' • ').first;
+        final desc = m.description.isNotEmpty ? m.description : c.modulDesc;
+        final pdfName = m.materiFile.isNotEmpty
+            ? m.materiFile
+            : (c.materiFile.isNotEmpty
+                ? c.materiFile
+                : '${c.materiTitle}.pdf');
+        final tugasTitle = m.tugasTitle.isNotEmpty ? m.tugasTitle : c.tugasTitle;
+        final deadline =
+            m.tugasDeadline.isNotEmpty ? m.tugasDeadline : c.tugasDeadline;
 
-    return LabSubPage(
+        return LabSubPage(
       onLogoTap: nav.home,
       children: [
         LabCard(
@@ -230,6 +236,8 @@ class PraktikanDetailMateriPage extends StatelessWidget {
           ],
         ),
       ],
+    );
+      },
     );
   }
 }

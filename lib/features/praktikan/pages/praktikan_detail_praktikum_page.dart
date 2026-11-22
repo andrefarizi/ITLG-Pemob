@@ -58,9 +58,15 @@ class _PraktikanDetailPraktikumPageState
       ? _sync.courseById(widget.course.id)
       : widget.course;
 
-  /// Pertemuan yang sudah berjalan (1–4), terbaru di atas.
-  List<PrakMeeting> get _meetings =>
-      _course.meetings.where((m) => m.number <= 4).toList();
+  /// Pertemuan yang sudah berjalan atau telah memiliki konten materi/tugas/kuis.
+  List<PrakMeeting> get _meetings => _course.meetings
+      .where((m) =>
+          m.number <= 4 ||
+          m.materiTitle.isNotEmpty ||
+          m.tugasTitle.isNotEmpty ||
+          m.kuisTitle.isNotEmpty ||
+          m.description.isNotEmpty)
+      .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +171,7 @@ class _PraktikanDetailPraktikumPageState
     final nav = widget.nav;
     final c = _course;
     final userId = AuthController.instance.userIdentifier;
-    final current = m.number == 4;
+    final current = m.number >= 4;
     final sub = _sync.submissionFor(c.id, m.number, userId);
     final taskDone = !current || (sub != null && sub.isSubmitted);
     final pending = _sync.pendingItemsCount(c.id, m.number, userId);

@@ -134,7 +134,11 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
             ),
             LabOverline(
               overline: 'Praktikum ${_course.name}',
-              title: 'Kuis Modul $_meetingNumber :\n${_course.modulTitle}',
+              title: (widget.meeting?.kuisTitle.isNotEmpty ?? false)
+                  ? widget.meeting!.kuisTitle
+                  : (widget.meeting != null
+                      ? 'Kuis ${widget.meeting!.module.replaceFirst(' • ', ' :\n')}'
+                      : 'Kuis Modul $_meetingNumber :\n${_course.modulTitle}'),
             ),
             LabProgress(
               label: 'Soal ${i + 1} dari $total',

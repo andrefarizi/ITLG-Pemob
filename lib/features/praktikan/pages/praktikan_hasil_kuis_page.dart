@@ -90,7 +90,12 @@ class _PraktikanHasilKuisPageState extends State<PraktikanHasilKuisPage> {
               Text('Pre-Test Selesai',
                   textAlign: TextAlign.center, style: labText(22, w: kBold)),
               const SizedBox(height: 4),
-              Text('Kuis Modul $mNum : ${c.modulTitle}',
+              Text(
+                  (widget.meeting?.kuisTitle.isNotEmpty ?? false)
+                      ? widget.meeting!.kuisTitle
+                      : (widget.meeting != null
+                          ? 'Kuis ${widget.meeting!.module.replaceFirst(' • ', ' : ')}'
+                          : 'Kuis Modul $mNum : ${c.modulTitle}'),
                   textAlign: TextAlign.center,
                   style: labText(14, c: ItlgColors.textMuted)),
               const SizedBox(height: 13),
