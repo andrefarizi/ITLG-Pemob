@@ -155,7 +155,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                 PrakCheckOption(
                   title: 'QR Code Dinamis',
                   subtitle:
-                      'Praktikan memindai QR yang berganti tiap 15 detik',
+                      'Praktikan memindai QR yang berganti tiap 5 menit',
                   checked: _qr,
                   onTap: () => setState(() => _qr = !_qr),
                 ),

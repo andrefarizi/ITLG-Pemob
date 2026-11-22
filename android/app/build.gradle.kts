@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
 plugins {
     id("com.android.application")
@@ -57,4 +58,85 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Sinkronisasi otomatis lokasi nyata laptop Windows ke Android Emulator
+// setiap kali `flutter run` (assembleDebug) dijalankan — tanpa script terpisah.
+val syncEmulatorGps by tasks.registering {
+    outputs.upToDateWhen { false }
+    doLast {
+        try {
+            val isWindows = System.getProperty("os.name").lowercase().contains("win")
+            if (!isWindows) return@doLast
+
+            val localProps = Properties()
+            val localPropsFile = rootProject.file("local.properties")
+            if (localPropsFile.exists()) {
+                localPropsFile.inputStream().use { localProps.load(it) }
+            }
+            val sdkDir = localProps.getProperty("sdk.dir")
+                ?: System.getenv("ANDROID_HOME")
+                ?: System.getenv("ANDROID_SDK_ROOT")
+                ?: "C:\\src\\Android\\Sdk"
+            var adbFile = File(sdkDir, "platform-tools\\adb.exe")
+            if (!adbFile.exists()) {
+                adbFile = File("C:\\src\\Android\\Sdk\\platform-tools\\adb.exe")
+            }
+            if (!adbFile.exists()) return@doLast
+
+            val devProc = ProcessBuilder(adbFile.absolutePath, "devices")
+                .redirectErrorStream(true)
+                .start()
+            val devOutput = devProc.inputStream.bufferedReader().readText()
+            devProc.waitFor(3, TimeUnit.SECONDS)
+
+            val emulators = Regex("(emulator-\\d+)\\s+device")
+                .findAll(devOutput)
+                .map { it.groupValues[1] }
+                .distinct()
+                .toList()
+            if (emulators.isEmpty()) return@doLast
+
+            val psCmd =
+                "Add-Type -AssemblyName System.Device; " +
+                "\$w = New-Object System.Device.Location.GeoCoordinateWatcher([System.Device.Location.GeoPositionAccuracy]::High); " +
+                "\$w.Start(); " +
+                "for (\$i=0; \$i -lt 30; \$i++) { " +
+                "  \$l = \$w.Position.Location; " +
+                "  if (\$l -ne \$null -and -not \$l.IsUnknown) { " +
+                "    Write-Output ([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0},{1}', \$l.Latitude, \$l.Longitude)); break " +
+                "  } " +
+                "  Start-Sleep -Milliseconds 150 " +
+                "}; " +
+                "\$w.Stop()"
+
+            val psProc = ProcessBuilder("powershell", "-NoProfile", "-Command", psCmd)
+                .redirectErrorStream(true)
+                .start()
+            val locText = psProc.inputStream.bufferedReader().readText().trim()
+            psProc.waitFor(6, TimeUnit.SECONDS)
+
+            val parts = locText.lines().lastOrNull()?.split(",") ?: emptyList()
+            if (parts.size == 2) {
+                val lat = parts[0].trim().toDoubleOrNull()
+                val lng = parts[1].trim().toDoubleOrNull()
+                if (lat != null && lng != null) {
+                    for (emu in emulators) {
+                        val fixProc = ProcessBuilder(
+                            adbFile.absolutePath, "-s", emu, "emu", "geo", "fix",
+                            lng.toString(), lat.toString()
+                        ).redirectErrorStream(true).start()
+                        fixProc.waitFor(3, TimeUnit.SECONDS)
+                        logger.lifecycle("[ITLG GPS] Auto-synced $emu -> lat=$lat, lng=$lng")
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+            // Jangan gagalkan build jika Windows Location Service nonaktif
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleDebug" }.configureEach {
+    dependsOn(syncEmulatorGps)
 }

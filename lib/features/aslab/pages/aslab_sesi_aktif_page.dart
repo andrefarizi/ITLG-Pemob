@@ -13,7 +13,7 @@ import '../widgets/aslab_ui.dart';
 
 /// Figma: "Sesi Aktif & QR Presensi-Aslab".
 ///
-/// QR berganti otomatis tiap 15 detik dengan token stabil yang tersinkron ke
+/// QR berganti otomatis tiap 5 menit dengan token stabil yang tersinkron ke
 /// backend agar dapat langsung dipindai oleh Praktikan.
 class AslabSesiAktifPage extends StatefulWidget {
   final AslabNav nav;
@@ -24,16 +24,24 @@ class AslabSesiAktifPage extends StatefulWidget {
 }
 
 class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
+  static const int _qrIntervalSeconds = 5 * 60; // 5 menit
+
   Timer? _timer;
 
-  /// Token QR stabil selama siklus 15 detik (tidak berubah tiap detik).
+  /// Token QR stabil selama siklus 5 menit.
   late String _qrData;
 
-  /// Siklus rotasi QR 15 detik.
-  int _left = 15;
+  /// Sisa waktu rotasi QR (detik).
+  int _left = _qrIntervalSeconds;
   int _generation = 1;
 
   final PresensiSyncService _sync = PresensiSyncService.instance;
+
+  String get _formattedLeft {
+    final m = (_left ~/ 60).toString().padLeft(2, '0');
+    final s = (_left % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
 
   @override
   void initState() {
@@ -55,7 +63,7 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
         setState(() => _left--);
       } else {
         setState(() {
-          _left = 15;
+          _left = _qrIntervalSeconds;
           _generation++;
         });
         _rotateQr();
@@ -167,15 +175,15 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
                   Text('Diperbarui otomatis dalam',
                       style: labText(12, c: ItlgColors.textSubtle)),
                   const SizedBox(height: 2),
-                  Text('$_left detik',
+                  Text(_formattedLeft,
                       style: labText(22, w: kBold, c: ItlgColors.primary)),
                 ],
               ),
             ),
             LabProgress(
-              label: 'Auto-refresh setiap 15 detik',
-              value: '$_left dtk',
-              fraction: _left / 15,
+              label: 'Auto-refresh setiap 5 menit',
+              value: _formattedLeft,
+              fraction: _left / _qrIntervalSeconds,
               color: ItlgColors.primary,
             ),
             Row(

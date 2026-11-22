@@ -601,7 +601,7 @@ class PresensiSyncService extends ChangeNotifier {
     return 'ITLG-${courseId.toUpperCase()}-P$meetingNumber-GEN$generation-$ts';
   }
 
-  /// Putar token QR dinamis sesi aktif (dipanggil setiap 15 detik dari Aslab)
+  /// Putar token QR dinamis sesi aktif (dipanggil setiap 5 menit dari Aslab)
   /// dan sinkronkan ke Supabase agar praktikan lintas perangkat memvalidasi
   /// token yang sedang berlaku.
   Future<String> rotateActiveQrToken(int generation) async {
@@ -612,7 +612,7 @@ class PresensiSyncService extends ChangeNotifier {
       generation: generation,
       now: now,
     );
-    final expiresAt = now.add(const Duration(seconds: 25));
+    final expiresAt = now.add(const Duration(minutes: 5, seconds: 30));
     _activeSession.qrToken = token;
     _activeSession.qrExpiresAt = expiresAt;
     notifyListeners();
@@ -693,7 +693,7 @@ class PresensiSyncService extends ChangeNotifier {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    if ((now - ts).abs() > 60) {
+    if ((now - ts).abs() > 330) {
       return (
         error: 'QR sudah kedaluwarsa, arahkan ke QR terbaru',
         courseId: parsedCourse,
@@ -728,7 +728,7 @@ class PresensiSyncService extends ChangeNotifier {
       generation: 1,
       now: now,
     );
-    final expiresAt = now.add(const Duration(seconds: 25));
+    final expiresAt = now.add(const Duration(minutes: 5, seconds: 30));
     _activeSession = AttendanceSessionRecord(
       id: '$courseId-p$meetingNumber',
       courseId: courseId,

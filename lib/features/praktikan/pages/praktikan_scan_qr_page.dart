@@ -204,7 +204,7 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
                             Text('Validasi Sesi Aktif',
                                 style: labText(12, w: kBold)),
                             Text(
-                              'QR diperbarui tiap 15 detik dan hanya berlaku pada '
+                              'QR diperbarui tiap 5 menit dan hanya berlaku pada '
                               'sesi yang sedang berjalan.',
                               style: labText(12, c: ItlgColors.textMuted),
                             ),

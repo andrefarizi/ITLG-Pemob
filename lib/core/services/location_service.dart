@@ -25,6 +25,102 @@ class LocationService {
       MethodChannel('com.example.itlg_mobile/config');
 
   String? _resolvedMapsApiKey;
+  bool? _cachedIsEmulator;
+
+  Future<bool> _isAndroidEmulator() async {
+    if (_cachedIsEmulator != null) return _cachedIsEmulator!;
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final v = await _configChannel.invokeMethod<bool>('isEmulator');
+        _cachedIsEmulator = v ?? false;
+        return _cachedIsEmulator!;
+      } catch (_) {}
+    }
+    _cachedIsEmulator = false;
+    return false;
+  }
+
+  /// Deteksi koordinat default bawaan Android Emulator (Googleplex, California)
+  /// jika emulator baru saja dijalankan setelah restart laptop.
+  bool _isDefaultGoogleplex(Position pos) {
+    return distanceInMeters(pos.latitude, pos.longitude, 37.421998, -122.084) <
+        5000.0;
+  }
+
+  /// Fallback otomatis berbasis Google Geolocation API / IP khusus untuk
+  /// emulator bila GPS emulator belum terinisialisasi dari host Windows.
+  Future<Position?> _fetchNetworkFallbackPosition() async {
+    final apiKey = await _getMapsApiKey();
+    if (apiKey.isNotEmpty) {
+      try {
+        final url = Uri.parse(
+          'https://www.googleapis.com/geolocation/v1/geolocate?key=$apiKey',
+        );
+        final client = HttpClient();
+        final req = await client.postUrl(url);
+        req.headers.contentType = ContentType.json;
+        req.write(jsonEncode({'considerIp': true}));
+        final res = await req.close().timeout(const Duration(seconds: 5));
+        if (res.statusCode == 200) {
+          final body = await res.transform(utf8.decoder).join();
+          final data = jsonDecode(body) as Map<String, dynamic>;
+          final loc = data['location'] as Map<String, dynamic>?;
+          final lat = (loc?['lat'] as num?)?.toDouble();
+          final lng = (loc?['lng'] as num?)?.toDouble();
+          final acc = (data['accuracy'] as num?)?.toDouble() ?? 50.0;
+          if (lat != null && lng != null) {
+            debugPrint(
+                '[LocationService] Emulator fallback Google Geolocation: $lat, $lng (±${acc}m)');
+            return Position(
+              longitude: lng,
+              latitude: lat,
+              timestamp: DateTime.now(),
+              accuracy: acc,
+              altitude: 0,
+              altitudeAccuracy: 0,
+              heading: 0,
+              headingAccuracy: 0,
+              speed: 0,
+              speedAccuracy: 0,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[LocationService] Google Geolocation fallback error: $e');
+      }
+    }
+
+    try {
+      final url = Uri.parse('https://ipwho.is/');
+      final client = HttpClient();
+      final req = await client.getUrl(url);
+      final res = await req.close().timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final body = await res.transform(utf8.decoder).join();
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        final lat = (data['latitude'] as num?)?.toDouble();
+        final lng = (data['longitude'] as num?)?.toDouble();
+        if (lat != null && lng != null) {
+          debugPrint('[LocationService] Emulator fallback ipwho.is: $lat, $lng');
+          return Position(
+            longitude: lng,
+            latitude: lat,
+            timestamp: DateTime.now(),
+            accuracy: 100.0,
+            altitude: 0,
+            altitudeAccuracy: 0,
+            heading: 0,
+            headingAccuracy: 0,
+            speed: 0,
+            speedAccuracy: 0,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[LocationService] ipwho.is fallback error: $e');
+    }
+    return null;
+  }
 
   Future<String> _getMapsApiKey() async {
     if (_resolvedMapsApiKey != null) return _resolvedMapsApiKey!;
@@ -118,6 +214,10 @@ class LocationService {
       );
       debugPrint(
           '[LocationService] GPS aktual: ${pos.latitude}, ${pos.longitude} (Akurasi: ±${pos.accuracy}m)');
+      if (await _isAndroidEmulator() && _isDefaultGoogleplex(pos)) {
+        final netPos = await _fetchNetworkFallbackPosition();
+        if (netPos != null) return netPos;
+      }
       return pos;
     } catch (e) {
       debugPrint(
@@ -125,11 +225,22 @@ class LocationService {
       try {
         final last = await Geolocator.getLastKnownPosition();
         if (last != null) {
+          if (await _isAndroidEmulator() && _isDefaultGoogleplex(last)) {
+            final netPos = await _fetchNetworkFallbackPosition();
+            if (netPos != null) return netPos;
+          }
           debugPrint(
               '[LocationService] Menggunakan lastKnownPosition: ${last.latitude}, ${last.longitude}');
+          return last;
         }
-        return last;
+        if (await _isAndroidEmulator()) {
+          return await _fetchNetworkFallbackPosition();
+        }
+        return null;
       } catch (_) {
+        if (await _isAndroidEmulator()) {
+          return await _fetchNetworkFallbackPosition();
+        }
         return null;
       }
     }
