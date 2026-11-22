@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../../shared/profil_data.dart';
@@ -140,14 +141,25 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                 icon: 'school_outline',
                 label: 'Program Studi',
                 value: 'Teknologi Informasi'),
-            _DataRow(
-                icon: 'book_open',
-                label: 'Grup Diampu',
-                value: '4 Grup Praktikum'),
-            _DataRow(
-                icon: 'calendar',
-                label: 'Mata Kuliah',
-                value: 'Mobile & Basis Data'),
+            ListenableBuilder(
+              listenable: PraktikumSyncService.instance,
+              builder: (_, __) {
+                final courses = PraktikumSyncService.instance.courses;
+                return LabColumn(
+                  gap: 10,
+                  children: [
+                    _DataRow(
+                        icon: 'book_open',
+                        label: 'Grup Diampu',
+                        value: '${courses.length} Grup Praktikum'),
+                    _DataRow(
+                        icon: 'calendar',
+                        label: 'Mata Kuliah',
+                        value: courses.take(2).map((c) => c.name).join(' & ')),
+                  ],
+                );
+              },
+            ),
             _DataRow(
                 icon: 'envelope', label: 'Email', value: _p.email),
             _DataRow(

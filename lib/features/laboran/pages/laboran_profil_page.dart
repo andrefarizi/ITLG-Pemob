@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../../shared/profil_data.dart';
@@ -139,10 +140,17 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
                 icon: 'school_outline',
                 label: 'Unit Kerja',
                 value: 'Lab ITLG Fasilkom-TI'),
-            _DataRow(
-                icon: 'book_open',
-                label: 'Lab Dikelola',
-                value: '5 Laboratorium'),
+            ListenableBuilder(
+              listenable: LabDeskSyncService.instance,
+              builder: (_, __) {
+                final inv = LabDeskSyncService.instance;
+                return _DataRow(
+                    icon: 'book_open',
+                    label: 'Lab Dikelola',
+                    value:
+                        '${inv.totalLabCount} Lab • ${inv.totalDeviceCount} PC');
+              },
+            ),
             _DataRow(
                 icon: 'calendar',
                 label: 'Jam Kerja',

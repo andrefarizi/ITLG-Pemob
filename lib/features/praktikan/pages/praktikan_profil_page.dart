@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../shared/lab_actions.dart';
 import '../../shared/profil_data.dart';
 import '../../shared/ubah_profil_page.dart';
 import '../praktikan_nav.dart';
@@ -172,8 +173,7 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
                   subtitle: 'Gedung Teknologi Informasi • ITLG',
                   trailing: const LabIcon('chevron_right',
                       size: 16, color: ItlgColors.primary),
-                  onTap: () => labToast(context,
-                      'Pusat Bantuan Lab: Senin-Jumat 08:00-16:30 WIB'),
+                  onTap: () => labShowHelpCenter(context),
                 ),
               ],
             ),

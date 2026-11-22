@@ -163,11 +163,14 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                         size: 12.8, color: ItlgColors.textSubtle),
                     const SizedBox(width: 4),
                     Flexible(
-                      child: Text(
-                        'NIM 241402105 • Ganjil 2026',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: labText(12, c: ItlgColors.textSubtle),
+                      child: ListenableBuilder(
+                        listenable: ProfilData.praktikan,
+                        builder: (_, __) => Text(
+                          '${ProfilData.praktikan.idLabel} ${ProfilData.praktikan.idValue} • Ganjil 2026',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: labText(12, c: ItlgColors.textSubtle),
+                        ),
                       ),
                     ),
                   ],
