@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/aslab/aslab_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
+import 'notification_sync_service.dart';
 import 'supabase_service.dart';
 
 /// Data pengumpulan tugas praktikan yang tersinkron ke Supabase & Aslab.
@@ -283,6 +284,23 @@ class PraktikumSyncService extends ChangeNotifier {
       updatedAt: now,
     );
     notifyListeners();
+
+    final cName = courseById(courseId).name;
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'trophy',
+      title: 'Nilai Modul $meetingNumber Tersedia',
+      body: 'Praktikum $cName: nilai anda $score / 100 telah dipublikasikan',
+      targetKey: 'detailNilai',
+      important: true,
+    );
+    NotificationSyncService.instance.push(
+      role: 'dosen',
+      icon: 'circle_check',
+      title: 'Penilaian Modul $meetingNumber Diperbarui',
+      body: '$userName ($cName) dinilai $score / 100 oleh asisten',
+      targetKey: 'validasi',
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -1254,6 +1272,16 @@ class PraktikumSyncService extends ChangeNotifier {
     _submissions[_subKey(courseId, meetingNumber, userIdentifier)] = rec;
     notifyListeners();
 
+    final cName = courseById(courseId).name;
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'clipboard',
+      title: 'Tugas Baru Dikumpulkan',
+      body: '$userName ($userIdentifier) mengunggah Tugas $meetingNumber • $cName',
+      targetKey: 'evaluasi',
+      important: true,
+    );
+
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
@@ -1334,6 +1362,15 @@ class PraktikumSyncService extends ChangeNotifier {
     );
     _quizAttempts[_subKey(courseId, meetingNumber, userIdentifier)] = rec;
     notifyListeners();
+
+    final cName = courseById(courseId).name;
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'question',
+      title: 'Kuis Diselesaikan • $userName',
+      body: '$cName Modul $meetingNumber • Skor $score ($correct/${questions.length} benar)',
+      targetKey: 'hasilKuis',
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -1460,6 +1497,17 @@ class PraktikumSyncService extends ChangeNotifier {
         );
       }
       notifyListeners();
+
+      final cName = _courses[idx].name;
+      final kindLabel = const ['Modul', 'Tugas', 'Kuis'][kind.clamp(0, 2)];
+      NotificationSyncService.instance.push(
+        role: 'praktikan',
+        icon: kind == 2 ? 'question' : (kind == 1 ? 'clipboard' : 'book_open'),
+        title: '$kindLabel Baru: $title',
+        body: 'Praktikum $cName • Pertemuan $meetingNumber telah diterbitkan asisten',
+        targetKey: kind == 2 ? 'kuis' : 'editTugas',
+        important: true,
+      );
     }
 
     final client = SupabaseService.instance.client;

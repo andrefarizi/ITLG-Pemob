@@ -42,6 +42,8 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
       listenable: Listenable.merge([presensiSync, praktikumSync]),
       builder: (context, _) {
         final leaves = presensiSync.pendingLeaveCount;
+        final session = presensiSync.activeSession;
+        final activeCourse = praktikumSync.courseById(session.courseId);
         final pendingSubs = praktikumSync.allSubmissions
             .where((s) => s.status != 'graded')
             .take(2)
@@ -51,13 +53,17 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
         _greeting(),
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabChip.info('Sesi Berikutnya'),
-              right: LabPill(icon: 'clock', text: 'Mulai 08:00'),
+            PrakSpaceRow(
+              left: session.isActive
+                  ? const LabChip.live('Sesi Berlangsung')
+                  : const LabChip.info('Sesi Berikutnya'),
+              right: session.isActive
+                  ? AslabElapsedPill(start: session.startedAt)
+                  : const LabPill(icon: 'clock', text: 'Mulai 08:00'),
             ),
-            Text('Praktikum\nPemrograman Mobile',
+            Text('Praktikum\n${activeCourse.name}',
                 style: labText(22, w: kBold, c: Colors.black)),
-            const LabColumn(
+            LabColumn(
               gap: 8,
               cross: CrossAxisAlignment.start,
               children: [
@@ -65,25 +71,29 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
                   children: [
                     Flexible(
                       child: LabMeta(
-                          icon: 'clock', text: 'Senin • 08:00–09:40 WIB'),
+                          icon: 'clock', text: activeCourse.jadwalAbsensi),
                     ),
-                    SizedBox(width: 24),
+                    const SizedBox(width: 24),
                     Flexible(
-                      child: LabMeta(icon: 'location', text: 'Lab Komputer 1'),
+                      child: LabMeta(icon: 'location', text: session.labName),
                     ),
                   ],
                 ),
                 LabMeta(
                   icon: 'people_group',
-                  text: 'TIF 3001 - Kelas C • 24 Praktikan',
+                  text: '${activeCourse.kelas} • 24 Praktikan',
                 ),
               ],
             ),
             LabPrimaryButton(
               icon: 'qrcode',
-              label: 'Mulai Sesi Presensi',
+              label: session.isActive
+                  ? 'Lihat Sesi & QR Presensi'
+                  : 'Mulai Sesi Presensi',
               large: true,
-              onTap: () => _nav.buatSesi(context),
+              onTap: () => session.isActive
+                  ? _nav.sesiAktif(context)
+                  : _nav.buatSesi(context, courseId: activeCourse.id),
             ),
           ],
         ),

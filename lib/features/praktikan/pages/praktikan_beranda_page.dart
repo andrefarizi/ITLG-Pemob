@@ -199,10 +199,12 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
   // Kartu presensi berlangsung (373 x 258).
   Widget _presensiCard() {
     final presensiSync = PresensiSyncService.instance;
+    final praktikumSync = PraktikumSyncService.instance;
     return ListenableBuilder(
-      listenable: presensiSync,
+      listenable: Listenable.merge([presensiSync, praktikumSync]),
       builder: (context, _) {
         final session = presensiSync.activeSession;
+        final course = praktikumSync.courseById(session.courseId);
         final userId = AuthController.instance.userIdentifier;
         final myRec = presensiSync.recordFor(
             session.courseId, session.meetingNumber, userId);
@@ -227,18 +229,25 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                         ? const PrakLiveChip24('Presensi Berlangsung')
                         : const LabChip.idle('Sesi Ditutup')),
               ),
-              Text('Praktikum \nPemrograman Mobile',
+              Text('Praktikum \n${course.name}',
                   style: labText(22, w: kBold, c: Colors.black)),
               PrakScheduleMeta(
-                jadwal: 'Senin • 08:00–09:40 WIB',
+                jadwal: course.jadwalAbsensi,
                 room: session.labName,
                 asisten: session.startedBy,
               ),
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => alreadyPresent
-                    ? _nav.pilihMejaFromPresensi()
-                    : _nav.presensi(context),
+                onTap: () {
+                  if (alreadyPresent) {
+                    _nav.pilihMejaFromPresensi();
+                  } else if (!session.isActive) {
+                    labToast(
+                        context, 'Sesi presensi sedang ditutup oleh asisten');
+                  } else {
+                    _nav.presensi(context);
+                  }
+                },
                 child: Container(
                   height: 50,
                   decoration: BoxDecoration(
@@ -254,7 +263,9 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                       Text(
                           alreadyPresent
                               ? 'Lihat / Pilih Meja'
-                              : 'Presensi Sekarang',
+                              : (session.isActive
+                                  ? 'Presensi Sekarang'
+                                  : 'Sesi Ditutup'),
                           style: labText(16,
                               w: kBold, c: ItlgColors.surfaceWhite)),
                     ],

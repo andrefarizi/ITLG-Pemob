@@ -14,6 +14,7 @@ import 'features/gyro/gyro_page.dart';
 import 'features/laboran/laboran_shell.dart';
 import 'core/services/jadwal_sync_service.dart';
 import 'core/services/lab_desk_sync_service.dart';
+import 'core/services/notification_sync_service.dart';
 import 'core/services/praktikum_sync_service.dart';
 import 'core/services/presensi_sync_service.dart';
 import 'core/services/supabase_service.dart';
@@ -28,6 +29,7 @@ void main() async {
   PraktikumSyncService.instance.initialize();
   PresensiSyncService.instance.initialize();
   JadwalSyncService.instance.initialize();
+  NotificationSyncService.instance.initialize();
   runApp(const ITLGApp());
 }
 

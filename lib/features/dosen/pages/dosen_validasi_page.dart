@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/notification_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
@@ -28,6 +29,22 @@ class DosenValidasiPage extends StatefulWidget {
 class _DosenValidasiPageState extends State<DosenValidasiPage> {
   void _validate() {
     setState(() => widget.store.validated = true);
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'circle_check',
+      title: 'Nilai Akhir Tervalidasi Dosen',
+      body: 'Nilai akhir TIF 3001 - Kelas C telah disinkronkan ke Portal Akademik',
+      targetKey: 'evaluasi',
+      important: true,
+    );
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'trophy',
+      title: 'Nilai Akhir Praktikum Tervalidasi',
+      body: 'Nilai akhir Pemrograman Mobile Kelas C telah disahkan oleh Dosen Pengampu',
+      targetKey: 'detailNilai',
+      important: true,
+    );
     dosenShowResult(
       context,
       icon: 'circle_check',

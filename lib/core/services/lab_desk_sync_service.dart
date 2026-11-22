@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/aslab/aslab_store.dart';
 import '../../features/laboran/laboran_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
+import 'notification_sync_service.dart';
 import 'supabase_service.dart';
 
 /// Model terpadu satu meja + PC di sebuah laboratorium.
@@ -846,6 +847,15 @@ class LabDeskSyncService extends ChangeNotifier {
     _tickets.insert(0, rec);
     notifyListeners();
 
+    NotificationSyncService.instance.push(
+      role: 'laboran',
+      icon: 'wrench_outline',
+      title: 'Tiket Kerusakan Baru ($code)',
+      body: '$labName • $title (dilaporkan oleh $reporterName)',
+      targetKey: 'tiket',
+      important: true,
+    );
+
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
@@ -909,6 +919,17 @@ class LabDeskSyncService extends ChangeNotifier {
     }
 
     notifyListeners();
+
+    final statusLabel =
+        status == 2 ? 'Resolved' : (status == 1 ? 'In Progress' : 'Reported');
+    NotificationSyncService.instance.push(
+      role: target.reporterRole == 'aslab' ? 'aslab' : 'praktikan',
+      icon: status == 2 ? 'circle_check' : 'wrench_outline',
+      title: 'Tiket $ticketCode: $statusLabel',
+      body: '${target.title} (${target.labName})${handlingNote.isNotEmpty ? ' • $handlingNote' : ''}',
+      targetKey: target.reporterRole == 'aslab' ? 'laporKendala' : 'pengumuman',
+      important: status == 2,
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {

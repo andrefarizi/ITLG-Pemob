@@ -144,7 +144,11 @@ class _PraktikanPilihMejaPageState extends State<PraktikanPilihMejaPage> {
           title: 'Meja $sel • PC-$pc',
           subtitle: spec,
           titleSize: 12,
-          trailing: const LabChip.live('Siap'),
+          trailing: deskRec?.status == PrakDesk.broken
+              ? const LabChip.danger('Rusak')
+              : (deskRec?.status == PrakDesk.taken
+                  ? const LabChip.warn('Terisi')
+                  : const LabChip.live('Siap')),
         ),
         LabPrimaryButton(
           icon: 'check',

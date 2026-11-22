@@ -67,6 +67,7 @@ class LaboranBerandaPage extends StatelessWidget {
                       verifiedAt: '07:52',
                       attendance: '$totalHadir / 24',
                       fraction: (totalHadir / 24).clamp(0.0, 1.0),
+                      active: session.isActive,
                       onTap: onOpenDenahMeja ?? onOpenPresensi,
                     ),
                     _LabCard(
@@ -77,6 +78,7 @@ class LaboranBerandaPage extends StatelessWidget {
                       verifiedAt: '07:58',
                       attendance: '19 / 22',
                       fraction: 292 / 338,
+                      active: true,
                       onTap: onOpenPresensi,
                     ),
                   ],
@@ -229,26 +231,55 @@ class _MonitoringCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LabCard(
-      children: [
-        Row(
-          children: const [
-            LabChip.live('Live Monitoring'),
-            Spacer(),
-            LabPill(icon: 'clock', text: '08:24 WIB'),
+    final presensi = PresensiSyncService.instance;
+    return ListenableBuilder(
+      listenable: presensi,
+      builder: (_, __) {
+        final session = presensi.activeSession;
+        final extraHadir = presensi
+            .recordsForMeeting(session.courseId, session.meetingNumber)
+            .where((r) => r.status == PrakAttend.hadir)
+            .length;
+        final totalHadir = (18 + extraHadir).clamp(0, 24);
+        final pct = ((totalHadir * 100) / 24).round();
+        final now = DateTime.now();
+        final clock =
+            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} WIB';
+        return LabCard(
+          children: [
+            Row(
+              children: [
+                session.isActive
+                    ? const LabChip.live('Live Monitoring')
+                    : const LabChip.idle('Monitoring Standby'),
+                const Spacer(),
+                LabPill(icon: 'clock', text: clock),
+              ],
+            ),
+            Text('Pantauan Laboratorium',
+                style: labText(22, w: kBold, c: Colors.black)),
+            LabStatRow(
+              stats: [
+                LabStat(
+                  icon: 'desktop_device',
+                  label: 'Terpakai',
+                  value: session.isActive ? '3 / 5 Lab' : '2 / 5 Lab',
+                ),
+                const LabStat(
+                  icon: 'shield_check_outline',
+                  label: 'On-Duty',
+                  value: '6 Aslab',
+                ),
+                LabStat(
+                  icon: 'people_group',
+                  label: 'Hadir',
+                  value: '$pct%',
+                ),
+              ],
+            ),
           ],
-        ),
-        Text('Pantauan Laboratorium',
-            style: labText(22, w: kBold, c: Colors.black)),
-        const LabStatRow(
-          stats: [
-            LabStat(icon: 'desktop_device', label: 'Terpakai', value: '3 / 5 Lab'),
-            LabStat(
-                icon: 'shield_check_outline', label: 'On-Duty', value: '6 Aslab'),
-            LabStat(icon: 'people_group', label: 'Hadir', value: '87%'),
-          ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -295,6 +326,7 @@ class _LabCard extends StatelessWidget {
   final String verifiedAt;
   final String attendance;
   final double fraction;
+  final bool active;
   final VoidCallback onTap;
 
   const _LabCard({
@@ -305,6 +337,7 @@ class _LabCard extends StatelessWidget {
     required this.verifiedAt,
     required this.attendance,
     required this.fraction,
+    this.active = true,
     required this.onTap,
   });
 
@@ -316,7 +349,9 @@ class _LabCard extends StatelessWidget {
         _LabHeader(
           name: name,
           course: course,
-          chip: const LabChip.live('Digunakan'),
+          chip: active
+              ? const LabChip.live('Digunakan')
+              : const LabChip.idle('Sesi Selesai'),
         ),
         LabInsetBox(
           child: Row(

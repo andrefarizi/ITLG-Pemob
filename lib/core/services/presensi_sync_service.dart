@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/aslab/aslab_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
+import 'notification_sync_service.dart';
 import 'supabase_service.dart';
 
 /// State sesi presensi aktif (dibuka / diakhiri oleh Aslab, terbaca oleh Praktikan).
@@ -749,6 +750,22 @@ class PresensiSyncService extends ChangeNotifier {
     );
     notifyListeners();
 
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'qrcode',
+      title: 'Presensi Berlangsung',
+      body: 'Pertemuan $meetingNumber • $labName dibuka oleh $startedBy',
+      targetKey: 'presensi',
+      important: true,
+    );
+    NotificationSyncService.instance.push(
+      role: 'laboran',
+      icon: 'key',
+      title: 'Sesi Lab Dibuka',
+      body: '$labName • Pertemuan $meetingNumber dimulai oleh $startedBy',
+      targetKey: 'presensi',
+    );
+
     final client = SupabaseService.instance.client;
     if (client != null) {
       final basePayload = <String, dynamic>{
@@ -794,6 +811,15 @@ class PresensiSyncService extends ChangeNotifier {
   Future<void> endActiveSession() async {
     _activeSession.status = 'closed';
     notifyListeners();
+
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'clock',
+      title: 'Sesi Presensi Ditutup',
+      body:
+          'Presensi Pertemuan ${_activeSession.meetingNumber} di ${_activeSession.labName} telah diakhiri',
+      targetKey: 'detailAbsensi',
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -845,6 +871,14 @@ class PresensiSyncService extends ChangeNotifier {
 
     _records[_recKey(courseId, meetingNumber, userIdentifier)] = rec;
     notifyListeners();
+
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'circle_check',
+      title: 'Presensi Tercatat • $userName',
+      body: 'Pertemuan $meetingNumber ($userIdentifier) • $note',
+      targetKey: 'detailPresensi',
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -917,6 +951,15 @@ class PresensiSyncService extends ChangeNotifier {
       recordedAt: now,
     );
     notifyListeners();
+
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'file',
+      title: 'Pengajuan $leaveType Baru',
+      body: '$userName ($userIdentifier) mengajukan $leaveType • Pertemuan $meetingNumber',
+      targetKey: 'persetujuanIzin',
+      important: true,
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -1003,6 +1046,15 @@ class PresensiSyncService extends ChangeNotifier {
       recordedAt: now,
     );
     notifyListeners();
+
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: approve ? 'circle_check' : 'triangle_alert',
+      title: approve ? 'Pengajuan Izin Disetujui' : 'Pengajuan Izin Ditolak',
+      body: 'Pertemuan ${leave.meetingNumber}: $newNote',
+      targetKey: 'detailAbsensi',
+      important: true,
+    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {

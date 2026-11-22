@@ -23,7 +23,12 @@ class PraktikanAbsensiPage extends StatelessWidget {
       builder: (context, _) {
         final courses = sync.courses;
         final session = presensiSync.activeSession;
+        final activeCourse = sync.courseById(session.courseId);
         final userId = AuthController.instance.userIdentifier;
+        final myRec = presensiSync.recordFor(
+            session.courseId, session.meetingNumber, userId);
+        final alreadyPresent =
+            myRec != null && myRec.status == PrakAttend.hadir;
         return LabTabBody(
           children: [
             const LabTitle(
@@ -35,20 +40,22 @@ class PraktikanAbsensiPage extends StatelessWidget {
             LabCard(
               children: [
                 PrakSpaceRow(
-                  left: session.isActive
-                      ? const LabChip.live('Presensi Berlangsung')
-                      : const LabChip.idle('Sesi Ditutup'),
+                  left: alreadyPresent
+                      ? const LabChip.live('Sudah Presensi')
+                      : (session.isActive
+                          ? const LabChip.live('Presensi Berlangsung')
+                          : const LabChip.idle('Sesi Ditutup')),
                   right: LabPill(
                       icon: 'calendar',
                       text: 'Minggu ke-${session.meetingNumber}'),
                 ),
-                Text('Praktikum Pemrograman Mobile',
+                Text('Praktikum ${activeCourse.name}',
                     style: labText(16, w: kBold, c: Colors.black)),
                 Row(
                   children: [
-                    const Flexible(
+                    Flexible(
                       child: LabMeta(
-                          icon: 'clock', text: 'Senin • 08:00–09:40 WIB'),
+                          icon: 'clock', text: activeCourse.jadwalAbsensi),
                     ),
                     const SizedBox(width: 24),
                     Flexible(
@@ -58,9 +65,22 @@ class PraktikanAbsensiPage extends StatelessWidget {
                 ),
                 LabPrimaryButton(
                   icon: 'circle_check',
-                  label: 'Isi Presensi Sekarang',
+                  label: alreadyPresent
+                      ? 'Lihat / Pilih Meja'
+                      : (session.isActive
+                          ? 'Isi Presensi Sekarang'
+                          : 'Sesi Ditutup'),
                   large: true,
-                  onTap: () => nav.presensi(context),
+                  onTap: () {
+                    if (alreadyPresent) {
+                      nav.pilihMejaFromPresensi();
+                    } else if (!session.isActive) {
+                      labToast(
+                          context, 'Sesi presensi sedang ditutup oleh asisten');
+                    } else {
+                      nav.presensi(context);
+                    }
+                  },
                 ),
               ],
             ),

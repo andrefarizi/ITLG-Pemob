@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/notification_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
@@ -17,31 +18,50 @@ class PraktikanNotifikasiPage extends StatefulWidget {
 }
 
 class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
-  PraktikanStore get _store => widget.nav.store;
+  final NotificationSyncService _sync = NotificationSyncService.instance;
 
   /// 0 Semua, 1 Belum Dibaca, 2 Penting.
   int _tab = 0;
 
-  bool _match(PrakNotif n) {
+  @override
+  void initState() {
+    super.initState();
+    _sync.refreshFromBackend();
+  }
+
+  bool _match(AppNotificationRecord n) {
     if (_tab == 1) return n.unread;
     if (_tab == 2) return n.important;
     return true;
   }
 
+  PrakNotifTarget _targetFor(String key) {
+    switch (key) {
+      case 'editTugas':
+        return PrakNotifTarget.editTugas;
+      case 'presensi':
+        return PrakNotifTarget.presensi;
+      case 'detailAbsensi':
+        return PrakNotifTarget.detailAbsensi;
+      case 'kuis':
+        return PrakNotifTarget.kuis;
+      case 'detailNilai':
+        return PrakNotifTarget.detailNilai;
+      default:
+        return PrakNotifTarget.pengumuman;
+    }
+  }
+
   void _markAllRead() {
-    setState(() {
-      for (final n in _store.notifs) {
-        n.unread = false;
-      }
-    });
+    _sync.markAllRead('praktikan');
   }
 
-  void _open(PrakNotif n) {
-    setState(() => n.unread = false);
-    widget.nav.openNotif(context, n.target);
+  void _open(AppNotificationRecord n) {
+    _sync.markRead(n.id);
+    widget.nav.openNotif(context, _targetFor(n.targetKey));
   }
 
-  Widget _group(String label, List<PrakNotif> items) {
+  Widget _group(String label, List<AppNotificationRecord> items) {
     return LabColumn(
       gap: 10,
       children: [
@@ -60,65 +80,70 @@ class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
 
   @override
   Widget build(BuildContext context) {
-    final store = _store;
-    final unread = store.unreadCount;
-    final today = store.notifs.where((n) => n.today && _match(n)).toList();
-    final earlier = store.notifs.where((n) => !n.today && _match(n)).toList();
+    return ListenableBuilder(
+      listenable: _sync,
+      builder: (context, _) {
+        final all = _sync.forRole('praktikan');
+        final unread = _sync.unreadCountForRole('praktikan');
+        final today = all.where((n) => n.isToday && _match(n)).toList();
+        final earlier = all.where((n) => !n.isToday && _match(n)).toList();
 
-    return LabSubPage(
-      onLogoTap: widget.nav.home,
-      children: [
-        Row(
+        return LabSubPage(
+          onLogoTap: widget.nav.home,
           children: [
-            Expanded(
-              child: LabColumn(
-                gap: 6,
-                children: [
-                  Text('Notifikasi',
-                      style: labText(22, w: kBold, c: Colors.black)),
-                  Text(
-                    unread == 0
-                        ? 'Semua sudah dibaca'
-                        : '$unread belum dibaca',
-                    style: labText(14, c: Colors.black),
+            Row(
+              children: [
+                Expanded(
+                  child: LabColumn(
+                    gap: 6,
+                    children: [
+                      Text('Notifikasi',
+                          style: labText(22, w: kBold, c: Colors.black)),
+                      Text(
+                        unread == 0
+                            ? 'Semua sudah dibaca'
+                            : '$unread belum dibaca',
+                        style: labText(14, c: Colors.black),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _markAllRead,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Tandai Dibaca',
+                        style: labText(12, c: ItlgColors.primary)),
+                  ),
+                ),
+              ],
             ),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _markAllRead,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text('Tandai Dibaca',
-                    style: labText(12, c: ItlgColors.primary)),
-              ),
+            LabTabs(
+              labels: ['Semua', 'Belum Dibaca ($unread)', 'Penting'],
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
             ),
+            if (today.isNotEmpty) _group('Hari Ini', today),
+            if (earlier.isNotEmpty) _group('Kemarin', earlier),
+            if (today.isEmpty && earlier.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'Tidak ada notifikasi.',
+                  textAlign: TextAlign.center,
+                  style: labText(12, c: ItlgColors.textSubtle),
+                ),
+              ),
           ],
-        ),
-        LabTabs(
-          labels: ['Semua', 'Belum Dibaca ($unread)', 'Penting'],
-          index: _tab,
-          onChanged: (i) => setState(() => _tab = i),
-        ),
-        if (today.isNotEmpty) _group('Hari Ini', today),
-        if (earlier.isNotEmpty) _group('Kemarin', earlier),
-        if (today.isEmpty && earlier.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text(
-              'Tidak ada notifikasi.',
-              textAlign: TextAlign.center,
-              style: labText(12, c: ItlgColors.textSubtle),
-            ),
-          ),
-      ],
+        );
+      },
     );
   }
 }
 
 class _NotifCard extends StatelessWidget {
-  final PrakNotif notif;
+  final AppNotificationRecord notif;
   final VoidCallback onTap;
   const _NotifCard({required this.notif, required this.onTap});
 
@@ -148,7 +173,7 @@ class _NotifCard extends StatelessWidget {
                       style:
                           labText(11, w: kMedium, c: ItlgColors.textSubtle)),
                   Text(
-                    notif.time,
+                    notif.relativeTime,
                     style: labText(
                       11,
                       w: kMedium,

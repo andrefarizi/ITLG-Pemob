@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
+import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
 /// Figma: "Pilih Metode Presensi-Praktikan".
@@ -23,9 +27,9 @@ class _PraktikanPilihMetodePageState extends State<PraktikanPilihMetodePage> {
   @override
   void initState() {
     super.initState();
-    final s = widget.nav.store;
+    PresensiSyncService.instance.refreshFromBackend();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (s.presensiSecondsLeft > 0) setState(() => s.presensiSecondsLeft--);
+      if (mounted) setState(() {});
     });
   }
 
@@ -35,65 +39,122 @@ class _PraktikanPilihMetodePageState extends State<PraktikanPilihMetodePage> {
     super.dispose();
   }
 
+  int _remainingSeconds(AttendanceSessionRecord session) {
+    if (!session.isActive) return 0;
+    final totalSec = session.durationMinutes * 60;
+    final elapsed = DateTime.now().difference(session.startedAt).inSeconds;
+    final rem = totalSec - elapsed;
+    return rem > 0 ? rem : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final nav = widget.nav;
-    return LabSubPage(
-      onLogoTap: nav.home,
-      children: [
-        const PrakStepper(step: 0),
-        LabCard(
+    final presensiSync = PresensiSyncService.instance;
+    final praktikumSync = PraktikumSyncService.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([presensiSync, praktikumSync]),
+      builder: (context, _) {
+        final session = presensiSync.activeSession;
+        final course = praktikumSync.courseById(session.courseId);
+        final userId = AuthController.instance.userIdentifier;
+        final myRec = presensiSync.recordFor(
+            session.courseId, session.meetingNumber, userId);
+        final alreadyPresent =
+            myRec != null && myRec.status == PrakAttend.hadir;
+        final remSec = _remainingSeconds(session);
+
+        return LabSubPage(
+          onLogoTap: nav.home,
           children: [
-            PrakSpaceRow(
-              left: const LabChip.live('Presensi Berlangsung'),
-              right: LabPill(
-                icon: 'clock',
-                text: 'Sisa ${prakClock(nav.store.presensiSecondsLeft)}',
-              ),
+            const PrakStepper(step: 0),
+            LabCard(
+              children: [
+                PrakSpaceRow(
+                  left: alreadyPresent
+                      ? const LabChip.live('Sudah Presensi')
+                      : (session.isActive
+                          ? const LabChip.live('Presensi Berlangsung')
+                          : const LabChip.idle('Sesi Ditutup')),
+                  right: LabPill(
+                    icon: 'clock',
+                    text: session.isActive
+                        ? 'Sisa ${prakClock(remSec)}'
+                        : 'Sesi Ditutup',
+                  ),
+                ),
+                LabOverline(
+                  overline: 'Pertemuan ${session.meetingNumber} • ${course.kelas}',
+                  title: 'Praktikum\n${course.name}',
+                ),
+                const PrakSessionMeta(),
+              ],
             ),
-            const LabOverline(
-              overline: 'Pertemuan 5 • TIF 3001 - Kelas C',
-              title: 'Praktikum\nPemrograman Mobile',
+            LabColumn(
+              gap: 12,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabHeading(
+                      icon: 'shield_check_outline',
+                      text: 'Pilih Cara Verifikasi'),
+                ),
+                _MethodCard(
+                  icon: 'qrcode',
+                  title: 'Pindai QR Code',
+                  description: 'Arahkan kamera ke QR dinamis yang ditampilkan '
+                      'asisten di layar lab.',
+                  metaIcon: 'camera',
+                  meta: 'Butuh kamera',
+                  duration: '± 5 detik',
+                  onTap: () {
+                    if (!session.isActive) {
+                      labToast(
+                          context, 'Sesi presensi sudah ditutup oleh asisten');
+                      return;
+                    }
+                    if (!session.allowQr) {
+                      labToast(context,
+                          'Metode QR tidak diaktifkan pada sesi ini');
+                      return;
+                    }
+                    nav.scanQr(context);
+                  },
+                ),
+                _MethodCard(
+                  icon: 'gesture_tap_button',
+                  title: 'Tombol Hadir',
+                  description:
+                      'Tanpa kamera. Tekan tombol hadir, lokasi anda '
+                      'dicek berada di area lab.',
+                  metaIcon: 'location',
+                  meta: 'Butuh lokasi (GPS)',
+                  duration: '± 10 detik',
+                  onTap: () {
+                    if (!session.isActive) {
+                      labToast(
+                          context, 'Sesi presensi sudah ditutup oleh asisten');
+                      return;
+                    }
+                    if (!session.allowButton) {
+                      labToast(context,
+                          'Metode Tombol Hadir tidak diaktifkan pada sesi ini');
+                      return;
+                    }
+                    nav.tombolHadir(context);
+                  },
+                ),
+              ],
             ),
-            const PrakSessionMeta(),
+            const PrakNotice.info(
+              icon: 'signature_freehand',
+              text:
+                  'Setelah verifikasi berhasil, anda diminta tanda tangan lalu '
+                  'presensi dikirim.',
+            ),
           ],
-        ),
-        LabColumn(
-          gap: 12,
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabHeading(
-                  icon: 'shield_check_outline', text: 'Pilih Cara Verifikasi'),
-            ),
-            _MethodCard(
-              icon: 'qrcode',
-              title: 'Pindai QR Code',
-              description: 'Arahkan kamera ke QR dinamis yang ditampilkan '
-                  'asisten di layar lab.',
-              metaIcon: 'camera',
-              meta: 'Butuh kamera',
-              duration: '± 5 detik',
-              onTap: () => nav.scanQr(context),
-            ),
-            _MethodCard(
-              icon: 'gesture_tap_button',
-              title: 'Tombol Hadir',
-              description: 'Tanpa kamera. Tekan tombol hadir, lokasi anda '
-                  'dicek berada di area lab.',
-              metaIcon: 'location',
-              meta: 'Butuh lokasi (GPS)',
-              duration: '± 10 detik',
-              onTap: () => nav.tombolHadir(context),
-            ),
-          ],
-        ),
-        const PrakNotice.info(
-          icon: 'signature_freehand',
-          text: 'Setelah verifikasi berhasil, anda diminta tanda tangan lalu '
-              'presensi dikirim.',
-        ),
-      ],
+        );
+      },
     );
   }
 }

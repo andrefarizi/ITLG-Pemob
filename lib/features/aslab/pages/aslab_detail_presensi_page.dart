@@ -86,9 +86,18 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
       children: [
         LabCard(
           children: [
-            const PrakSpaceRow(
-              left: LabChip.idle('Sesi Ditutup'),
-              right: LabMeta(icon: 'calendar', text: 'Sen, 28 Sep 2026'),
+            ListenableBuilder(
+              listenable: PresensiSyncService.instance,
+              builder: (_, __) {
+                final active = PresensiSyncService.instance.activeSession;
+                final live = active.meetingNumber == 4 && active.isActive;
+                return PrakSpaceRow(
+                  left: live
+                      ? const LabChip.live('Sesi Berlangsung')
+                      : const LabChip.idle('Sesi Ditutup'),
+                  right: const LabMeta(icon: 'calendar', text: 'Sen, 28 Sep 2026'),
+                );
+              },
             ),
             const LabOverline(
               overline: 'Praktikum Pemrograman Mobile • Kelas C',

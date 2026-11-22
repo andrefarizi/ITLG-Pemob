@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/praktikan/praktikan_store.dart';
 import 'device_calendar_service.dart';
+import 'notification_sync_service.dart';
 import 'supabase_service.dart';
 
 /// Data jadwal praktikum mingguan yang tersinkron ke Supabase & Kalender HP.
@@ -446,6 +447,29 @@ class JadwalSyncService extends ChangeNotifier {
     );
     _announcements.insert(0, ann);
     notifyListeners();
+
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'bullhorn_outline',
+      title: '$tag: $title',
+      body: body.isNotEmpty
+          ? body
+          : (newScheduleLabel != null
+              ? 'Jadwal baru: $newScheduleLabel di ${newRoom ?? 'Lab'}'
+              : 'Pengumuman baru dari $author'),
+      targetKey: 'pengumuman',
+      important: categoryIndex != 1,
+    );
+    if (categoryIndex == 0 && newRoom != null) {
+      NotificationSyncService.instance.push(
+        role: 'laboran',
+        icon: 'calendar',
+        title: 'Perubahan Jadwal Ruangan',
+        body: '$title • $newRoom (${newScheduleLabel ?? ''})',
+        targetKey: 'ruangan',
+        important: true,
+      );
+    }
 
     final client = SupabaseService.instance.client;
     if (client != null) {

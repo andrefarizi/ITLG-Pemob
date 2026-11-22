@@ -4,6 +4,7 @@ import '../../../core/services/lab_desk_sync_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
+import '../praktikan_store.dart';
 import '../widgets/desk_map.dart';
 import '../widgets/praktikan_ui.dart';
 
@@ -74,7 +75,9 @@ class PraktikanMejaKamuPage extends StatelessWidget {
               title: 'Meja $n • PC-$pc',
               subtitle: spec,
               titleSize: 12,
-              trailing: const LabChip.live('Terbooking'),
+              trailing: sync.deskRecord(n)?.status == PrakDesk.broken
+                  ? const LabChip.danger('Dilaporkan Rusak')
+                  : const LabChip.live('Terbooking'),
             ),
             Text(
               'Meja $n sudah dibooking atas namamu untuk sesi ini. Kalau ada '
