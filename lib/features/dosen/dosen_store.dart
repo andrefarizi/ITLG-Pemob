@@ -350,18 +350,18 @@ class DosenStore {
     DosenGrade('Teguh Situmorang', '231402094', '82', '92%', '85', 'A-'),
   ];
 
-  final List<DosenDownload> downloads = const [
-    DosenDownload('September 2026', 'Rekap_PemMobile_C.xlsx',
+  final List<DosenDownload> downloads = [
+    const DosenDownload('September 2026', 'Rekap_PemMobile_C.xlsx',
         '21 Sep 2026 • 248 KB', true),
-    DosenDownload('September 2026', 'Kehadiran_PemMobile_A.xlsx',
+    const DosenDownload('September 2026', 'Kehadiran_PemMobile_A.xlsx',
         '18 Sep 2026 • 196 KB', true),
-    DosenDownload('September 2026', 'Nilai_BasisData_B.pdf',
+    const DosenDownload('September 2026', 'Nilai_BasisData_B.pdf',
         '14 Sep 2026 • 1,1 MB', false),
-    DosenDownload('September 2026', 'Kedisiplinan_Asisten_Sep.pdf',
+    const DosenDownload('September 2026', 'Kedisiplinan_Asisten_Sep.pdf',
         '10 Sep 2026 • 860 KB', false),
-    DosenDownload('September 2026', 'Rekap_BasisData_B.xlsx',
+    const DosenDownload('September 2026', 'Rekap_BasisData_B.xlsx',
         '07 Sep 2026 • 231 KB', true),
-    DosenDownload('Agustus 2026', 'Nilai_PemMobile_A.pdf',
+    const DosenDownload('Agustus 2026', 'Nilai_PemMobile_A.pdf',
         '31 Agu 2026 • 1,0 MB', false),
   ];
 

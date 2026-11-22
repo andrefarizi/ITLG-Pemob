@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_download_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -115,14 +116,39 @@ class PraktikanDetailMateriPage extends StatelessWidget {
               right: LabPrimaryButton(
                 icon: 'download',
                 label: 'Unduh Materi',
-                // Figma: Unduh Materi → "Pop up Materi Diunduh".
-                onTap: () => labShowResult(
-                  context,
-                  icon: 'download',
-                  title: 'Materi Diunduh',
-                  message: 'Berkas materi tersimpan di folder Unduhan '
-                      'perangkat anda.',
-                ),
+                // Figma: Unduh Materi → simpan file nyata lalu "Pop up Materi Diunduh".
+                onTap: () async {
+                  final res = await FileDownloadService.instance.downloadFile(
+                    fileName: pdfName,
+                    source: 'Praktikum ${c.name} • Pertemuan ${m.number}',
+                    contentLines: [
+                      'ITLG MOBILE - MATERI PRAKTIKUM',
+                      'Praktikum : ${c.name} (${c.kelas})',
+                      'Pertemuan : ${m.number} - ${m.module}',
+                      'Tanggal   : $dateText',
+                      'Asisten   : ${c.asisten}',
+                      'Berkas    : $pdfName',
+                      '------------------------------------------------------------',
+                      'Ringkasan Materi:',
+                      desc,
+                      '',
+                      'Tugas Terkait: $tugasTitle',
+                      'Batas Waktu  : $deadline',
+                    ],
+                  );
+                  if (!context.mounted) return;
+                  if (res.success) {
+                    labShowResult(
+                      context,
+                      icon: 'download',
+                      title: 'Materi Diunduh',
+                      message:
+                          'Berkas tersimpan di ${res.location} (${res.formattedSize}).',
+                    );
+                  } else {
+                    labToast(context, 'Gagal mengunduh $pdfName');
+                  }
+                },
               ),
             ),
           ],
@@ -141,15 +167,46 @@ class PraktikanDetailMateriPage extends StatelessWidget {
                   name: 'Starter_Modul_${m.number}_${c.id}.zip',
                   meta: 'ZIP • 1,8 MB',
                   action: 'download',
-                  onAction: () => labToast(
-                      context, 'Starter_Modul_${m.number}_${c.id}.zip diunduh'),
+                  onAction: () async {
+                    final fname = 'Starter_Modul_${m.number}_${c.id}.zip';
+                    final res = await FileDownloadService.instance.downloadFile(
+                      fileName: fname,
+                      source: 'Lampiran Praktikum ${c.name} • Pertemuan ${m.number}',
+                      contentLines: [
+                        'Starter Project Praktikum ${c.name}',
+                        'Pertemuan ${m.number}: ${m.module}',
+                        'Asisten: ${c.asisten}',
+                        '',
+                        desc,
+                      ],
+                    );
+                    if (!context.mounted) return;
+                    labToast(
+                      context,
+                      res.success
+                          ? 'Tersimpan di ${res.location}'
+                          : 'Gagal mengunduh $fname',
+                    );
+                  },
                 ),
                 PrakFileItem(
                   name: 'Contoh_Praktikum_M${m.number}.mp4',
                   meta: 'Video • 12 MB',
                   action: 'download',
-                  onAction: () => labToast(
-                      context, 'Contoh_Praktikum_M${m.number}.mp4 diunduh'),
+                  onAction: () async {
+                    final fname = 'Contoh_Praktikum_M${m.number}.mp4';
+                    final res = await FileDownloadService.instance.downloadFile(
+                      fileName: fname,
+                      source: 'Lampiran Praktikum ${c.name} • Pertemuan ${m.number}',
+                    );
+                    if (!context.mounted) return;
+                    labToast(
+                      context,
+                      res.success
+                          ? 'Tersimpan di ${res.location}'
+                          : 'Gagal mengunduh $fname',
+                    );
+                  },
                 ),
               ],
             ),

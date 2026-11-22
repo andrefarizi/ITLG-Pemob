@@ -56,6 +56,12 @@ class FileUploadService {
   static const MethodChannel _channel =
       MethodChannel('com.example.itlg_mobile/files');
 
+  final Map<String, String> _localPathByName = {};
+  final Map<String, String> _remotePathByName = {};
+
+  String? localPathForName(String name) => _localPathByName[name];
+  String? remotePathForName(String name) => _remotePathByName[name];
+
   /// Membuka pemilih berkas/galeri asli perangkat lalu langsung mengunggahnya
   /// ke Supabase Storage (`itlg-uploads/<folder>/...`).
   /// Mengembalikan `null` jika pengguna membatalkan pemilihan.
@@ -108,6 +114,7 @@ class FileUploadService {
                 ),
               );
           remoteUrl = client.storage.from(bucketName).getPublicUrl(objectPath);
+          _remotePathByName[name] = objectPath;
           uploaded = true;
           debugPrint('[FileUpload] Berhasil unggah ke Supabase Storage: $objectPath');
         }
@@ -116,6 +123,8 @@ class FileUploadService {
             '[FileUpload] Gagal unggah ke bucket $bucketName (tetap pakai berkas perangkat): $e');
       }
     }
+
+    _localPathByName[name] = path;
 
     return UploadedDeviceFile(
       name: name,

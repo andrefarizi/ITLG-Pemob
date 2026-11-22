@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.CalendarContract
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -297,6 +299,86 @@ class MainActivity : FlutterActivity() {
         )
     }
 
+    private fun saveFileToDeviceDownloads(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): Map<String, Any> {
+        val safeName = fileName.replace(Regex("[^a-zA-Z0-9._\\- ]"), "_").trim()
+            .ifEmpty { "berkas_itlg_${System.currentTimeMillis()}.pdf" }
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                    put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                    put(
+                        MediaStore.Downloads.RELATIVE_PATH,
+                        "${Environment.DIRECTORY_DOWNLOADS}/ITLG Mobile"
+                    )
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Gagal membuat entri MediaStore.Downloads")
+                resolver.openOutputStream(uri)?.use { out ->
+                    out.write(bytes)
+                    out.flush()
+                } ?: throw IllegalStateException("Gagal membuka output stream")
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+
+                mapOf(
+                    "ok" to true,
+                    "fileName" to safeName,
+                    "location" to "Download/ITLG Mobile/$safeName",
+                    "uri" to uri.toString(),
+                    "size" to bytes.size
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                val baseDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+                val targetDir = File(baseDir, "ITLG Mobile")
+                if (!targetDir.exists()) targetDir.mkdirs()
+                val outFile = File(targetDir, safeName)
+                FileOutputStream(outFile).use { out ->
+                    out.write(bytes)
+                    out.flush()
+                }
+                mapOf(
+                    "ok" to true,
+                    "fileName" to safeName,
+                    "location" to outFile.absolutePath,
+                    "uri" to Uri.fromFile(outFile).toString(),
+                    "size" to bytes.size
+                )
+            }
+        } catch (e: Exception) {
+            try {
+                val fallbackDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+                val outFile = File(fallbackDir, safeName)
+                FileOutputStream(outFile).use { out ->
+                    out.write(bytes)
+                    out.flush()
+                }
+                mapOf(
+                    "ok" to true,
+                    "fileName" to safeName,
+                    "location" to outFile.absolutePath,
+                    "uri" to Uri.fromFile(outFile).toString(),
+                    "size" to bytes.size
+                )
+            } catch (err: Exception) {
+                mapOf(
+                    "ok" to false,
+                    "error" to (err.message ?: e.message ?: "Gagal menyimpan berkas")
+                )
+            }
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -394,6 +476,13 @@ class MainActivity : FlutterActivity() {
                                 result.success(null)
                             }
                         }
+                    }
+                    "saveToDownloads" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val fileName = (args?.get("fileName") as? String) ?: "dokumen_itlg.pdf"
+                        val mimeType = (args?.get("mimeType") as? String) ?: "application/octet-stream"
+                        val bytes = (args?.get("bytes") as? ByteArray) ?: ByteArray(0)
+                        result.success(saveFileToDeviceDownloads(fileName, mimeType, bytes))
                     }
                     else -> result.notImplemented()
                 }

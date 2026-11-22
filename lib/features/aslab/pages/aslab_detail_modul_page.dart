@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_download_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -121,7 +122,30 @@ class AslabDetailModulPage extends StatelessWidget {
                   right: LabPrimaryButton(
                     icon: 'download',
                     label: 'Unduh Modul',
-                    onTap: () => labToast(context, '$fileName diunduh'),
+                    onTap: () async {
+                      final res =
+                          await FileDownloadService.instance.downloadFile(
+                        fileName: fileName,
+                        source:
+                            'Modul Pertemuan $meetingNumber • ${course.name}',
+                        contentLines: [
+                          'ITLG MOBILE - MODUL ASISTEN LAB',
+                          'Praktikum : ${course.name} (${course.kelas})',
+                          'Pertemuan : $meetingNumber',
+                          'Judul     : $title',
+                          'Berkas    : $fileName',
+                          '------------------------------------------------------------',
+                          desc,
+                        ],
+                      );
+                      if (!context.mounted) return;
+                      labToast(
+                        context,
+                        res.success
+                            ? 'Tersimpan di ${res.location}'
+                            : 'Gagal mengunduh $fileName',
+                      );
+                    },
                   ),
                 ),
               ],
@@ -137,8 +161,25 @@ class AslabDetailModulPage extends StatelessWidget {
                   name: 'starter_project.zip',
                   meta: 'ZIP • 4,1 MB',
                   action: 'download',
-                  onAction: () =>
-                      labToast(context, 'starter_project.zip diunduh'),
+                  onAction: () async {
+                    final res = await FileDownloadService.instance.downloadFile(
+                      fileName: 'starter_project.zip',
+                      source:
+                          'Lampiran Modul $meetingNumber • ${course.name}',
+                      contentLines: [
+                        'Starter Project - ${course.name}',
+                        'Modul $meetingNumber: $title',
+                        desc,
+                      ],
+                    );
+                    if (!context.mounted) return;
+                    labToast(
+                      context,
+                      res.success
+                          ? 'Tersimpan di ${res.location}'
+                          : 'Gagal mengunduh starter_project.zip',
+                    );
+                  },
                 ),
               ],
             ),

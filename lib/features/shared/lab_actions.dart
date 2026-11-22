@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/services/file_download_service.dart';
 import '../../core/widgets/itlg_ui.dart';
 import '../laboran/widgets/laboran_ui.dart';
 
@@ -221,7 +222,19 @@ Future<void> labShowFilePreview(
     primary: (
       'download',
       'Unduh Berkas',
-      () => labToast(context, '$name diunduh'),
+      () async {
+        final res = await FileDownloadService.instance.downloadFile(
+          fileName: name,
+          source: source,
+        );
+        if (!context.mounted) return;
+        labToast(
+          context,
+          res.success
+              ? 'Tersimpan di ${res.location}'
+              : 'Gagal mengunduh $name',
+        );
+      },
     ),
   );
 }

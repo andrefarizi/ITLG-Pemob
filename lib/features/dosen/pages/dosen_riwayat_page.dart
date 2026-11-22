@@ -52,7 +52,20 @@ class _DosenRiwayatPageState extends State<DosenRiwayatPage> {
               for (final d in shown.where((d) => d.month == m))
                 DosenDownloadItem(
                   download: d,
-                  onTap: () => dosenShowDownloaded(context),
+                  onTap: () async {
+                    final res = await dosenDownloadReportFile(
+                      fileName: d.name,
+                      periode: d.month,
+                      sections: widget.store.isiLaporan,
+                      store: widget.store,
+                    );
+                    if (!context.mounted) return;
+                    if (res.success) {
+                      dosenShowDownloaded(context, location: res.location);
+                    } else {
+                      labToast(context, 'Gagal mengunduh ${d.name}');
+                    }
+                  },
                 ),
             ],
           ),
