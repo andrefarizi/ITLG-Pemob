@@ -32,7 +32,9 @@ class _Result {
 
   /// Gaya chip di Figma berbeda: 0 putih polos, 1 kuning, 2 hijau berikon.
   final int chip;
-  const _Result(this.student, this.score, this.benar, this.waktu, this.chip);
+  final KuisAttemptRecord? attempt;
+  const _Result(this.student, this.score, this.benar, this.waktu, this.chip,
+      {this.attempt});
 
   bool get lulus => score >= 70;
 }
@@ -104,6 +106,73 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
       '${q.correctCount} / ${q.correctCount + q.wrongCount} benar',
       '$mins menit',
       chip,
+      attempt: q,
+    );
+  }
+
+  void _showAnswerBreakdown(_Result r, String kuisTitle) {
+    final questions =
+        PraktikumSyncService.instance.questionsForCourse(widget.courseId);
+    final total = questions.length;
+    final attempt = r.attempt;
+    const letters = ['A', 'B', 'C', 'D'];
+    final correctCount = attempt?.correctCount ??
+        ((r.score / 100) * total).round().clamp(0, total);
+
+    labShowCustomSheet<void>(
+      context,
+      title: 'Rincian Jawaban • ${r.student.name}',
+      subtitle:
+          '$kuisTitle • Skor ${r.score} • $correctCount dari $total benar • ${r.lulus ? 'Lulus' : 'Remedial'}',
+      child: LabColumn(
+        gap: 8,
+        children: [
+          for (var idx = 0; idx < total; idx++)
+            () {
+              final q = questions[idx];
+              final keyLetter = letters[q.answer.clamp(0, letters.length - 1)];
+              final bool isOk;
+              final String ansText;
+              if (attempt != null) {
+                final picked = attempt.answers[idx];
+                isOk = picked != null && picked == q.answer;
+                if (picked == null) {
+                  ansText = 'Tidak dijawab • Kunci $keyLetter';
+                } else {
+                  final pickedLetter =
+                      letters[picked.clamp(0, letters.length - 1)];
+                  ansText = 'Jawaban $pickedLetter • Kunci $keyLetter';
+                }
+              } else {
+                isOk = idx < correctCount;
+                final fallbackWrong =
+                    letters[(q.answer + 1) % letters.length];
+                ansText = isOk
+                    ? 'Jawaban $keyLetter • Kunci $keyLetter'
+                    : 'Jawaban $fallbackWrong • Kunci $keyLetter';
+              }
+              return LabListItem(
+                leading: LabIconTile(isOk ? 'circle_check' : 'cross'),
+                title: 'Soal ${idx + 1} • ${q.text}',
+                subtitle: ansText,
+                titleSize: 12,
+                trailing: isOk
+                    ? const LabChip.live('Benar')
+                    : const LabChip.danger('Salah'),
+              );
+            }(),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              attempt != null
+                  ? 'Data jawaban tersinkron dari Supabase ($total soal)'
+                  : 'Menampilkan $total dari $total soal • geser untuk melihat rincian',
+              textAlign: TextAlign.center,
+              style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -208,6 +277,7 @@ class _AslabHasilKuisPageState extends State<AslabHasilKuisPage> {
             ),
             for (final r in items)
               LabCard(
+                onTap: () => _showAnswerBreakdown(r, kuisTitle),
                 children: [
                   Row(
                     children: [

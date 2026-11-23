@@ -1484,6 +1484,14 @@ class PraktikumSyncService extends ChangeNotifier {
     required Map<int, int> answers,
     required int durationSeconds,
   }) async {
+    // Idempotent: jika praktikan sudah pernah mengirim kuis untuk modul ini,
+    // kembalikan hasil sebelumnya tanpa menimpa.
+    final key = _subKey(courseId, meetingNumber, userIdentifier);
+    final existing = _quizAttempts[key];
+    if (existing != null) {
+      return existing;
+    }
+
     final questions = questionsForCourse(courseId);
     var correct = 0;
     for (var i = 0; i < questions.length; i++) {

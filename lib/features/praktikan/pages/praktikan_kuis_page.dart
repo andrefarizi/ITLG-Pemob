@@ -87,10 +87,27 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
       return;
     }
     if (_submitting) return;
-    setState(() {
-      _commit();
-      _submitting = true;
-    });
+    setState(() => _commit());
+
+    final total = _questions.length;
+    final unanswered = <int>[
+      for (var n = 0; n < total; n++)
+        if (!_answers.containsKey(n)) n + 1,
+    ];
+    final msg = unanswered.isEmpty
+        ? 'Anda telah menjawab semua $total soal. Yakin ingin mengakhiri dan mengumpulkan kuis?'
+        : 'Anda telah menjawab ${_answers.length} dari $total soal. Soal nomor ${unanswered.join(', ')} belum dijawab. Yakin ingin mengakhiri dan mengumpulkan kuis?';
+
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'circle_check',
+      title: 'Kumpulkan Kuis Sekarang?',
+      message: msg,
+      cancelLabel: 'Periksa Kembali',
+      confirmLabel: 'Ya, Kumpulkan',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _submitting = true);
 
     final auth = AuthController.instance;
     final elapsed = (_initialSeconds - _secondsLeft).clamp(1, _initialSeconds);

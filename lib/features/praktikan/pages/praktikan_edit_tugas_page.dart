@@ -42,22 +42,19 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
     super.initState();
     final userId = AuthController.instance.userIdentifier;
     final existing = _sync.submissionFor(_course.id, _meetingNumber, userId);
+    final isSubmitted = existing != null && existing.isSubmitted;
 
-    _files = existing != null && existing.files.isNotEmpty
+    _files = isSubmitted
         ? List<PrakFile>.from(existing.files)
-        : List<PrakFile>.from(widget.nav.store.tugasFiles);
+        : <PrakFile>[];
     _nama = TextEditingController(
-      text: _files.isNotEmpty ? _files.first.name : 'Laporan Tugas $_meetingNumber',
+      text: isSubmitted && _files.isNotEmpty ? _files.first.name : '',
     );
     _repo = TextEditingController(
-      text: existing != null && existing.repoUrl.isNotEmpty
-          ? existing.repoUrl
-          : 'https://github.com/andrefarizi/praktikum-${_course.id}',
+      text: isSubmitted ? existing.repoUrl : '',
     );
     _catatan = TextEditingController(
-      text: existing != null && existing.note.isNotEmpty
-          ? existing.note
-          : 'Tugas pertemuan $_meetingNumber sudah diuji dan siap dinilai asisten.',
+      text: isSubmitted ? existing.note : '',
     );
   }
 
@@ -109,6 +106,16 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
 
   Future<void> _batalkan() async {
     if (_saving) return;
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'delete_filled',
+      title: 'Batalkan Pengumpulan?',
+      message:
+          'Semua berkas yang sudah diunggah untuk tugas ini akan dihapus. Kamu masih bisa mengumpulkan ulang sebelum deadline.',
+      cancelLabel: 'Batal',
+      confirmLabel: 'Ya, Hapus Pengumpulan',
+    );
+    if (!ok || !mounted) return;
     setState(() => _saving = true);
     await _sync.cancelTugasSubmission(
       courseId: _course.id,
@@ -163,26 +170,34 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
             ),
           ],
         ),
-        const PrakNotice.warn(
+        PrakNotice.warn(
           icon: 'clock',
-          text: 'Pengumpulan masih dapat diubah sampai deadline. Sisa waktu '
-              '1 hari 14 jam.',
+          text: submitted
+              ? 'Pengumpulan masih dapat diubah sampai deadline. Sisa waktu 1 hari 14 jam.'
+              : 'Tugas belum dikumpulkan. Unggah berkas lalu tekan Kumpulkan sebelum deadline.',
         ),
         LabCard(
           children: [
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
               child: LabSectionTitle(
-                  icon: 'outline_assignment', text: 'Ubah Berkas Tugas'),
+                icon: 'outline_assignment',
+                text: submitted ? 'Ubah Berkas Tugas' : 'Unggah Berkas Tugas',
+              ),
             ),
             PrakField(
               label: 'Nama Berkas',
-              child: PrakInput(controller: _nama),
+              child: PrakInput(
+                controller: _nama,
+                hint: 'Contoh: Tugas $_meetingNumber - ${c.name}',
+              ),
             ),
             PrakField(
               label: 'Berkas',
               child: PrakUploadBox(
-                title: 'Tarik atau Pilih Berkas Pengganti',
+                title: submitted
+                    ? 'Tarik atau Pilih Berkas Pengganti'
+                    : 'Tarik atau Pilih Berkas Tugas',
                 subtitle: 'Format didukung PNG, JPG, PDF, PPTX',
                 onTap: _addFile,
               ),
@@ -193,27 +208,32 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
               large: true,
               onTap: _addFile,
             ),
-            if (_files.isNotEmpty)
-              PrakField(
-                label: 'Berkas Terunggah',
-                child: LabColumn(
-                  gap: 8,
-                  children: [
-                    for (final f in _files)
-                      PrakFileItem(
-                        name: f.name,
-                        meta: f.meta,
-                        action: 'delete_filled',
-                        onAction: () => setState(() => _files.remove(f)),
-                      ),
-                  ],
-                ),
-              ),
+            PrakField(
+              label: 'Berkas Terunggah',
+              child: _files.isEmpty
+                  ? Text(
+                      'Belum ada berkas yang diunggah.',
+                      style: labText(12, c: LabColors.textGrey),
+                    )
+                  : LabColumn(
+                      gap: 8,
+                      children: [
+                        for (final f in _files)
+                          PrakFileItem(
+                            name: f.name,
+                            meta: f.meta,
+                            action: 'delete_filled',
+                            onAction: () => setState(() => _files.remove(f)),
+                          ),
+                      ],
+                    ),
+            ),
             PrakField(
               label: 'Tautan Repositori (Opsional)',
               child: PrakInput(
                 controller: _repo,
                 leadingIcon: 'link_chain',
+                hint: 'https://github.com/... (opsional)',
                 textColor: ItlgColors.textMuted,
               ),
             ),
@@ -228,7 +248,10 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
             ),
             PrakField(
               label: 'Catatan :',
-              child: PrakTextArea(controller: _catatan),
+              child: PrakTextArea(
+                controller: _catatan,
+                hint: 'Tulis catatan untuk asisten (opsional)',
+              ),
             ),
           ],
         ),
@@ -237,16 +260,19 @@ class _PraktikanEditTugasPageState extends State<PraktikanEditTugasPage> {
           children: [
             LabPrimaryButton(
               icon: 'check',
-              label: 'Simpan Perubahan',
+              label: submitted
+                  ? 'Simpan Perubahan'
+                  : 'Kumpulkan Tugas Sekarang',
               large: true,
               onTap: _simpan,
             ),
-            LabOutlineButton(
-              icon: 'cross',
-              label: 'Batalkan Pengumpulan',
-              large: true,
-              onTap: _batalkan,
-            ),
+            if (submitted)
+              LabOutlineButton(
+                icon: 'cross',
+                label: 'Batalkan Pengumpulan',
+                large: true,
+                onTap: _batalkan,
+              ),
           ],
         ),
       ],

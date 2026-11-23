@@ -33,7 +33,8 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
 
   late final TextEditingController _nama;
   late final TextEditingController _desk;
-  int _dl = 0;
+  final int _dl = 0;
+  String? _customDeadline;
   late final List<(String, String)> _files;
 
   @override
@@ -65,9 +66,24 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
   }
 
   Future<void> _pickDeadline() async {
-    final i = await prakShowPicker(context,
-        title: 'Deadline Pengumpulan', options: _deadline, selected: _dl);
-    if (i != null && mounted) setState(() => _dl = i);
+    final picked = await labShowDateTimePicker(
+      context,
+      title: 'Pilih Tanggal & Jam',
+    );
+    if (picked == null || !mounted) return;
+    const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    final dName = days[picked.weekday - 1];
+    final dd = picked.day.toString().padLeft(2, '0');
+    final hh = picked.hour.toString().padLeft(2, '0');
+    final mm = picked.minute.toString().padLeft(2, '0');
+    setState(() {
+      _customDeadline =
+          '$dName, $dd ${months[picked.month - 1]} ${picked.year} • $hh:$mm WIB';
+    });
   }
 
   Future<void> _addFile() async {
@@ -96,7 +112,7 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
       title: _nama.text.trim().isEmpty ? c.tugasTitle : _nama.text.trim(),
       description: _desk.text.trim(),
       fileName: _files.isNotEmpty ? _files.first.$1 : null,
-      deadline: _deadline[_dl],
+      deadline: _customDeadline ?? _deadline[_dl],
     );
     if (!mounted) return;
     _close('Perubahan tugas Pertemuan ${widget.meetingNumber} disimpan ke BE');
@@ -155,7 +171,10 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
             ),
             PrakField(
               label: 'Deadline Pengumpulan',
-              child: PrakSelect(value: _deadline[_dl], onTap: _pickDeadline),
+              child: PrakSelect(
+                value: _customDeadline ?? _deadline[_dl],
+                onTap: _pickDeadline,
+              ),
             ),
             PrakField(
               label: 'Berkas Tugas',

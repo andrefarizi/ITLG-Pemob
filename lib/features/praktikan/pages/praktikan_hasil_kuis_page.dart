@@ -27,7 +27,74 @@ class PraktikanHasilKuisPage extends StatefulWidget {
 
 class _PraktikanHasilKuisPageState extends State<PraktikanHasilKuisPage> {
   static const List<String> _letters = ['A', 'B', 'C', 'D'];
-  bool _all = false;
+
+  /// Figma: "Sheet Pembahasan Kuis-Praktikan" (5828:3459).
+  void _showPembahasanSheet({
+    required String kuisTitle,
+    required List<PrakQuestion> questions,
+    required KuisAttemptRecord? attempt,
+    required int score,
+    required int correct,
+  }) {
+    final total = questions.length;
+    final lulus = score >= 70;
+    labShowCustomSheet<void>(
+      context,
+      title: 'Pembahasan Kuis • Jawaban Kamu',
+      subtitle:
+          '$kuisTitle • Skor $score • $correct dari $total benar • ${lulus ? 'Lulus' : 'Remedial'}',
+      child: LabColumn(
+        gap: 8,
+        children: [
+          for (var i = 0; i < total; i++)
+            () {
+              final q = questions[i];
+              final keyLetter = _letters[q.answer.clamp(0, _letters.length - 1)];
+              final picked = attempt?.answers[i];
+              final isOk = attempt != null
+                  ? (picked != null && picked == q.answer)
+                  : i < correct;
+              final ansSub = attempt != null
+                  ? (picked == null
+                      ? 'Tidak dijawab • Kunci $keyLetter'
+                      : 'Jawaban ${_letters[picked.clamp(0, _letters.length - 1)]} • Kunci $keyLetter')
+                  : (isOk
+                      ? 'Jawaban $keyLetter • Kunci $keyLetter'
+                      : 'Jawaban ${_letters[(q.answer + 1) % _letters.length]} • Kunci $keyLetter');
+              return LabListItem(
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: LabColors.tile,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: LabIcon(
+                    isOk ? 'circle_check' : 'cross',
+                    size: 18,
+                    color: isOk ? LabColors.green : ItlgColors.primary,
+                  ),
+                ),
+                title: 'Soal ${i + 1} • ${q.text}',
+                subtitle: ansSub,
+                titleSize: 12,
+                trailing: isOk
+                    ? const LabChip.live('Benar')
+                    : const LabChip.danger('Salah'),
+              );
+            }(),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Menampilkan $total dari $total soal • geser ke bawah untuk melihat sisanya',
+              style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +138,12 @@ class _PraktikanHasilKuisPageState extends State<PraktikanHasilKuisPage> {
     final correct = attempt?.correctCount ?? 8;
     final wrong = attempt?.wrongCount ?? 2;
     final timeStr = prakClock(attempt?.durationSeconds ?? (5 * 60 + 28));
-    final shown = _all ? review.length : (review.length < 4 ? review.length : 4);
+    final shown = review.length < 4 ? review.length : 4;
+    final kuisTitle = (widget.meeting?.kuisTitle.isNotEmpty ?? false)
+        ? widget.meeting!.kuisTitle
+        : (widget.meeting != null
+            ? 'Kuis ${widget.meeting!.module.replaceFirst(' • ', ' : ')}'
+            : 'Pre-Test Modul $mNum');
 
     return LabSubPage(
       onLogoTap: widget.nav.home,
@@ -117,8 +189,14 @@ class _PraktikanHasilKuisPageState extends State<PraktikanHasilKuisPage> {
               left: const LabSectionTitle(
                   icon: 'clipboard', text: 'Pembahasan'),
               right: PrakSideLink(
-                _all ? 'Ringkas' : 'Lihat Semua',
-                onTap: () => setState(() => _all = !_all),
+                'Lihat Semua',
+                onTap: () => _showPembahasanSheet(
+                  kuisTitle: kuisTitle,
+                  questions: questions,
+                  attempt: attempt,
+                  score: score,
+                  correct: correct,
+                ),
               ),
             ),
             LabColumn(
@@ -135,6 +213,13 @@ class _PraktikanHasilKuisPageState extends State<PraktikanHasilKuisPage> {
                             size: 18, color: LabColors.green)
                         : const LabIcon('cross',
                             size: 18, color: ItlgColors.primary),
+                    onTap: () => _showPembahasanSheet(
+                      kuisTitle: kuisTitle,
+                      questions: questions,
+                      attempt: attempt,
+                      score: score,
+                      correct: correct,
+                    ),
                   ),
               ],
             ),

@@ -39,6 +39,8 @@ class AslabDetailPertemuanPage extends StatelessWidget {
         final modulFile = (live != null && live.materiFile.isNotEmpty)
             ? live.materiFile
             : course.materiFile;
+        final hasTugas =
+            (live != null && live.tugasTitle.isNotEmpty) || mNum <= 4;
         final tugasTitle = (live != null && live.tugasTitle.isNotEmpty)
             ? live.tugasTitle
             : (mNum == 4 ? course.tugasTitle : 'Tugas $mNum');
@@ -47,6 +49,8 @@ class AslabDetailPertemuanPage extends StatelessWidget {
             : course.tugasDeadline;
         final subsCount =
             (20 + sync.submissionsForCourse(courseId, mNum).length).clamp(0, 24);
+        final hasKuis =
+            (live != null && live.kuisTitle.isNotEmpty) || mNum <= 4;
         final kuisTitle = (live != null && live.kuisTitle.isNotEmpty)
             ? live.kuisTitle
             : course.preTest;
@@ -171,7 +175,7 @@ class AslabDetailPertemuanPage extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: LabPrimaryButton(
-                            icon: 'view',
+                            icon: 'eye',
                             label: 'Detail Modul',
                             onTap: () => nav.detailModul(context,
                                 courseId: courseId, meetingNumber: mNum),
@@ -194,79 +198,96 @@ class AslabDetailPertemuanPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 LabCard(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEEF0F3),
-                            borderRadius: BorderRadius.circular(9),
+                  children: !hasTugas
+                      ? [
+                          Text(
+                            'Belum ada tugas di pertemuan ini.',
+                            style: labText(12, c: ItlgColors.textMuted),
                           ),
-                          child: const LabIcon('clipboard',
-                              size: 20, color: ItlgColors.primary),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
+                          LabPrimaryButton(
+                            icon: 'plus',
+                            label: 'Tambah Tugas Pertemuan Ini',
+                            onTap: () => nav.tambahMateri(context,
+                                kind: 1,
+                                courseId: courseId,
+                                meetingNumber: mNum),
+                          ),
+                        ]
+                      : [
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
+                                width: 36,
+                                height: 36,
+                                alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEDDADA),
-                                  borderRadius: BorderRadius.circular(6),
+                                  color: const Color(0xFFEEF0F3),
+                                  borderRadius: BorderRadius.circular(9),
                                 ),
-                                child: Text(
-                                  'Tugas',
-                                  style: labText(10,
-                                      w: kSemiBold,
-                                      c: const Color(0xFF850909)),
+                                child: const LabIcon('clipboard',
+                                    size: 20, color: ItlgColors.primary),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEDDADA),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Tugas',
+                                        style: labText(10,
+                                            w: kSemiBold,
+                                            c: const Color(0xFF850909)),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      tugasTitle,
+                                      style: labText(12,
+                                          w: kBold,
+                                          c: const Color(0xFF0A0B0C)),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$tugasDeadline • $subsCount / 24 terkumpul',
+                                      style: labText(11,
+                                          w: kMedium,
+                                          c: const Color(0xFF6B7280)),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                tugasTitle,
-                                style: labText(12,
-                                    w: kBold, c: const Color(0xFF0A0B0C)),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '$tugasDeadline • $subsCount / 24 terkumpul',
-                                style: labText(11,
-                                    w: kMedium, c: const Color(0xFF6B7280)),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: LabOutlineButton(
-                            icon: 'pencil',
-                            label: 'Edit Tugas',
-                            onTap: () => nav.editTugas(context,
-                                courseId: courseId, meetingNumber: mNum),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: LabOutlineButton(
+                                  icon: 'pencil',
+                                  label: 'Edit Tugas',
+                                  onTap: () => nav.editTugas(context,
+                                      courseId: courseId, meetingNumber: mNum),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: LabPrimaryButton(
+                                  icon: 'clipboard',
+                                  label: 'Evaluasi Tugas',
+                                  onTap: () => nav.evaluasiTugas(context,
+                                      courseId: courseId, meetingNumber: mNum),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: LabPrimaryButton(
-                            icon: 'clipboard',
-                            label: 'Evaluasi Tugas',
-                            onTap: () => nav.evaluasiTugas(context,
-                                courseId: courseId, meetingNumber: mNum),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
                 ),
               ],
             ),
@@ -281,81 +302,98 @@ class AslabDetailPertemuanPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 LabCard(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEEF0F3),
-                            borderRadius: BorderRadius.circular(9),
+                  children: !hasKuis
+                      ? [
+                          Text(
+                            'Belum ada kuis di pertemuan ini.',
+                            style: labText(12, c: ItlgColors.textMuted),
                           ),
-                          child: const LabIcon('question',
-                              size: 20, color: ItlgColors.primary),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEEF0F3),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  'Kuis',
-                                  style: labText(10,
-                                      w: kSemiBold,
-                                      c: const Color(0xFF6B7280)),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                kuisTitle,
-                                style: labText(12,
-                                    w: kBold, c: const Color(0xFF0A0B0C)),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '$qCount soal • 10 menit • $attemptCount / 24 mengerjakan',
-                                style: labText(11,
-                                    w: kMedium, c: const Color(0xFF6B7280)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: LabOutlineButton(
-                            icon: 'pencil',
-                            label: 'Edit Kuis',
+                          LabPrimaryButton(
+                            icon: 'plus',
+                            label: 'Tambah Kuis Pertemuan Ini',
                             onTap: () => nav.tambahMateri(context,
                                 kind: 2,
                                 courseId: courseId,
                                 meetingNumber: mNum),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: LabPrimaryButton(
-                            icon: 'view',
-                            label: 'Lihat Hasil',
-                            onTap: () => nav.hasilKuis(context,
-                                courseId: courseId, meetingNumber: mNum),
+                        ]
+                      : [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEEF0F3),
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: const LabIcon('question',
+                                    size: 20, color: ItlgColors.primary),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEEF0F3),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Kuis',
+                                        style: labText(10,
+                                            w: kSemiBold,
+                                            c: const Color(0xFF6B7280)),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      kuisTitle,
+                                      style: labText(12,
+                                          w: kBold,
+                                          c: const Color(0xFF0A0B0C)),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$qCount soal • 10 menit • $attemptCount / 24 mengerjakan',
+                                      style: labText(11,
+                                          w: kMedium,
+                                          c: const Color(0xFF6B7280)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                          Row(
+                            children: [
+                              Expanded(
+                                child: LabOutlineButton(
+                                  icon: 'pencil',
+                                  label: 'Edit Kuis',
+                                  onTap: () => nav.tambahMateri(context,
+                                      kind: 2,
+                                      courseId: courseId,
+                                      meetingNumber: mNum),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: LabPrimaryButton(
+                                  icon: 'eye',
+                                  label: 'Lihat Hasil',
+                                  onTap: () => nav.hasilKuis(context,
+                                      courseId: courseId, meetingNumber: mNum),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                 ),
               ],
             ),
