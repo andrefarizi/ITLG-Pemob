@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
@@ -54,6 +55,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
   bool _qr = true;
   bool _tombol = true;
   bool _ttd = true;
+  int _sesi = 0; // 0 = Sesi C1, 1 = Sesi C2
   int _tt = 0;
   int _rd = 1;
   int _bt = 1;
@@ -112,13 +114,32 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
   @override
   Widget build(BuildContext context) {
     final course = PraktikumSyncService.instance.courseById(widget.courseId);
+    final courseScheds = JadwalSyncService.instance.schedules
+        .where((s) => s.courseId == widget.courseId)
+        .toList();
+    final sesiOptions = courseScheds.isNotEmpty
+        ? [
+            for (final s in courseScheds)
+              'Kom C • ${s.sessionShort} (${s.dayShort}, ${s.startTime}–${s.endTime} WIB)',
+          ]
+        : const [
+            'Kom C • Sesi C1 (08:00–09:40 WIB)',
+            'Kom C • Sesi C2 (10:00–11:40 WIB)',
+          ];
+    final safeSesi = _sesi.clamp(0, sesiOptions.length - 1);
+    final meetingObj = course.meetings.firstWhere(
+      (m) => m.number == widget.meetingNumber,
+      orElse: () => course.meetings.first,
+    );
+    final meetingDateShort = meetingObj.date.split(' • ').first;
+
     return LabSubPage(
       onLogoTap: widget.nav.home,
       children: [
         LabCard(
           children: [
             LabOverline(
-              overline: 'Praktikum ${course.name} • Kelas C',
+              overline: 'Praktikum ${course.name} • ${course.kelas}',
               title: 'Buat Sesi\nPresensi',
             ),
             Row(
@@ -126,7 +147,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                 Flexible(
                   child: LabMeta(
                     icon: 'calendar',
-                    text: 'Pertemuan ${widget.meetingNumber} • Sen, 05 Okt 2026',
+                    text: 'Pertemuan ${widget.meetingNumber} • $meetingDateShort',
                   ),
                 ),
                 const SizedBox(width: 24),
@@ -134,6 +155,14 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                   child: LabMeta(icon: 'people_group', text: '24 Praktikan'),
                 ),
               ],
+            ),
+            PrakField(
+              label: 'Sesi Kom C (Durasi 1 jam 40 menit)',
+              child: PrakSelect(
+                value: sesiOptions[safeSesi],
+                onTap: () => _pick(
+                    'Pilih Sesi Kom C', sesiOptions, safeSesi, (i) => _sesi = i),
+              ),
             ),
           ],
         ),

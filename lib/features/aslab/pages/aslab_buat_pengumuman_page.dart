@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/jadwal_sync_service.dart';
-import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -25,10 +24,16 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
     ('triangle_alert', 'Penting'),
   ];
   static const List<(int, String, String, String)> _jadwalOptions = [
-    (3, '13:00', '14:40', 'Kam, 01 Okt 2026 • 13:00–14:40'),
-    (4, '08:00', '09:40', 'Jum, 02 Okt 2026 • 08:00–09:40'),
-    (5, '10:00', '11:40', 'Sab, 03 Okt 2026 • 10:00–11:40'),
-    (1, '10:00', '11:40', 'Sel, 29 Sep 2026 • 10:00–11:40'),
+    (0, '08:00', '09:40', 'Sen, 28 Sep 2026 • 08:00–09:40 (1j 40m)'),
+    (0, '10:00', '11:40', 'Sen, 28 Sep 2026 • 10:00–11:40 (1j 40m)'),
+    (1, '08:00', '09:40', 'Sel, 29 Sep 2026 • 08:00–09:40 (1j 40m)'),
+    (1, '10:00', '11:40', 'Sel, 29 Sep 2026 • 10:00–11:40 (1j 40m)'),
+    (2, '10:00', '11:40', 'Rab, 30 Sep 2026 • 10:00–11:40 (1j 40m)'),
+    (2, '13:00', '14:40', 'Rab, 30 Sep 2026 • 13:00–14:40 (1j 40m)'),
+    (3, '13:00', '14:40', 'Kam, 01 Okt 2026 • 13:00–14:40 (1j 40m)'),
+    (3, '15:00', '16:40', 'Kam, 01 Okt 2026 • 15:00–16:40 (1j 40m)'),
+    (4, '08:00', '09:40', 'Jum, 02 Okt 2026 • 08:00–09:40 (1j 40m)'),
+    (5, '10:00', '11:40', 'Sab, 03 Okt 2026 • 10:00–11:40 (1j 40m)'),
   ];
   static const List<String> _ruang = [
     'Lab Komputer 1',
@@ -48,10 +53,11 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
   int _rg = 0;
 
   List<String> get _tujuan {
-    final courses = PraktikumSyncService.instance.courses;
+    final scheds = JadwalSyncService.instance.schedules;
     return [
-      for (final c in courses) '${c.name} • ${c.kelas}',
-      'Semua praktikan yang saya ampu',
+      for (final s in scheds)
+        '${s.courseName} • Kom C (${s.sessionShort} • ${s.dayShort} ${s.startTime}–${s.endTime})',
+      'Semua praktikan Kom C (C1 & C2)',
     ];
   }
 
@@ -70,11 +76,13 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
   }
 
   Future<void> _kirim() async {
-    final courses = PraktikumSyncService.instance.courses;
-    final courseId = _to < courses.length ? courses[_to].id : null;
+    final scheds = JadwalSyncService.instance.schedules;
+    final targetSched = _to < scheds.length ? scheds[_to] : null;
+    final courseId = targetSched?.courseId;
     final sched = _jadwalOptions[_jd];
     await JadwalSyncService.instance.publishAnnouncementAndSchedule(
       courseId: courseId,
+      scheduleId: targetSched?.id,
       categoryIndex: _kat,
       title: _judul.text.trim().isEmpty
           ? 'Pengumuman Praktikum'

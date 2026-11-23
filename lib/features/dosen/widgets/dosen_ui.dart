@@ -207,7 +207,7 @@ class DosenClassTitle extends StatelessWidget {
   final String courseName;
   const DosenClassTitle({
     super.key,
-    this.kelas = 'Kelas C',
+    this.kelas = 'Kom C (C1 & C2)',
     this.code,
     this.courseName = 'Pemrograman Mobile',
   });

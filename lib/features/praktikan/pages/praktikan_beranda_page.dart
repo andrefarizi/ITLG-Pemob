@@ -108,6 +108,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                     _TodayItem(
                       start: s.startTime,
                       end: s.endTime,
+                      titleOverride: '${s.courseName} • ${s.sessionShort}',
                       roomOverride: s.room,
                       asistenOverride: s.asisten,
                       course: praktikumSync.courseById(s.courseId),
@@ -287,7 +288,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
     final latest = anns.isNotEmpty ? anns.first : null;
     final title = latest?.title ?? _store.announcements.first.title;
     final subtitle = latest?.body ??
-        'Praktikum Machine Learning Kelas C pindah ke Kam, 01 Okt • 13:00';
+        'Praktikum Machine Learning Kom C (C1 & C2) hari Kamis di Lab AI & Data';
     final timeText = latest?.relativeTime ?? _store.announcements.first.time;
     return LabColumn(
       gap: 12,
@@ -475,6 +476,7 @@ class _DayButton extends StatelessWidget {
 class _TodayItem {
   final String start;
   final String end;
+  final String? titleOverride;
   final String? roomOverride;
   final String? asistenOverride;
   final PrakCourse course;
@@ -482,6 +484,7 @@ class _TodayItem {
   const _TodayItem({
     required this.start,
     required this.end,
+    this.titleOverride,
     this.roomOverride,
     this.asistenOverride,
     required this.course,
@@ -553,7 +556,7 @@ class _TodayRow extends StatelessWidget {
               child: LabColumn(
                 gap: 4,
                 children: [
-                  Text(item.course.name,
+                  Text(item.titleOverride ?? item.course.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: labText(14, w: kBold)),

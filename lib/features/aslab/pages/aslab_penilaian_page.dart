@@ -83,7 +83,7 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                     return _TaskCard(
                       tag: 'Tugas 4',
                       title: c.tugasTitle.replaceFirst('Tugas 4 : ', ''),
-                      course: 'Praktikum ${c.name} • Kelas C',
+                      course: 'Praktikum ${c.name} • Kom C (C1 & C2)',
                       deadline: c.tugasDeadline,
                       done: '$gradedCount / $totalSubs',
                       fraction: (gradedCount / totalSubs).clamp(0.0, 1.0),
@@ -96,7 +96,7 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                 _TaskCard(
                   tag: 'Tugas 3',
                   title: c.grades.length > 1 ? c.grades[1].title : c.modulTitle,
-                  course: 'Praktikum ${c.name} • Kelas C',
+                  course: 'Praktikum ${c.name} • Kom C (C1 & C2)',
                   done: '24 / 24',
                   fraction: 1,
                   finished: true,

@@ -41,6 +41,15 @@ class PraktikumScheduleRecord {
 
   String get jadwalShort => '$dayShort • $startTime–$endTime WIB';
 
+  /// Ekstrak label sesi ('Sesi C1' atau 'Sesi C2') dari nama kelas / id.
+  String get sessionShort {
+    final lower = kelas.toLowerCase();
+    if (lower.contains('c2') || id.toLowerCase().endsWith('-c2')) {
+      return 'Sesi C2';
+    }
+    return 'Sesi C1';
+  }
+
   PraktikumScheduleRecord copyWith({
     int? dayIndex,
     String? dayShort,
@@ -291,11 +300,12 @@ class JadwalSyncService extends ChangeNotifier {
     _schedules
       ..clear()
       ..addAll([
+        // 1. Pemrograman Mobile — Kom C (Senin) — 1 jam 40 menit per sesi
         PraktikumScheduleRecord(
           id: 'sched-pemob',
           courseId: 'pemob',
           courseName: 'Pemrograman Mobile',
-          kelas: 'TIF 3001 - Kelas C',
+          kelas: 'TIF 3001 - Kom C (Sesi C1)',
           dayIndex: 0,
           dayShort: 'Sen',
           startTime: '08:00',
@@ -306,24 +316,54 @@ class JadwalSyncService extends ChangeNotifier {
           updatedAt: now,
         ),
         PraktikumScheduleRecord(
+          id: 'sched-pemob-c2',
+          courseId: 'pemob',
+          courseName: 'Pemrograman Mobile',
+          kelas: 'TIF 3001 - Kom C (Sesi C2)',
+          dayIndex: 0,
+          dayShort: 'Sen',
+          startTime: '10:00',
+          endTime: '11:40',
+          room: 'Lab Komputer 1',
+          asisten: 'Andi Pratama',
+          weekNumber: 4,
+          updatedAt: now,
+        ),
+        // 2. Desain Interaksi — Kom C (Selasa) — 1 jam 40 menit per sesi
+        PraktikumScheduleRecord(
           id: 'sched-desain',
           courseId: 'desain',
           courseName: 'Desain Interaksi',
-          kelas: 'TIF 3002 - Kelas C',
-          dayIndex: 0,
-          dayShort: 'Sen',
-          startTime: '13:00',
-          endTime: '14:40',
+          kelas: 'TIF 3002 - Kom C (Sesi C1)',
+          dayIndex: 1,
+          dayShort: 'Sel',
+          startTime: '08:00',
+          endTime: '09:40',
           room: 'Lab Jaringan 2',
           asisten: 'Feri Gunawan',
           weekNumber: 4,
           updatedAt: now,
         ),
         PraktikumScheduleRecord(
+          id: 'sched-desain-c2',
+          courseId: 'desain',
+          courseName: 'Desain Interaksi',
+          kelas: 'TIF 3002 - Kom C (Sesi C2)',
+          dayIndex: 1,
+          dayShort: 'Sel',
+          startTime: '10:00',
+          endTime: '11:40',
+          room: 'Lab Jaringan 2',
+          asisten: 'Feri Gunawan',
+          weekNumber: 4,
+          updatedAt: now,
+        ),
+        // 3. Analisis Desain Jaringan — Kom C (Rabu) — 1 jam 40 menit per sesi
+        PraktikumScheduleRecord(
           id: 'sched-adj',
           courseId: 'adj',
           courseName: 'Analisis Desain Jaringan',
-          kelas: 'TIF 3003 - Kelas C',
+          kelas: 'TIF 3003 - Kom C (Sesi C1)',
           dayIndex: 2,
           dayShort: 'Rab',
           startTime: '10:00',
@@ -334,14 +374,43 @@ class JadwalSyncService extends ChangeNotifier {
           updatedAt: now,
         ),
         PraktikumScheduleRecord(
+          id: 'sched-adj-c2',
+          courseId: 'adj',
+          courseName: 'Analisis Desain Jaringan',
+          kelas: 'TIF 3003 - Kom C (Sesi C2)',
+          dayIndex: 2,
+          dayShort: 'Rab',
+          startTime: '13:00',
+          endTime: '14:40',
+          room: 'Lab Jaringan 1',
+          asisten: 'Sinta Marpaung',
+          weekNumber: 4,
+          updatedAt: now,
+        ),
+        // 4. Machine Learning — Kom C (Kamis) — 1 jam 40 menit per sesi
+        PraktikumScheduleRecord(
           id: 'sched-ml',
           courseId: 'ml',
           courseName: 'Machine Learning',
-          kelas: 'TIF 3004 - Kelas C',
+          kelas: 'TIF 3004 - Kom C (Sesi C1)',
           dayIndex: 3,
           dayShort: 'Kam',
           startTime: '13:00',
           endTime: '14:40',
+          room: 'Lab AI & Data',
+          asisten: 'Rizky Harahap',
+          weekNumber: 4,
+          updatedAt: now,
+        ),
+        PraktikumScheduleRecord(
+          id: 'sched-ml-c2',
+          courseId: 'ml',
+          courseName: 'Machine Learning',
+          kelas: 'TIF 3004 - Kom C (Sesi C2)',
+          dayIndex: 3,
+          dayShort: 'Kam',
+          startTime: '15:00',
+          endTime: '16:40',
           room: 'Lab AI & Data',
           asisten: 'Rizky Harahap',
           weekNumber: 4,
@@ -358,12 +427,12 @@ class JadwalSyncService extends ChangeNotifier {
           category: 1,
           tag: 'Perubahan Jadwal',
           tagRed: true,
-          title: 'Pemindahan Jadwal Praktikum',
+          title: 'Jadwal Sesi C1 & C2 Kom C',
           body:
-              'Pertemuan 4 Praktikum Machine Learning Kelas C dipindahkan ke hari Kamis karena penggunaan lab untuk ujian.',
+              'Praktikum Machine Learning Kom C (Sesi C1 13:00–14:40 & Sesi C2 15:00–16:40) dilaksanakan hari Kamis di Lab AI & Data.',
           author: 'Rizky Harahap • Asisten Lab',
-          oldSchedule: 'Sel, 29 Sep • 13:00',
-          newSchedule: 'Kam, 01 Okt • 13:00',
+          oldSchedule: 'Sel, 29 Sep • 13:00–14:40',
+          newSchedule: 'Kam, 01 Okt • C1 13:00 | C2 15:00',
           room: 'Lab AI & Data',
           createdAt: now.subtract(const Duration(hours: 2)),
         ),
@@ -388,27 +457,27 @@ class JadwalSyncService extends ChangeNotifier {
           id: 'room-req-1',
           tag: 'Praktikum Pengganti',
           labName: 'Lab Komputer 1',
-          title: 'Praktikum Basis Data • Kelas B',
-          dateLabel: 'Kam, 01 Okt 2026',
-          timeRange: '13:00–14:40',
-          initials: 'SM',
-          requesterName: 'Sinta Marpaung',
+          title: 'Desain Interaksi • Kom C (Sesi C2)',
+          dateLabel: 'Sel, 29 Sep 2026',
+          timeRange: '10:00–11:40',
+          initials: 'FG',
+          requesterName: 'Feri Gunawan',
           requesterRole: 'Asisten Lab',
           reason:
-              'Pengganti pertemuan 3 yang bertepatan dengan libur nasional.',
+              'Pengganti pertemuan 3 Sesi C2 (durasi 1 jam 40 menit) karena libur nasional.',
         ),
         RoomBookingRecord(
           id: 'room-req-2',
           tag: 'Kelas Pengganti',
           labName: 'Lab Multimedia',
-          title: 'Pemrograman Mobile • Kelas A',
+          title: 'Pemrograman Mobile • Kom C (Sesi C1)',
           dateLabel: 'Jum, 02 Okt 2026',
-          timeRange: '10:00–11:40',
+          timeRange: '08:00–09:40',
           initials: 'AR',
           requesterName: 'Abbil Rizki',
           requesterRole: 'Asisten Lab',
           reason:
-              'Kelas pengganti karena perbaikan proyektor di Lab Komputer 1.',
+              'Kelas pengganti Sesi C1 karena perbaikan proyektor di Lab Komputer 1.',
         ),
       ]);
   }
@@ -432,10 +501,45 @@ class JadwalSyncService extends ChangeNotifier {
           .order('start_time', ascending: true);
 
       if (schedRows.isNotEmpty) {
-        _schedules
-          ..clear()
-          ..addAll(schedRows.map(
-              (r) => PraktikumScheduleRecord.fromJson(Map<String, dynamic>.from(r))));
+        final loaded = schedRows
+            .map((r) =>
+                PraktikumScheduleRecord.fromJson(Map<String, dynamic>.from(r)))
+            .toList();
+        final hasKomCSessions = loaded.length >= 8 &&
+            loaded.any((s) => s.id == 'sched-pemob-c2') &&
+            loaded.any((s) => s.kelas.contains('Kom C'));
+        if (!hasKomCSessions) {
+          // Migrasi otomatis jadwal lama (4 baris Kelas C) ke 8 sesi Kom C (C1 & C2)
+          _seedDefaults();
+          try {
+            await client.from('praktikum_schedules').upsert(
+              [
+                for (final s in _schedules)
+                  {
+                    'id': s.id,
+                    'course_id': s.courseId,
+                    'course_name': s.courseName,
+                    'kelas': s.kelas,
+                    'day_index': s.dayIndex,
+                    'day_short': s.dayShort,
+                    'start_time': s.startTime,
+                    'end_time': s.endTime,
+                    'room': s.room,
+                    'asisten': s.asisten,
+                    'week_number': s.weekNumber,
+                    'updated_at': DateTime.now().toIso8601String(),
+                  },
+              ],
+              onConflict: 'id',
+            );
+          } catch (e) {
+            debugPrint('[JadwalSync] Migrasi Kom C C1/C2 gagal: $e');
+          }
+        } else {
+          _schedules
+            ..clear()
+            ..addAll(loaded);
+        }
       }
 
       final annRows = await client
@@ -518,6 +622,7 @@ class JadwalSyncService extends ChangeNotifier {
   /// sekaligus memperbarui jadwal praktikum di Supabase & Kalender perangkat.
   Future<void> publishAnnouncementAndSchedule({
     required String? courseId,
+    String? scheduleId,
     required int categoryIndex, // 0 Perubahan Jadwal, 1 Umum, 2 Penting
     required String title,
     required String body,
@@ -533,7 +638,9 @@ class JadwalSyncService extends ChangeNotifier {
     String? oldScheduleLabel;
 
     if (categoryIndex == 0 && courseId != null && newDayIndex != null) {
-      final idx = _schedules.indexWhere((s) => s.courseId == courseId);
+      final idx = scheduleId != null
+          ? _schedules.indexWhere((s) => s.id == scheduleId)
+          : _schedules.indexWhere((s) => s.courseId == courseId);
       if (idx != -1) {
         final old = _schedules[idx];
         oldScheduleLabel = '${old.dayShort} • ${old.startTime}';

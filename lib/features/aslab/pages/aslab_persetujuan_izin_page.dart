@@ -121,7 +121,7 @@ class _LeaveCard extends StatelessWidget {
         LabPerson(
           initials: leave.initials,
           name: leave.userName,
-          caption: '${leave.userIdentifier} • TIF 3001 - Kelas C',
+          caption: '${leave.userIdentifier} • Kom C (Sesi C1 / C2)',
         ),
         LabStatRow(
           gap: 13,

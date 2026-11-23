@@ -115,9 +115,9 @@ class DeviceCalendarService {
       final (start, end) = _nextOccurrence(s.dayIndex, s.startTime, s.endTime);
       payload.add({
         'id': s.id,
-        'title': 'Praktikum ${s.courseName}',
+        'title': 'Praktikum ${s.courseName} (${s.sessionShort})',
         'description':
-            '${s.kelas} • Asisten: ${s.asisten} • ITLG Mobile (Pengingat 15 menit sebelumnya)',
+            '${s.kelas} • Durasi 1 jam 40 menit • Asisten: ${s.asisten} • ITLG Mobile',
         'location': '${s.room}, Fasilkom-TI USU',
         'startMillis': start.millisecondsSinceEpoch,
         'endMillis': end.millisecondsSinceEpoch,

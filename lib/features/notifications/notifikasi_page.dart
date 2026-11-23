@@ -316,26 +316,29 @@ class _TopBar extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const GyroPage()),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 11, right: 11),
+                child: SizedBox(
+                  width: 146,
+                  height: 38.12,
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Image.asset(
                         'assets/gyro/gyro_avatar.png',
-                        width: 38,
-                        height: 38,
+                        width: 38.12,
+                        height: 38.12,
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.medium,
                         errorBuilder: (_, __, ___) => const Icon(
                           Icons.smart_toy_rounded,
                           size: 26,
                           color: ItlgColors.secondary,
                         ),
                       ),
-                      const SizedBox(width: 3.5),
+                      const SizedBox(width: 3.55),
                       Text(
                         'Tanya Gyro',
                         style: ItlgText.style(
-                          size: 14.2,
+                          size: 14.18,
                           weight: FontWeight.w700,
                           color: const Color(0xFF2F0303),
                         ),

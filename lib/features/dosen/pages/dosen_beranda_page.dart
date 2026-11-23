@@ -176,7 +176,7 @@ class DosenBerandaPage extends StatelessWidget {
                       final ratingLabel =
                           praktikumSync.averageRatingLabelForCourse(c.id);
                       return _GroupItem(
-                        title: '${c.name} • Kelas C',
+                        title: '${c.name} • Kom C (C1 & C2)',
                         assistant: ratingCount > 0
                             ? '${c.asisten} • ★ $ratingLabel'
                             : c.asisten,

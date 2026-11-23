@@ -718,12 +718,12 @@ class PraktikumSyncService extends ChangeNotifier {
           name: 'Pemrograman Mobile',
           asisten: 'Andi Pratama',
           asistenInitials: 'AP',
-          kelas: 'TIF 3001 - Kelas C',
+          kelas: 'TIF 3001 - Kom C (C1 & C2)',
           room: 'Lab Komputer 1',
-          jadwalDaftar: 'Sen, 08:00–09:40',
-          jadwalDetail: 'Sen, 08:00-09:40',
-          jadwalAbsensi: 'Sen, 08:00–09:40',
-          jam: '08:00–09:40 WIB',
+          jadwalDaftar: 'Sen • C1 08:00 | C2 10:00',
+          jadwalDetail: 'Sen, C1 08:00–09:40 • C2 10:00–11:40',
+          jadwalAbsensi: 'Sen, C1 08:00–09:40 | C2 10:00–11:40',
+          jam: 'C1 08:00–09:40 • C2 10:00–11:40 WIB',
           modulTitle: 'State Management',
           modulDesc:
               'Pembahasan State Management Flutter secara mendalam: setState, ChangeNotifier, dan Provider.',
@@ -827,19 +827,19 @@ class PraktikumSyncService extends ChangeNotifier {
           name: 'Desain Interaksi',
           asisten: 'Feri Gunawan',
           asistenInitials: 'FG',
-          kelas: 'TIF 3002 - Kelas C',
+          kelas: 'TIF 3002 - Kom C (C1 & C2)',
           room: 'Lab Jaringan 2',
-          jadwalDaftar: 'Sen, 13:00–14:40',
-          jadwalDetail: 'Sen, 13:00-14:40',
-          jadwalAbsensi: 'Sen, 13:00–14:40',
-          jam: '13:00–14:40 WIB',
+          jadwalDaftar: 'Sel • C1 08:00 | C2 10:00',
+          jadwalDetail: 'Sel, C1 08:00–09:40 • C2 10:00–11:40',
+          jadwalAbsensi: 'Sel, C1 08:00–09:40 | C2 10:00–11:40',
+          jam: 'C1 08:00–09:40 • C2 10:00–11:40 WIB',
           modulTitle: 'Figma Management',
           modulDesc:
               'Pembahasan materi Figma secara mendalam: komponen, variant, dan auto layout.',
           materiTitle: 'Panduan Penggunaan Figma',
           materiFile: 'Panduan_Penggunaan_Figma.pdf',
           tugasTitle: 'Tugas 4 : Pembuatan Prototype Figma',
-          tugasDeadline: 'Batas 10:30 WIB, 29 Sep 2026',
+          tugasDeadline: 'Batas 10:30 WIB, 30 Sep 2026',
           preTest: 'Pre-Test Modul 4 : Figma Management',
           postTest: 'Post-Test Modul 4 : Figma Management',
           hadir: 4,
@@ -849,40 +849,40 @@ class PraktikumSyncService extends ChangeNotifier {
             PrakMeeting(
               number: 5,
               module: 'Modul 5 • Design System',
-              date: 'Sen, 05 Okt 2026 • 13:00–14:40 WIB',
+              date: 'Sel, 06 Okt 2026 • 08:00–09:40 WIB',
               status: PrakAttend.upcoming,
             ),
             PrakMeeting(
               number: 4,
               module: 'Modul 4 • Figma Management',
-              date: 'Sen, 28 Sep 2026 • 13:00–14:40 WIB',
+              date: 'Sel, 29 Sep 2026 • 08:00–09:40 WIB',
               status: PrakAttend.hadir,
               noteIcon: 'qrcode',
-              note: 'Tercatat 13:02 WIB melalui pindai QR',
+              note: 'Tercatat 08:02 WIB melalui pindai QR',
             ),
             PrakMeeting(
               number: 3,
               module: 'Modul 3 • Prototyping Dasar',
-              date: 'Sen, 21 Sep 2026 • 13:00–14:40 WIB',
+              date: 'Sel, 22 Sep 2026 • 08:00–09:40 WIB',
               status: PrakAttend.hadir,
               noteIcon: 'location',
-              note: 'Tercatat 13:00 WIB melalui tombol hadir & lokasi',
+              note: 'Tercatat 08:00 WIB melalui tombol hadir & lokasi',
             ),
             PrakMeeting(
               number: 2,
               module: 'Modul 2 • Wireframing',
-              date: 'Sen, 14 Sep 2026 • 13:00–14:40 WIB',
+              date: 'Sel, 15 Sep 2026 • 08:00–09:40 WIB',
               status: PrakAttend.hadir,
               noteIcon: 'qrcode',
-              note: 'Tercatat 12:58 WIB melalui pindai QR',
+              note: 'Tercatat 07:58 WIB melalui pindai QR',
             ),
             PrakMeeting(
               number: 1,
               module: 'Modul 1 • Pengenalan Figma',
-              date: 'Sen, 07 Sep 2026 • 13:00–14:40 WIB',
+              date: 'Sel, 08 Sep 2026 • 08:00–09:40 WIB',
               status: PrakAttend.hadir,
               noteIcon: 'qrcode',
-              note: 'Tercatat 13:01 WIB melalui pindai QR',
+              note: 'Tercatat 08:01 WIB melalui pindai QR',
             ),
           ],
           nilaiRata: '84,5',
@@ -891,12 +891,12 @@ class PraktikumSyncService extends ChangeNotifier {
             PrakGrade(
               modul: 4,
               title: 'Figma Management',
-              date: 'Sen, 28 September 2026',
+              date: 'Sel, 29 September 2026',
             ),
             PrakGrade(
               modul: 3,
               title: 'Prototyping Dasar',
-              date: 'Sen, 21 September 2026',
+              date: 'Sel, 22 September 2026',
               score: '85',
               note: 'Alur prototipe sudah jelas. Rapikan penamaan frame dan konsistensi komponen.',
               components: [
@@ -908,7 +908,7 @@ class PraktikumSyncService extends ChangeNotifier {
             PrakGrade(
               modul: 2,
               title: 'Wireframing',
-              date: 'Sen, 14 September 2026',
+              date: 'Sel, 15 September 2026',
               score: '82',
               note: 'Wireframe lengkap, namun hierarki konten di halaman utama perlu diperjelas.',
               components: [
@@ -920,7 +920,7 @@ class PraktikumSyncService extends ChangeNotifier {
             PrakGrade(
               modul: 1,
               title: 'Pengenalan Figma',
-              date: 'Sen, 07 September 2026',
+              date: 'Sel, 08 September 2026',
               score: '86,5',
               note: 'Eksplorasi tools sudah baik. Lengkapi dokumentasi pada laporan.',
               components: [
@@ -936,12 +936,12 @@ class PraktikumSyncService extends ChangeNotifier {
           name: 'Analisis Desain Jaringan',
           asisten: 'Sinta Marpaung',
           asistenInitials: 'SM',
-          kelas: 'TIF 3003 - Kelas C',
+          kelas: 'TIF 3003 - Kom C (C1 & C2)',
           room: 'Lab Jaringan 1',
-          jadwalDaftar: 'Rab, 10:00–11:40',
-          jadwalDetail: 'Rab, 10:00-11:40',
-          jadwalAbsensi: 'Rab, 10:00–11:40',
-          jam: '10:00–11:40 WIB',
+          jadwalDaftar: 'Rab • C1 10:00 | C2 13:00',
+          jadwalDetail: 'Rab, C1 10:00–11:40 • C2 13:00–14:40',
+          jadwalAbsensi: 'Rab, C1 10:00–11:40 | C2 13:00–14:40',
+          jam: 'C1 10:00–11:40 • C2 13:00–14:40 WIB',
           modulTitle: 'VLAN & Inter-VLAN Routing',
           modulDesc:
               'Perancangan segmentasi VLAN, trunking 802.1Q, dan konfigurasi Router-on-a-Stick pada Cisco Packet Tracer.',
@@ -1045,12 +1045,12 @@ class PraktikumSyncService extends ChangeNotifier {
           name: 'Machine Learning',
           asisten: 'Rizky Harahap',
           asistenInitials: 'RH',
-          kelas: 'TIF 3004 - Kelas C',
+          kelas: 'TIF 3004 - Kom C (C1 & C2)',
           room: 'Lab AI & Data',
-          jadwalDaftar: 'Kam, 13:00–14:40',
-          jadwalDetail: 'Kam, 13:00-14:40',
-          jadwalAbsensi: 'Kam, 13:00–14:40',
-          jam: '13:00–14:40 WIB',
+          jadwalDaftar: 'Kam • C1 13:00 | C2 15:00',
+          jadwalDetail: 'Kam, C1 13:00–14:40 • C2 15:00–16:40',
+          jadwalAbsensi: 'Kam, C1 13:00–14:40 | C2 15:00–16:40',
+          jam: 'C1 13:00–14:40 • C2 15:00–16:40 WIB',
           modulTitle: 'Klasifikasi Supervised Learning',
           modulDesc:
               'Implementasi algoritma Decision Tree, Random Forest, dan evaluasi confusion matrix menggunakan scikit-learn.',
@@ -1274,9 +1274,39 @@ class PraktikumSyncService extends ChangeNotifier {
           );
         }
         if (updated.isNotEmpty) {
-          _courses
-            ..clear()
-            ..addAll(updated);
+          final needsKomCMigration = updated.any((c) =>
+              !c.kelas.contains('Kom C') ||
+              (c.id == 'desain' && c.jadwalDaftar.startsWith('Sen')));
+          if (needsKomCMigration) {
+            // Migrasi otomatis data lama (Kelas C / Desain Senin) ke Kom C (C1 & C2) beda hari
+            _seedDefaults();
+            try {
+              final nowIso = DateTime.now().toIso8601String();
+              for (final c in _courses) {
+                await client.from('praktikum_courses').update({
+                  'code': c.kelas,
+                  'jadwal_daftar': c.jadwalDaftar,
+                  'jadwal_detail': c.jadwalDetail,
+                  'jadwal_absensi': c.jadwalAbsensi,
+                  'jam': c.jam,
+                  'updated_at': nowIso,
+                }).eq('id', c.id);
+              }
+              final desainCourse = courseById('desain');
+              for (final m in desainCourse.meetings) {
+                await client.from('praktikum_meetings').update({
+                  'date_label': m.date,
+                  'updated_at': nowIso,
+                }).eq('id', 'desain-m${m.number}');
+              }
+            } catch (e) {
+              debugPrint('[PraktikumSync] Migrasi Kom C C1/C2 gagal: $e');
+            }
+          } else {
+            _courses
+              ..clear()
+              ..addAll(updated);
+          }
         }
         _backendAvailable = true;
       }

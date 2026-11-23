@@ -209,7 +209,7 @@ class AslabEditHeader extends StatelessWidget {
           child: LabChip.live('Sudah Diterbitkan'),
         ),
         LabOverline(
-          overline: 'Praktikum $courseName • Kelas C',
+          overline: 'Praktikum $courseName • Kom C (C1 & C2)',
           title: title,
         ),
         LabMeta(

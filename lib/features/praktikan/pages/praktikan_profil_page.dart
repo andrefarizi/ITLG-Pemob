@@ -128,7 +128,7 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
             const _DataRow(
                 icon: 'people_group',
                 label: 'Kelas Praktikum',
-                value: 'TIF 3001 - Kelas C'),
+                value: 'Kom C • Sesi C1 & C2'),
             _DataRow(
                 icon: 'envelope',
                 label: 'Email',

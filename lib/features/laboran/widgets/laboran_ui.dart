@@ -307,7 +307,7 @@ class LabTopBar extends StatelessWidget {
             onTap: () => labOpenGyro(context),
             child: Container(
               width: 146,
-              height: 38,
+              height: 38.12,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
@@ -316,9 +316,14 @@ class LabTopBar extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset('assets/gyro/gyro_avatar.png',
-                      width: 38, height: 38, fit: BoxFit.contain),
-                  const SizedBox(width: 3.5),
+                  Image.asset(
+                    'assets/gyro/gyro_avatar.png',
+                    width: 38.12,
+                    height: 38.12,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                  const SizedBox(width: 3.55),
                   Text('Tanya Gyro',
                       style: labText(14.18, w: kBold, c: LabColors.gyroText)),
                 ],

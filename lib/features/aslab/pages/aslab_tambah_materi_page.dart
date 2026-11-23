@@ -192,7 +192,7 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
         LabCard(
           children: [
             LabOverline(
-              overline: 'Praktikum ${course.name} • Kelas C',
+              overline: 'Praktikum ${course.name} • ${course.kelas}',
               title: 'Tambah Materi',
             ),
             PrakField(

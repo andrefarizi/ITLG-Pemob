@@ -334,9 +334,9 @@ INSERT INTO public.praktikum_courses (
     tugas_title, tugas_deadline, pre_test_title, post_test_title, sort_order
 ) VALUES
 (
-    'pemob', 'TIF 3001 - Kelas C', 'Pemrograman Mobile', 'Semester Ganjil 2026/2027',
+    'pemob', 'TIF 3001 - Kom C (C1 & C2)', 'Pemrograman Mobile', 'Semester Ganjil 2026/2027',
     'Andi Pratama', 'AP', 'Lab Komputer 1',
-    'Sen, 08:00–09:40', 'Sen, 08:00-09:40', 'Sen, 08:00–09:40', '08:00–09:40 WIB',
+    'Sen • C1 08:00 | C2 10:00', 'Sen, C1 08:00–09:40 • C2 10:00–11:40', 'Sen, C1 08:00–09:40 | C2 10:00–11:40', 'C1 08:00–09:40 • C2 10:00–11:40 WIB',
     4, 12,
     'State Management',
     'Pembahasan State Management Flutter secara mendalam: setState, ChangeNotifier, dan Provider.',
@@ -345,20 +345,20 @@ INSERT INTO public.praktikum_courses (
     'Pre-Test Modul 4 : State Management', 'Post-Test Modul 4 : State Management', 1
 ),
 (
-    'desain', 'TIF 3002 - Kelas C', 'Desain Interaksi', 'Semester Ganjil 2026/2027',
+    'desain', 'TIF 3002 - Kom C (C1 & C2)', 'Desain Interaksi', 'Semester Ganjil 2026/2027',
     'Feri Gunawan', 'FG', 'Lab Jaringan 2',
-    'Sen, 13:00–14:40', 'Sen, 13:00-14:40', 'Sen, 13:00–14:40', '13:00–14:40 WIB',
+    'Sel • C1 08:00 | C2 10:00', 'Sel, C1 08:00–09:40 • C2 10:00–11:40', 'Sel, C1 08:00–09:40 | C2 10:00–11:40', 'C1 08:00–09:40 • C2 10:00–11:40 WIB',
     4, 12,
     'Figma Management',
     'Pembahasan pengelolaan file Figma secara mendalam: komponen, variant, dan auto layout.',
     'Panduan Penggunaan Figma', 'Panduan_Penggunaan_Figma.pdf',
-    'Tugas 4 : Pembuatan Prototype Figma', 'Batas 10:30 WIB, 29 Sep 2026',
+    'Tugas 4 : Pembuatan Prototype Figma', 'Batas 10:30 WIB, 30 Sep 2026',
     'Pre-Test Modul 4 : Figma Management', 'Post-Test Modul 4 : Figma Management', 2
 ),
 (
-    'adj', 'TIF 3003 - Kelas C', 'Analisis Desain Jaringan', 'Semester Ganjil 2026/2027',
+    'adj', 'TIF 3003 - Kom C (C1 & C2)', 'Analisis Desain Jaringan', 'Semester Ganjil 2026/2027',
     'Sinta Marpaung', 'SM', 'Lab Jaringan 1',
-    'Rab, 10:00–11:40', 'Rab, 10:00-11:40', 'Rab, 10:00–11:40', '10:00–11:40 WIB',
+    'Rab • C1 10:00 | C2 13:00', 'Rab, C1 10:00–11:40 • C2 13:00–14:40', 'Rab, C1 10:00–11:40 | C2 13:00–14:40', 'C1 10:00–11:40 • C2 13:00–14:40 WIB',
     4, 12,
     'VLAN & Inter-VLAN Routing',
     'Perancangan segmentasi VLAN, trunking 802.1Q, dan konfigurasi Router-on-a-Stick pada Cisco Packet Tracer.',
@@ -367,9 +367,9 @@ INSERT INTO public.praktikum_courses (
     'Pre-Test Modul 4 : VLAN & Routing', 'Post-Test Modul 4 : VLAN & Routing', 3
 ),
 (
-    'ml', 'TIF 3004 - Kelas C', 'Machine Learning', 'Semester Ganjil 2026/2027',
+    'ml', 'TIF 3004 - Kom C (C1 & C2)', 'Machine Learning', 'Semester Ganjil 2026/2027',
     'Rizky Harahap', 'RH', 'Lab AI & Data',
-    'Kam, 13:00–14:40', 'Kam, 13:00-14:40', 'Kam, 13:00–14:40', '13:00–14:40 WIB',
+    'Kam • C1 13:00 | C2 15:00', 'Kam, C1 13:00–14:40 • C2 15:00–16:40', 'Kam, C1 13:00–14:40 | C2 15:00–16:40', 'C1 13:00–14:40 • C2 15:00–16:40 WIB',
     4, 12,
     'Klasifikasi Supervised Learning',
     'Implementasi algoritma Decision Tree, Random Forest, dan evaluasi confusion matrix menggunakan scikit-learn.',
@@ -377,7 +377,12 @@ INSERT INTO public.praktikum_courses (
     'Tugas 4 : Model Klasifikasi Dataset Medis', 'Batas 10:30 WIB, 02 Okt 2026',
     'Pre-Test Modul 4 : Klasifikasi ML', 'Post-Test Modul 4 : Klasifikasi ML', 4
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    code = EXCLUDED.code,
+    jadwal_daftar = EXCLUDED.jadwal_daftar,
+    jadwal_detail = EXCLUDED.jadwal_detail,
+    jadwal_absensi = EXCLUDED.jadwal_absensi,
+    jam = EXCLUDED.jam;
 
 INSERT INTO public.praktikum_meetings (
     id, course_id, meeting_number, module_title, date_label, description,
@@ -390,11 +395,11 @@ INSERT INTO public.praktikum_meetings (
 ('pemob-m2', 'pemob', 2, 'Modul 2 • Widget Dasar', 'Sen, 14 Sep 2026 • 08:00–09:40 WIB', 'Pengenalan StatelessWidget, StatefulWidget, dan komponen UI dasar.', 'Materi Widget Dasar', 'Modul_2_Widget.pdf', 'Tugas 2 : Profil Mahasiswa', 'Sudah dinilai asisten', 'Pre-Test Modul 2', 'izin', NULL, NULL, 'surat_dokter.pdf'),
 ('pemob-m1', 'pemob', 1, 'Modul 1 • Pengenalan Flutter', 'Sen, 07 Sep 2026 • 08:00–09:40 WIB', 'Instalasi Flutter SDK, emulator Android, dan struktur proyek Dart.', 'Materi Pengenalan Flutter', 'Modul_1_Flutter.pdf', 'Tugas 1 : Hello Flutter', 'Sudah dinilai asisten', 'Pre-Test Modul 1', 'hadir', 'qrcode', 'Tercatat 07:58 WIB melalui pindai QR', NULL),
 
-('desain-m5', 'desain', 5, 'Modul 5 • Design System', 'Sen, 05 Okt 2026 • 13:00–14:40 WIB', 'Membangun token warna, tipografi, dan pustaka komponen terstandar.', 'Panduan Design System', 'Modul_5_Design_System.pdf', 'Tugas 5 : Design System Mini', 'Batas 10:30 WIB, 12 Okt 2026', 'Pre-Test Modul 5 : Design System', 'upcoming', NULL, NULL, NULL),
-('desain-m4', 'desain', 4, 'Modul 4 • Figma Management', 'Sen, 28 Sep 2026 • 13:00–14:40 WIB', 'Pembahasan materi Figma secara mendalam: komponen, variant, dan auto layout.', 'Panduan Penggunaan Figma', 'Panduan_Penggunaan_Figma.pdf', 'Tugas 4 : Pembuatan Prototype Figma', 'Batas 10:30 WIB, 29 Sep 2026', 'Pre-Test Modul 4 : Figma Management', 'hadir', 'qrcode', 'Tercatat 13:02 WIB melalui pindai QR', NULL),
-('desain-m3', 'desain', 3, 'Modul 3 • Prototyping Dasar', 'Sen, 21 Sep 2026 • 13:00–14:40 WIB', 'Membuat alur interaksi interaktif dan transisi smart animate.', 'Materi Prototyping Dasar', 'Modul_3_Prototyping.pdf', 'Tugas 3 : Alur Login Interaktif', 'Sudah dinilai asisten', 'Pre-Test Modul 3', 'hadir', 'location', 'Tercatat 13:00 WIB melalui tombol hadir & lokasi', NULL),
-('desain-m2', 'desain', 2, 'Modul 2 • Wireframing', 'Sen, 14 Sep 2026 • 13:00–14:40 WIB', 'Perancangan wireframe low-fidelity dan hierarki informasi.', 'Materi Wireframing', 'Modul_2_Wireframing.pdf', 'Tugas 2 : Wireframe Aplikasi Kampus', 'Sudah dinilai asisten', 'Pre-Test Modul 2', 'hadir', 'qrcode', 'Tercatat 12:58 WIB melalui pindai QR', NULL),
-('desain-m1', 'desain', 1, 'Modul 1 • Pengenalan Figma', 'Sen, 07 Sep 2026 • 13:00–14:40 WIB', 'Pengenalan workspace Figma, frame, grid, dan constraints.', 'Materi Pengenalan Figma', 'Modul_1_Figma.pdf', 'Tugas 1 : Eksplorasi Frame Figma', 'Sudah dinilai asisten', 'Pre-Test Modul 1', 'hadir', 'qrcode', 'Tercatat 13:01 WIB melalui pindai QR', NULL),
+('desain-m5', 'desain', 5, 'Modul 5 • Design System', 'Sel, 06 Okt 2026 • 08:00–09:40 WIB', 'Membangun token warna, tipografi, dan pustaka komponen terstandar.', 'Panduan Design System', 'Modul_5_Design_System.pdf', 'Tugas 5 : Design System Mini', 'Batas 10:30 WIB, 13 Okt 2026', 'Pre-Test Modul 5 : Design System', 'upcoming', NULL, NULL, NULL),
+('desain-m4', 'desain', 4, 'Modul 4 • Figma Management', 'Sel, 29 Sep 2026 • 08:00–09:40 WIB', 'Pembahasan materi Figma secara mendalam: komponen, variant, dan auto layout.', 'Panduan Penggunaan Figma', 'Panduan_Penggunaan_Figma.pdf', 'Tugas 4 : Pembuatan Prototype Figma', 'Batas 10:30 WIB, 30 Sep 2026', 'Pre-Test Modul 4 : Figma Management', 'hadir', 'qrcode', 'Tercatat 08:02 WIB melalui pindai QR', NULL),
+('desain-m3', 'desain', 3, 'Modul 3 • Prototyping Dasar', 'Sel, 22 Sep 2026 • 08:00–09:40 WIB', 'Membuat alur interaksi interaktif dan transisi smart animate.', 'Materi Prototyping Dasar', 'Modul_3_Prototyping.pdf', 'Tugas 3 : Alur Login Interaktif', 'Sudah dinilai asisten', 'Pre-Test Modul 3', 'hadir', 'location', 'Tercatat 08:00 WIB melalui tombol hadir & lokasi', NULL),
+('desain-m2', 'desain', 2, 'Modul 2 • Wireframing', 'Sel, 15 Sep 2026 • 08:00–09:40 WIB', 'Perancangan wireframe low-fidelity dan hierarki informasi.', 'Materi Wireframing', 'Modul_2_Wireframing.pdf', 'Tugas 2 : Wireframe Aplikasi Kampus', 'Sudah dinilai asisten', 'Pre-Test Modul 2', 'hadir', 'qrcode', 'Tercatat 07:58 WIB melalui pindai QR', NULL),
+('desain-m1', 'desain', 1, 'Modul 1 • Pengenalan Figma', 'Sel, 08 Sep 2026 • 08:00–09:40 WIB', 'Pengenalan workspace Figma, frame, grid, dan constraints.', 'Materi Pengenalan Figma', 'Modul_1_Figma.pdf', 'Tugas 1 : Eksplorasi Frame Figma', 'Sudah dinilai asisten', 'Pre-Test Modul 1', 'hadir', 'qrcode', 'Tercatat 08:01 WIB melalui pindai QR', NULL),
 
 ('adj-m5', 'adj', 5, 'Modul 5 • Dynamic Routing OSPF', 'Rab, 07 Okt 2026 • 10:00–11:40 WIB', 'Konfigurasi routing dinamis OSPF single-area dan verifikasi neighbor table.', 'Panduan Routing OSPF', 'Modul_5_OSPF.pdf', 'Tugas 5 : Simulasi OSPF Multi-Router', 'Batas 10:30 WIB, 14 Okt 2026', 'Pre-Test Modul 5 : OSPF', 'upcoming', NULL, NULL, NULL),
 ('adj-m4', 'adj', 4, 'Modul 4 • VLAN & Inter-VLAN Routing', 'Rab, 30 Sep 2026 • 10:00–11:40 WIB', 'Perancangan segmentasi VLAN, trunking 802.1Q, dan Router-on-a-Stick.', 'Panduan Konfigurasi VLAN & Trunking', 'Panduan_VLAN_InterVLAN_Routing.pdf', 'Tugas 4 : Topologi Multi-VLAN Kampus', 'Batas 10:30 WIB, 01 Okt 2026', 'Pre-Test Modul 4 : VLAN & Routing', 'hadir', 'qrcode', 'Tercatat 10:02 WIB melalui pindai QR', NULL),
@@ -718,10 +723,18 @@ CREATE TABLE IF NOT EXISTS public.room_booking_requests (
 INSERT INTO public.praktikum_schedules (
     id, course_id, course_name, kelas, day_index, day_short, start_time, end_time, room, asisten, week_number
 ) VALUES
-    ('sched-pemob', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kelas C', 0, 'Sen', '08:00', '09:40', 'Lab Komputer 1', 'Andi Pratama', 4),
-    ('sched-desain', 'desain', 'Desain Interaksi', 'TIF 3002 - Kelas C', 0, 'Sen', '13:00', '14:40', 'Lab Jaringan 2', 'Feri Gunawan', 4),
-    ('sched-adj', 'adj', 'Analisis Desain Jaringan', 'TIF 3003 - Kelas C', 2, 'Rab', '10:00', '11:40', 'Lab Jaringan 1', 'Sinta Marpaung', 4),
-    ('sched-ml', 'ml', 'Machine Learning', 'TIF 3004 - Kelas C', 3, 'Kam', '13:00', '14:40', 'Lab AI & Data', 'Rizky Harahap', 4)
+    -- 1. Pemrograman Mobile — Kom C (Senin, 1 jam 40 menit per sesi)
+    ('sched-pemob', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kom C (Sesi C1)', 0, 'Sen', '08:00', '09:40', 'Lab Komputer 1', 'Andi Pratama', 4),
+    ('sched-pemob-c2', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kom C (Sesi C2)', 0, 'Sen', '10:00', '11:40', 'Lab Komputer 1', 'Andi Pratama', 4),
+    -- 2. Desain Interaksi — Kom C (Selasa, 1 jam 40 menit per sesi)
+    ('sched-desain', 'desain', 'Desain Interaksi', 'TIF 3002 - Kom C (Sesi C1)', 1, 'Sel', '08:00', '09:40', 'Lab Jaringan 2', 'Feri Gunawan', 4),
+    ('sched-desain-c2', 'desain', 'Desain Interaksi', 'TIF 3002 - Kom C (Sesi C2)', 1, 'Sel', '10:00', '11:40', 'Lab Jaringan 2', 'Feri Gunawan', 4),
+    -- 3. Analisis Desain Jaringan — Kom C (Rabu, 1 jam 40 menit per sesi)
+    ('sched-adj', 'adj', 'Analisis Desain Jaringan', 'TIF 3003 - Kom C (Sesi C1)', 2, 'Rab', '10:00', '11:40', 'Lab Jaringan 1', 'Sinta Marpaung', 4),
+    ('sched-adj-c2', 'adj', 'Analisis Desain Jaringan', 'TIF 3003 - Kom C (Sesi C2)', 2, 'Rab', '13:00', '14:40', 'Lab Jaringan 1', 'Sinta Marpaung', 4),
+    -- 4. Machine Learning — Kom C (Kamis, 1 jam 40 menit per sesi)
+    ('sched-ml', 'ml', 'Machine Learning', 'TIF 3004 - Kom C (Sesi C1)', 3, 'Kam', '13:00', '14:40', 'Lab AI & Data', 'Rizky Harahap', 4),
+    ('sched-ml-c2', 'ml', 'Machine Learning', 'TIF 3004 - Kom C (Sesi C2)', 3, 'Kam', '15:00', '16:40', 'Lab AI & Data', 'Rizky Harahap', 4)
 ON CONFLICT (id) DO UPDATE SET
     course_name = EXCLUDED.course_name,
     kelas = EXCLUDED.kelas,
@@ -830,13 +843,19 @@ INSERT INTO public.lab_shifts (
     id, day_index, day_label, shift_label, course_name, time_range, room,
     asisten_name, asisten_initials, partner_name, attendance_status, check_in_time, discipline_pct
 ) VALUES
-    ('shift-sen-pagi', 0, 'Sen, 28 Sep', 'Shift Pagi', 'Praktikum Pemrograman Mobile', '08:00–09:40 WIB', 'Lab Komputer 1', 'Abbil Rizki', 'AR', 'Rizky Harahap', 'hadir', '07:52', 96),
-    ('shift-sen-siang', 0, 'Sen, 28 Sep', 'Shift Siang', 'Praktikum Basis Data', '13:00–14:40 WIB', 'Lab Jaringan 2', 'Feri Gunawan', 'FG', 'Sinta Marpaung', 'hadir', '07:58', 92),
-    ('shift-sel-pagi', 1, 'Sel, 29 Sep', 'Shift Pagi', 'Praktikum Desain Interaksi', '10:00–11:40 WIB', 'Lab Multimedia', 'Sinta Marpaung', 'SM', 'Feri Gunawan', 'terlambat', '08:12', 78),
-    ('shift-rab-siang', 2, 'Rab, 30 Sep', 'Shift Siang', 'Praktikum Administrasi Jaringan', '13:00–14:40 WIB', 'Lab Jaringan 2', 'Feri Gunawan', 'FG', 'Abbil Rizki', 'hadir', '12:55', 92),
-    ('shift-kam-pagi', 3, 'Kam, 01 Okt', 'Shift Pagi', 'Praktikum Machine Learning', '08:00–09:40 WIB', 'Lab Komputer 1', 'Abbil Rizki', 'AR', 'Rizky Harahap', 'belum', NULL, 96),
-    ('shift-jum-pagi', 4, 'Jum, 02 Okt', 'Shift Pagi', 'Praktikum Jaringan Komputer', '10:00–11:40 WIB', 'Lab Jaringan 2', 'Rizky Harahap', 'RH', 'Sinta Marpaung', 'belum', NULL, 85)
-ON CONFLICT (id) DO NOTHING;
+    ('shift-sen-pagi', 0, 'Sen, 28 Sep', 'Sesi C1', 'Praktikum Pemrograman Mobile (Kom C)', '08:00–09:40 WIB', 'Lab Komputer 1', 'Abbil Rizki', 'AR', 'Andi Pratama', 'hadir', '07:52', 96),
+    ('shift-sen-siang', 0, 'Sen, 28 Sep', 'Sesi C2', 'Praktikum Pemrograman Mobile (Kom C)', '10:00–11:40 WIB', 'Lab Komputer 1', 'Andi Pratama', 'AP', 'Abbil Rizki', 'hadir', '09:55', 94),
+    ('shift-sel-pagi', 1, 'Sel, 29 Sep', 'Sesi C1', 'Praktikum Desain Interaksi (Kom C)', '08:00–09:40 WIB', 'Lab Jaringan 2', 'Feri Gunawan', 'FG', 'Sinta Marpaung', 'terlambat', '08:12', 86),
+    ('shift-rab-siang', 2, 'Rab, 30 Sep', 'Sesi C1', 'Praktikum Analisis Desain Jaringan (Kom C)', '10:00–11:40 WIB', 'Lab Jaringan 1', 'Sinta Marpaung', 'SM', 'Abbil Rizki', 'hadir', '09:55', 92),
+    ('shift-kam-pagi', 3, 'Kam, 01 Okt', 'Sesi C1', 'Praktikum Machine Learning (Kom C)', '13:00–14:40 WIB', 'Lab AI & Data', 'Abbil Rizki', 'AR', 'Rizky Harahap', 'belum', NULL, 96),
+    ('shift-jum-pagi', 3, 'Kam, 01 Okt', 'Sesi C2', 'Praktikum Machine Learning (Kom C)', '15:00–16:40 WIB', 'Lab AI & Data', 'Rizky Harahap', 'RH', 'Abbil Rizki', 'belum', NULL, 90)
+ON CONFLICT (id) DO UPDATE SET
+    day_index = EXCLUDED.day_index,
+    day_label = EXCLUDED.day_label,
+    shift_label = EXCLUDED.shift_label,
+    course_name = EXCLUDED.course_name,
+    time_range = EXCLUDED.time_range,
+    room = EXCLUDED.room;
 
 INSERT INTO public.shift_swap_requests (
     swap_code, requester_name, requester_initials, target_name, target_initials,
