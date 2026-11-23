@@ -93,6 +93,31 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.reset_password_by_email(text, text) TO anon, authenticated, service_role;
 
+-- Fungsi RPC Verifikasi Kata Sandi Saat Ini (untuk halaman Ubah Kata Sandi dari Profil)
+CREATE OR REPLACE FUNCTION public.verify_user_password(user_email text, current_password text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_hash text;
+BEGIN
+  SELECT encrypted_password INTO v_hash
+  FROM auth.users
+  WHERE lower(email) = lower(user_email)
+     OR id IN (SELECT id FROM public.profiles WHERE lower(email) = lower(user_email))
+  LIMIT 1;
+
+  IF v_hash IS NULL THEN
+    RETURN false;
+  END IF;
+
+  RETURN crypt(current_password, v_hash) = v_hash;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.verify_user_password(text, text) TO anon, authenticated, service_role;
+
 -- Seed 4 Akun Utama (Praktikan, Aslab, Laboran, Dosen) - Password: password123
 DO $$
 DECLARE
@@ -473,11 +498,16 @@ CREATE TABLE IF NOT EXISTS public.leave_requests (
     pertemuan_label TEXT NOT NULL,
     note TEXT NOT NULL,
     file_name TEXT,
+    desk_number INT,
     status INT NOT NULL DEFAULT 0 CHECK (status IN (0, 1, 2)),
     decided_by TEXT,
+    decision_history_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.leave_requests ADD COLUMN IF NOT EXISTS desk_number INT;
+ALTER TABLE public.leave_requests ADD COLUMN IF NOT EXISTS decision_history_json JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_leave_requests_status ON public.leave_requests(status);
 CREATE INDEX IF NOT EXISTS idx_leave_requests_user ON public.leave_requests(user_identifier);
@@ -522,14 +552,37 @@ INSERT INTO public.leave_requests (
 ON CONFLICT DO NOTHING;
 
 -- =============================================================================
--- BAGIAN 4: MEJA LAB, BOOKING MEJA, TIKET KERUSAKAN & INVENTARIS SOFTWARE
+-- BAGIAN 4: MASTER LAB (JARINGAN 1-4), MEJA 6x5, TIKET LK- & INVENTARIS SOFTWARE
 -- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.labs (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    building_floor TEXT NOT NULL,
+    capacity INT NOT NULL DEFAULT 30,
+    lat DOUBLE PRECISION NOT NULL DEFAULT 3.5621,
+    lng DOUBLE PRECISION NOT NULL DEFAULT 98.6600,
+    radius_m DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO public.labs (id, name, building_floor, capacity, lat, lng, radius_m) VALUES
+    ('lab-jaringan-1', 'Lab Jaringan 1', 'Gedung C • Lantai 2', 30, 3.5621, 98.6600, 50.0),
+    ('lab-jaringan-2', 'Lab Jaringan 2', 'Gedung C • Lantai 2', 30, 3.5621, 98.6601, 50.0),
+    ('lab-jaringan-3', 'Lab Jaringan 3', 'Gedung D • Lantai 2', 30, 3.5622, 98.6602, 50.0),
+    ('lab-jaringan-4', 'Lab Jaringan 4', 'Gedung D • Lantai 3', 30, 3.5622, 98.6603, 50.0)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    building_floor = EXCLUDED.building_floor,
+    capacity = EXCLUDED.capacity;
 
 CREATE TABLE IF NOT EXISTS public.lab_desks (
     id BIGSERIAL PRIMARY KEY,
     lab_name TEXT NOT NULL,
     desk_number INT NOT NULL,
     pc_code TEXT NOT NULL,
+    row_num INT NOT NULL DEFAULT 1,
+    col_num INT NOT NULL DEFAULT 1,
     spec TEXT NOT NULL DEFAULT 'Core i5-12400 • 16 GB • SSD 512 GB',
     status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'taken', 'broken')),
     booked_by_user_id TEXT,
@@ -539,6 +592,82 @@ CREATE TABLE IF NOT EXISTS public.lab_desks (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (lab_name, desk_number)
 );
+
+ALTER TABLE public.lab_desks ADD COLUMN IF NOT EXISTS row_num INT NOT NULL DEFAULT 1;
+ALTER TABLE public.lab_desks ADD COLUMN IF NOT EXISTS col_num INT NOT NULL DEFAULT 1;
+
+-- RPC Transaksi Atomik Pilih / Pindah Meja (row lock FOR UPDATE + lepas meja lama dalam 1 transaksi)
+CREATE OR REPLACE FUNCTION public.claim_or_move_desk(
+    p_lab_name TEXT,
+    p_desk_number INT,
+    p_user_id TEXT,
+    p_user_name TEXT,
+    p_session_key TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_target public.lab_desks%ROWTYPE;
+BEGIN
+    SELECT * INTO v_target
+    FROM public.lab_desks
+    WHERE lab_name = p_lab_name AND desk_number = p_desk_number
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Meja tidak ditemukan');
+    END IF;
+
+    IF v_target.status = 'broken' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Meja sedang rusak');
+    END IF;
+
+    IF v_target.status = 'taken' AND v_target.booked_by_user_id IS DISTINCT FROM p_user_id THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Meja sudah ditempati praktikan lain');
+    END IF;
+
+    -- Lepaskan meja lama milik praktikan di lab yang sama dalam transaksi ini
+    UPDATE public.lab_desks
+    SET status = 'available',
+        booked_by_user_id = NULL,
+        booked_by_name = NULL,
+        booked_at = NULL,
+        updated_at = NOW()
+    WHERE lab_name = p_lab_name
+      AND booked_by_user_id = p_user_id
+      AND desk_number <> p_desk_number
+      AND status = 'taken';
+
+    UPDATE public.desk_bookings
+    SET status = 'released'
+    WHERE lab_name = p_lab_name
+      AND session_key = p_session_key
+      AND user_identifier = p_user_id
+      AND status = 'active';
+
+    -- Tandai meja baru ditempati praktikan ini
+    UPDATE public.lab_desks
+    SET status = 'taken',
+        booked_by_user_id = p_user_id,
+        booked_by_name = p_user_name,
+        booked_at = NOW(),
+        session_key = p_session_key,
+        updated_at = NOW()
+    WHERE id = v_target.id;
+
+    INSERT INTO public.desk_bookings (
+        lab_name, desk_number, session_key, user_id, user_identifier, user_name, status, booked_at
+    ) VALUES (
+        p_lab_name, p_desk_number, p_session_key, p_user_id, p_user_id, p_user_name, 'active', NOW()
+    );
+
+    RETURN jsonb_build_object('success', true, 'desk_number', p_desk_number);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.claim_or_move_desk(TEXT, INT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
 
 CREATE INDEX IF NOT EXISTS idx_lab_desks_lab ON public.lab_desks(lab_name);
 CREATE INDEX IF NOT EXISTS idx_lab_desks_status ON public.lab_desks(lab_name, status);
@@ -571,11 +700,16 @@ CREATE TABLE IF NOT EXISTS public.lab_tickets (
     reporter_name TEXT NOT NULL,
     reporter_role TEXT NOT NULL DEFAULT 'praktikan' CHECK (reporter_role IN ('praktikan', 'aslab', 'laboran')),
     photo_name TEXT NOT NULL DEFAULT 'foto_kendala.jpg',
+    photo_url TEXT,
     status INT NOT NULL DEFAULT 0 CHECK (status IN (0, 1, 2)),
     handling_note TEXT NOT NULL DEFAULT '',
+    status_history_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.lab_tickets ADD COLUMN IF NOT EXISTS photo_url TEXT;
+ALTER TABLE public.lab_tickets ADD COLUMN IF NOT EXISTS status_history_json JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_lab_tickets_lab_desk ON public.lab_tickets(lab_name, desk_number);
 CREATE INDEX IF NOT EXISTS idx_lab_tickets_status ON public.lab_tickets(status);
@@ -584,11 +718,16 @@ CREATE TABLE IF NOT EXISTS public.lab_software (
     id BIGSERIAL PRIMARY KEY,
     lab_name TEXT NOT NULL,
     software_name TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '',
+    target_scope TEXT NOT NULL DEFAULT 'Semua PC',
     icon TEXT NOT NULL DEFAULT 'code_tags',
     is_installed BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (lab_name, software_name)
 );
+
+ALTER TABLE public.lab_software ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.lab_software ADD COLUMN IF NOT EXISTS target_scope TEXT NOT NULL DEFAULT 'Semua PC';
 
 CREATE INDEX IF NOT EXISTS idx_lab_software_lab ON public.lab_software(lab_name);
 
@@ -613,10 +752,58 @@ SELECT
 FROM generate_series(1, 30) AS n
 ON CONFLICT (lab_name, desk_number) DO NOTHING;
 
+INSERT INTO public.lab_desks (lab_name, desk_number, pc_code, row_num, col_num, spec, status, booked_by_user_id, booked_by_name, booked_at)
+SELECT
+    lab_title,
+    n,
+    'PC-' || LPAD(n::text, 2, '0'),
+    ((n - 1) / 5) + 1,
+    ((n - 1) % 5) + 1,
+    CASE
+        WHEN lab_title IN ('Lab Jaringan 3', 'Lab Jaringan 4') THEN 'Core i7-12700 • 16 GB • SSD 512 GB'
+        ELSE 'Core i5-12400 • 16 GB • SSD 512 GB'
+    END,
+    CASE
+        WHEN lab_title = 'Lab Jaringan 1' AND n IN (3, 8, 14, 17, 25, 27, 30) THEN 'available'
+        WHEN lab_title = 'Lab Jaringan 1' AND n = 23 THEN 'broken'
+        WHEN lab_title = 'Lab Jaringan 1' THEN 'taken'
+        WHEN lab_title = 'Lab Jaringan 2' AND n = 12 THEN 'broken'
+        WHEN lab_title = 'Lab Jaringan 2' AND n <= 16 THEN 'taken'
+        WHEN lab_title = 'Lab Jaringan 3' AND n = 7 THEN 'broken'
+        WHEN lab_title = 'Lab Jaringan 3' AND n <= 12 THEN 'taken'
+        WHEN lab_title = 'Lab Jaringan 4' AND n = 19 THEN 'broken'
+        WHEN lab_title = 'Lab Jaringan 4' AND n <= 10 THEN 'taken'
+        ELSE 'available'
+    END,
+    CASE WHEN lab_title = 'Lab Jaringan 1' AND n = 12 THEN '231402045' ELSE NULL END,
+    CASE
+        WHEN lab_title = 'Lab Jaringan 1' AND n = 12 THEN 'Rina Novita'
+        WHEN (lab_title = 'Lab Jaringan 1' AND n NOT IN (3, 8, 14, 17, 25, 27, 30, 23))
+          OR (lab_title = 'Lab Jaringan 2' AND n <= 16 AND n <> 12)
+          OR (lab_title = 'Lab Jaringan 3' AND n <= 12 AND n <> 7)
+          OR (lab_title = 'Lab Jaringan 4' AND n <= 10 AND n <> 19)
+        THEN 'Praktikan Sesi Aktif'
+        ELSE NULL
+    END,
+    CASE
+        WHEN (lab_title = 'Lab Jaringan 1' AND n NOT IN (3, 8, 14, 17, 25, 27, 30, 23))
+          OR (lab_title = 'Lab Jaringan 2' AND n <= 16 AND n <> 12)
+          OR (lab_title = 'Lab Jaringan 3' AND n <= 12 AND n <> 7)
+          OR (lab_title = 'Lab Jaringan 4' AND n <= 10 AND n <> 19)
+        THEN NOW()
+        ELSE NULL
+    END
+FROM (VALUES ('Lab Jaringan 1'), ('Lab Jaringan 2'), ('Lab Jaringan 3'), ('Lab Jaringan 4')) AS labs(lab_title)
+CROSS JOIN generate_series(1, 30) AS n
+ON CONFLICT (lab_name, desk_number) DO NOTHING;
+
+-- Pastikan seluruh baris meja memiliki posisi 6 baris x 5 kolom (3 kiri | 2 kanan)
+UPDATE public.lab_desks
+SET row_num = ((desk_number - 1) / 5) + 1,
+    col_num = ((desk_number - 1) % 5) + 1
+WHERE desk_number BETWEEN 1 AND 30;
+
 INSERT INTO public.lab_desks (lab_name, desk_number, pc_code, spec, status) VALUES
-    ('Lab Jaringan 2', 1, 'PC-01', 'Core i5-12400 • 16 GB • SSD 512 GB', 'available'),
-    ('Lab Jaringan 2', 2, 'PC-02', 'Core i5-12400 • 16 GB • SSD 512 GB', 'available'),
-    ('Lab Jaringan 2', 12, 'PC-12', 'Core i5-12400 • 16 GB • SSD 512 GB', 'broken'),
     ('Lab Multimedia', 1, 'PC-01', 'Core i5-12400 • 16 GB • SSD 512 GB', 'available'),
     ('Lab Multimedia', 2, 'PC-02', 'Core i5-12400 • 16 GB • SSD 512 GB', 'available'),
     ('Lab Multimedia', 12, 'PC-12', 'Core i5-12400 • 16 GB • SSD 512 GB', 'broken')
@@ -653,11 +840,26 @@ INSERT INTO public.lab_software (lab_name, software_name, icon, is_installed) VA
     ('Lab Komputer 1', 'Android Studio', 'code_tags', false),
     ('Lab Komputer 1', 'Visual Studio Code', 'code_tags', true),
     ('Lab Komputer 1', 'Figma Desktop', 'pencil', true),
+    ('Lab Jaringan 1', 'MySQL 8.0', 'database_outline', true),
+    ('Lab Jaringan 1', 'PostgreSQL 16', 'database_outline', true),
+    ('Lab Jaringan 1', 'Android Studio', 'code_tags', false),
+    ('Lab Jaringan 1', 'Visual Studio Code', 'code_tags', true),
+    ('Lab Jaringan 1', 'Figma Desktop', 'pencil', true),
     ('Lab Jaringan 2', 'Cisco Packet Tracer', 'wifi', true),
     ('Lab Jaringan 2', 'Wireshark', 'wifi', true),
     ('Lab Jaringan 2', 'PuTTY / OpenSSH', 'code_tags', true),
     ('Lab Jaringan 2', 'VirtualBox', 'desktop_device', true),
     ('Lab Jaringan 2', 'GNS3', 'wifi', false),
+    ('Lab Jaringan 3', 'Figma Desktop', 'pencil', true),
+    ('Lab Jaringan 3', 'Blender 4.2', 'desktop_device', true),
+    ('Lab Jaringan 3', 'Visual Studio Code', 'code_tags', true),
+    ('Lab Jaringan 3', 'Unity Hub', 'code_tags', false),
+    ('Lab Jaringan 3', 'OBS Studio', 'camera', true),
+    ('Lab Jaringan 4', 'Python 3.12 & Anaconda', 'code_tags', true),
+    ('Lab Jaringan 4', 'JupyterLab', 'code_tags', true),
+    ('Lab Jaringan 4', 'Docker Desktop', 'database_outline', true),
+    ('Lab Jaringan 4', 'Visual Studio Code', 'code_tags', true),
+    ('Lab Jaringan 4', 'CUDA Toolkit 12', 'desktop_device', false),
     ('Lab Multimedia', 'Figma Desktop', 'pencil', true),
     ('Lab Multimedia', 'Blender 4.2', 'desktop_device', true),
     ('Lab Multimedia', 'Visual Studio Code', 'code_tags', true),
@@ -716,9 +918,12 @@ CREATE TABLE IF NOT EXISTS public.room_booking_requests (
     requester_role TEXT NOT NULL DEFAULT 'Asisten Lab',
     reason TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'menunggu' CHECK (status IN ('menunggu', 'disetujui', 'ditolak')),
+    rejection_note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.room_booking_requests ADD COLUMN IF NOT EXISTS rejection_note TEXT;
 
 INSERT INTO public.praktikum_schedules (
     id, course_id, course_name, kelas, day_index, day_short, start_time, end_time, room, asisten, week_number
@@ -902,12 +1107,16 @@ ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.grade_validations (
     course_id TEXT PRIMARY KEY,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'revision_requested', 'validated')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('draft', 'pending', 'revision_requested', 'validated')),
     revision_part TEXT,
     revision_note TEXT,
     validated_by TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.grade_validations DROP CONSTRAINT IF EXISTS grade_validations_status_check;
+ALTER TABLE public.grade_validations ADD CONSTRAINT grade_validations_status_check
+    CHECK (status IN ('draft', 'pending', 'revision_requested', 'validated'));
 
 CREATE TABLE IF NOT EXISTS public.grade_appeals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -918,9 +1127,40 @@ CREATE TABLE IF NOT EXISTS public.grade_appeals (
     components_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     reason TEXT NOT NULL,
     attachment_name TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved')),
+    current_score INT NOT NULL DEFAULT 70,
+    proposed_score INT NOT NULL DEFAULT 85,
+    assistant_recommendation TEXT,
+    rejection_reason TEXT,
+    decided_by TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'recommended_approve', 'recommended_reject', 'approved', 'rejected', 'reviewed', 'resolved')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.grade_appeals ADD COLUMN IF NOT EXISTS current_score INT NOT NULL DEFAULT 70;
+ALTER TABLE public.grade_appeals ADD COLUMN IF NOT EXISTS proposed_score INT NOT NULL DEFAULT 85;
+ALTER TABLE public.grade_appeals ADD COLUMN IF NOT EXISTS assistant_recommendation TEXT;
+ALTER TABLE public.grade_appeals ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE public.grade_appeals ADD COLUMN IF NOT EXISTS decided_by TEXT;
+ALTER TABLE public.grade_appeals ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE public.grade_appeals DROP CONSTRAINT IF EXISTS grade_appeals_status_check;
+ALTER TABLE public.grade_appeals ADD CONSTRAINT grade_appeals_status_check
+    CHECK (status IN ('pending', 'recommended_approve', 'recommended_reject', 'approved', 'rejected', 'reviewed', 'resolved'));
+
+CREATE TABLE IF NOT EXISTS public.grade_change_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_id TEXT NOT NULL,
+    modul INT NOT NULL,
+    user_identifier TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    old_score INT NOT NULL,
+    new_score INT NOT NULL,
+    changed_by TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_grade_change_logs_course ON public.grade_change_logs(course_id, modul);
 
 CREATE INDEX IF NOT EXISTS idx_grade_appeals_course ON public.grade_appeals(course_id, modul);
 
@@ -931,8 +1171,28 @@ CREATE TABLE IF NOT EXISTS public.assistant_followups (
     assistant_name TEXT NOT NULL,
     followup_type TEXT NOT NULL,
     message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.assistant_followups ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE public.assistant_followups DROP CONSTRAINT IF EXISTS assistant_followups_status_check;
+ALTER TABLE public.assistant_followups ADD CONSTRAINT assistant_followups_status_check
+    CHECK (status IN ('pending', 'done'));
+
+CREATE TABLE IF NOT EXISTS public.report_downloads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    course_name TEXT NOT NULL DEFAULT 'Semua Praktikum',
+    file_name TEXT NOT NULL,
+    format TEXT NOT NULL DEFAULT 'PDF',
+    size_label TEXT NOT NULL DEFAULT '120 KB',
+    local_path TEXT NOT NULL DEFAULT '',
+    downloaded_by TEXT NOT NULL DEFAULT 'Dr. Eng. Daniele Christian, M.Kom.',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_downloads_created ON public.report_downloads(created_at DESC);
 
 INSERT INTO public.grade_validations (course_id, status) VALUES
     ('pemob', 'pending'),
@@ -940,6 +1200,57 @@ INSERT INTO public.grade_validations (course_id, status) VALUES
     ('adj', 'validated'),
     ('ml', 'validated')
 ON CONFLICT (course_id) DO NOTHING;
+
+INSERT INTO public.grade_appeals (
+    course_id, modul, user_identifier, user_name, components_json, reason,
+    attachment_name, current_score, proposed_score, status
+)
+SELECT * FROM (VALUES
+    (
+        'pemob', 4, '241402105', 'Andre Al Farizi Sebayang',
+        '["Tugas Praktikum"]'::jsonb,
+        'Repository GitHub untuk Tugas 4 sudah diperbarui sebelum batas waktu dan fitur state management berjalan lengkap.',
+        'bukti_commit_tugas4.png', 74, 86, 'pending'
+    )
+) AS seed(course_id, modul, user_identifier, user_name, components_json, reason, attachment_name, current_score, proposed_score, status)
+WHERE NOT EXISTS (SELECT 1 FROM public.grade_appeals LIMIT 1);
+
+INSERT INTO public.assistant_followups (
+    student_nim, student_name, assistant_name, followup_type, message, status
+)
+SELECT * FROM (VALUES
+    (
+        '231402070', 'Yoga Siregar', 'Abbil Rizki', 'Pendampingan & Evaluasi',
+        'Mohon lakukan pendampingan khusus dan jadwalkan pengumpulan susulan Modul 4 sebelum validasi nilai akhir.',
+        'pending'
+    )
+) AS seed(student_nim, student_name, assistant_name, followup_type, message, status)
+WHERE NOT EXISTS (SELECT 1 FROM public.assistant_followups LIMIT 1);
+
+INSERT INTO public.report_downloads (
+    title, course_name, file_name, format, size_label, local_path, downloaded_by
+)
+SELECT * FROM (VALUES
+    (
+        'Rekap Kehadiran & Nilai Pemrograman Mobile',
+        'Pemrograman Mobile',
+        'Rekap_Nilai_Pemrograman_Mobile.pdf',
+        'PDF',
+        '142 KB',
+        'Download/ITLG/Rekap_Nilai_Pemrograman_Mobile.pdf',
+        'Dr. Eng. Daniele Christian, M.Kom.'
+    ),
+    (
+        'Rekap Kehadiran Mingguan Kom C',
+        'Semua Praktikum',
+        'Rekap_Kehadiran_KomC.csv',
+        'CSV',
+        '38 KB',
+        'Download/ITLG/Rekap_Kehadiran_KomC.csv',
+        'Dr. Eng. Daniele Christian, M.Kom.'
+    )
+) AS seed(title, course_name, file_name, format, size_label, local_path, downloaded_by)
+WHERE NOT EXISTS (SELECT 1 FROM public.report_downloads LIMIT 1);
 
 -- =============================================================================
 -- BAGIAN 8: NOTIFIKASI LINTAS ROLE (PRAKTIKAN ↔ ASLAB ↔ LABORAN ↔ DOSEN)
@@ -952,10 +1263,19 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     target_key TEXT NOT NULL DEFAULT '',
+    course_id TEXT,
+    meeting_number INT,
+    course_name TEXT,
+    module_label TEXT,
     important BOOLEAN NOT NULL DEFAULT FALSE,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS course_id TEXT;
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS meeting_number INT;
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS course_name TEXT;
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS module_label TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_notifications_role_created
     ON public.notifications(target_role, created_at DESC);
@@ -1025,6 +1345,7 @@ BEGIN
         'attendance_sessions',
         'attendance_records',
         'leave_requests',
+        'labs',
         'lab_desks',
         'desk_bookings',
         'lab_tickets',
@@ -1037,7 +1358,9 @@ BEGIN
         'assistant_access_codes',
         'grade_validations',
         'grade_appeals',
+        'grade_change_logs',
         'assistant_followups',
+        'report_downloads',
         'notifications'
     ] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
