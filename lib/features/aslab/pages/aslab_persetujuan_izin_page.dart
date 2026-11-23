@@ -158,7 +158,26 @@ class _LeaveCard extends StatelessWidget {
                 icon: 'cross', label: 'Tolak', onTap: onReject),
             right: LabPrimaryButton(
                 icon: 'check', label: leave.approveLabel, onTap: onApprove),
+          )
+        else ...[
+          PrakSpaceRow(
+            left: LabMeta(
+              icon: leave.status == 1 ? 'circle_check' : 'cross',
+              text: leave.status == 1
+                  ? 'Disetujui ${AuthController.instance.userName}'
+                  : 'Ditolak ${AuthController.instance.userName}',
+              color: leave.status == 1 ? LabColors.green : ItlgColors.primary,
+            ),
+            right: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: leave.status == 1 ? onReject : onApprove,
+              child: Text(
+                'Ubah Keputusan',
+                style: labText(12, w: kBold, c: ItlgColors.primary),
+              ),
+            ),
           ),
+        ],
       ],
     );
   }

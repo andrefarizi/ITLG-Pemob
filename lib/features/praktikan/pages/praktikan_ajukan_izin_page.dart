@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/file_upload_service.dart';
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -29,9 +30,7 @@ class PraktikanAjukanIzinPage extends StatefulWidget {
 class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
   final TextEditingController _alasan = TextEditingController();
   int _jenis = 0;
-  final List<PrakFile> _files = [
-    const PrakFile('surat_dokter.pdf', 'PDF • 420 KB'),
-  ];
+  final List<PrakFile> _files = [];
 
   static const List<(String, String)> _options = [
     ('health', 'Sakit'),
@@ -64,6 +63,9 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
     final auth = AuthController.instance;
     final jenisLabel = const ['Izin Sakit', 'Izin', 'Kendala QR'][_jenis];
     final dateShort = widget.meeting.date.split(' • ').first;
+    final activeDesk = _jenis == 2
+        ? LabDeskSyncService.instance.bookedDeskForUser(auth.userIdentifier)
+        : null;
     await PresensiSyncService.instance.submitLeaveRequest(
       courseId: widget.course.id.isNotEmpty ? widget.course.id : 'pemob',
       meetingNumber: widget.meeting.number,
@@ -73,6 +75,7 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
       pertemuanLabel: '${widget.meeting.number} • $dateShort',
       note: _alasan.text.trim(),
       fileName: _files.isNotEmpty ? _files.first.name : null,
+      deskNumber: activeDesk,
     );
     if (widget.meeting.status == PrakAttend.upcoming) {
       widget.meeting.status = PrakAttend.pending;
@@ -129,18 +132,29 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
               ),
             ),
             PrakField(
-              label: 'Alasan Izin :',
+              label: _jenis == 2
+                  ? 'Keterangan Kendala & Nomor Meja :'
+                  : 'Alasan Izin :',
               child: PrakTextArea(
                 controller: _alasan,
                 height: 96,
-                hint: 'Jelaskan alasan anda tidak dapat hadir...',
+                hint: _jenis == 2
+                    ? 'Contoh: Kamera HP rusak, saya hadir di ${c.room}, Meja 14.'
+                    : 'Jelaskan alasan anda tidak dapat hadir...',
               ),
             ),
             PrakField(
-              label: 'Surat / Lampiran',
+              label: _jenis == 2
+                  ? 'Foto Bukti Kehadiran di Lab (Opsional)'
+                  : 'Surat / Lampiran',
               child: PrakUploadBox(
-                title: 'Tarik atau Pilih Surat / Lampiran',
-                subtitle: 'Format didukung PDF, PNG, JPG',
+                camera: _jenis == 2,
+                title: _jenis == 2
+                    ? 'Ambil atau Pilih Foto Bukti'
+                    : 'Tarik atau Pilih Surat / Lampiran',
+                subtitle: _jenis == 2
+                    ? 'Format didukung PNG, JPG'
+                    : 'Format didukung PDF, PNG, JPG',
                 onTap: _addFile,
               ),
             ),
@@ -150,32 +164,38 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
               large: true,
               onTap: _addFile,
             ),
-            if (_files.isNotEmpty)
-              PrakField(
-                label: 'Berkas Terunggah',
-                child: LabColumn(
-                  gap: 8,
-                  children: [
-                    for (final f in _files)
-                      PrakFileItem(
-                        name: f.name,
-                        meta: f.meta,
-                        action: 'delete_filled',
-                        onAction: () => setState(() => _files.remove(f)),
-                      ),
-                  ],
-                ),
-              ),
+            PrakField(
+              label: 'Berkas Terunggah',
+              child: _files.isEmpty
+                  ? Text(
+                      'Belum ada berkas dipilih.',
+                      style: labText(12, c: LabColors.textGrey),
+                    )
+                  : LabColumn(
+                      gap: 8,
+                      children: [
+                        for (final f in _files)
+                          PrakFileItem(
+                            name: f.name,
+                            meta: f.meta,
+                            action: 'delete_filled',
+                            onAction: () => setState(() => _files.remove(f)),
+                          ),
+                      ],
+                    ),
+            ),
           ],
         ),
-        const PrakNotice.info(
+        PrakNotice.info(
           icon: 'info',
-          text: 'Pengajuan diperiksa asisten. Status kehadiran pertemuan ini '
-              'berubah setelah disetujui.',
+          text: _jenis == 2
+              ? 'Asisten akan mengecek kehadiranmu langsung di lab, lalu menandai kamu hadir.'
+              : 'Pengajuan diperiksa asisten. Status kehadiran pertemuan ini '
+                  'berubah setelah disetujui.',
         ),
         LabPrimaryButton(
           icon: 'send',
-          label: 'Kirim Pengajuan',
+          label: _jenis == 2 ? 'Kirim Laporan Kendala QR' : 'Kirim Pengajuan',
           large: true,
           onTap: _kirim,
         ),

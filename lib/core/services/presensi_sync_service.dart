@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/aslab/aslab_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
+import 'lab_desk_sync_service.dart';
 import 'notification_sync_service.dart';
 import 'supabase_service.dart';
 
@@ -201,9 +202,11 @@ class LeaveRequestRecord {
   final String pertemuanLabel;
   final String note;
   final String? fileName;
+  final int? deskNumber;
 
   /// 0 Menunggu, 1 Disetujui, 2 Ditolak.
   int status;
+  final List<Map<String, dynamic>> decisionHistory;
   final DateTime createdAt;
 
   LeaveRequestRecord({
@@ -216,9 +219,12 @@ class LeaveRequestRecord {
     required this.pertemuanLabel,
     required this.note,
     this.fileName,
+    this.deskNumber,
     this.status = 0,
+    List<Map<String, dynamic>>? decisionHistory,
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  })  : decisionHistory = decisionHistory ?? <Map<String, dynamic>>[],
+        createdAt = createdAt ?? DateTime.now();
 
   String get initials {
     final parts = userName
@@ -812,6 +818,10 @@ class PresensiSyncService extends ChangeNotifier {
     _activeSession.status = 'closed';
     notifyListeners();
 
+    // Kosongkan meja yang masih ditempati secara otomatis saat sesi berakhir
+    await LabDeskSyncService.instance
+        .releaseSessionDesks(labName: _activeSession.labName);
+
     NotificationSyncService.instance.push(
       role: 'praktikan',
       icon: 'clock',
@@ -819,6 +829,8 @@ class PresensiSyncService extends ChangeNotifier {
       body:
           'Presensi Pertemuan ${_activeSession.meetingNumber} di ${_activeSession.labName} telah diakhiri',
       targetKey: 'detailAbsensi',
+      courseId: _activeSession.courseId,
+      meetingNumber: _activeSession.meetingNumber,
     );
 
     final client = SupabaseService.instance.client;
@@ -836,6 +848,7 @@ class PresensiSyncService extends ChangeNotifier {
   }
 
   /// Catat presensi HADIR oleh Praktikan (setelah Tanda Tangan dikirim).
+  /// Menolak metode yang dinonaktifkan Aslab pada sesi aktif.
   Future<void> submitPresence({
     String courseId = 'pemob',
     int meetingNumber = 5,
@@ -847,6 +860,19 @@ class PresensiSyncService extends ChangeNotifier {
     double? distanceMeters,
     bool hasSignature = true,
   }) async {
+    if (_activeSession.courseId == courseId &&
+        _activeSession.meetingNumber == meetingNumber) {
+      if (!_activeSession.isActive) {
+        throw StateError('Sesi presensi sudah ditutup oleh asisten.');
+      }
+      if (method == 'qr' && !_activeSession.allowQr) {
+        throw StateError('Metode Pindai QR sedang dinonaktifkan oleh asisten.');
+      }
+      if (method == 'location' && !_activeSession.allowButton) {
+        throw StateError(
+            'Metode Tombol Hadir & Lokasi sedang dinonaktifkan oleh asisten.');
+      }
+    }
     final now = DateTime.now();
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
@@ -919,6 +945,7 @@ class PresensiSyncService extends ChangeNotifier {
     required String pertemuanLabel,
     required String note,
     String? fileName,
+    int? deskNumber,
   }) async {
     final now = DateTime.now();
     final localId = 'leave-${now.millisecondsSinceEpoch}';
@@ -932,6 +959,7 @@ class PresensiSyncService extends ChangeNotifier {
       pertemuanLabel: pertemuanLabel,
       note: note.isEmpty ? 'Mengajukan $leaveType' : note,
       fileName: fileName,
+      deskNumber: deskNumber,
       status: 0,
       createdAt: now,
     );
@@ -975,6 +1003,7 @@ class PresensiSyncService extends ChangeNotifier {
               'pertemuan_label': pertemuanLabel,
               'note': leave.note,
               'file_name': fileName,
+              'desk_number': deskNumber,
               'status': 0,
               'created_at': now.toIso8601String(),
               'updated_at': now.toIso8601String(),
@@ -1018,8 +1047,15 @@ class PresensiSyncService extends ChangeNotifier {
     required bool approve,
     required String decidedBy,
   }) async {
+    final prevStatus = leave.status;
     leave.status = approve ? 1 : 2;
     final now = DateTime.now();
+    leave.decisionHistory.add({
+      'from_status': prevStatus,
+      'to_status': leave.status,
+      'decided_by': decidedBy,
+      'decided_at': now.toIso8601String(),
+    });
 
     final newAttendStatus = approve
         ? (leave.leaveType.toLowerCase().contains('kendala')
@@ -1063,6 +1099,7 @@ class PresensiSyncService extends ChangeNotifier {
           await client.from('leave_requests').update({
             'status': leave.status,
             'decided_by': decidedBy,
+            'decision_history_json': leave.decisionHistory,
             'updated_at': now.toIso8601String(),
           }).eq('id', leave.id);
         }

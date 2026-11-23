@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_calendar_service.dart';
 import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -155,7 +156,25 @@ class _AnnouncementCard extends StatelessWidget {
                 ),
                 LabMeta(
                   icon: 'location',
-                  text: item.room ?? 'Lab Komputer 1',
+                  text: item.room ?? 'Lab Jaringan 1',
+                ),
+                LabOutlineButton(
+                  icon: 'calendar',
+                  label: 'Sinkronkan ke Kalender HP',
+                  onTap: () async {
+                    final res = await DeviceCalendarService.instance
+                        .syncSchedules(
+                      JadwalSyncService.instance.schedules,
+                      askPermission: true,
+                    );
+                    if (!context.mounted) return;
+                    labToast(
+                      context,
+                      res.synced
+                          ? 'Jadwal pengganti disinkronkan ke ${res.calendarName}'
+                          : 'Jadwal pengganti dicatat untuk kalender HP',
+                    );
+                  },
                 ),
               ],
             ),

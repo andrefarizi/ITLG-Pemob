@@ -256,6 +256,21 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
                           ),
                       ],
                     ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => nav.detailPresensi(
+                          context,
+                          courseId: session.courseId,
+                          meetingNumber: session.meetingNumber,
+                        ),
+                        child: Text(
+                          'Lihat Semua Praktikan (24) →',
+                          style: labText(12, w: kBold, c: ItlgColors.primary),
+                        ),
+                      ),
+                    ),
                   ],
                 );
               },

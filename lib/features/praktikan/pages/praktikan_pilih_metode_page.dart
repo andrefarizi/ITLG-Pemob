@@ -107,6 +107,7 @@ class _PraktikanPilihMetodePageState extends State<PraktikanPilihMetodePage> {
                   metaIcon: 'camera',
                   meta: 'Butuh kamera',
                   duration: '± 5 detik',
+                  enabled: session.isActive && session.allowQr,
                   onTap: () {
                     if (!session.isActive) {
                       labToast(
@@ -130,6 +131,7 @@ class _PraktikanPilihMetodePageState extends State<PraktikanPilihMetodePage> {
                   metaIcon: 'location',
                   meta: 'Butuh lokasi (GPS)',
                   duration: '± 10 detik',
+                  enabled: session.isActive && session.allowButton,
                   onTap: () {
                     if (!session.isActive) {
                       labToast(
@@ -146,12 +148,20 @@ class _PraktikanPilihMetodePageState extends State<PraktikanPilihMetodePage> {
                 ),
               ],
             ),
-            const PrakNotice.info(
-              icon: 'signature_freehand',
-              text:
-                  'Setelah verifikasi berhasil, anda diminta tanda tangan lalu '
-                  'presensi dikirim.',
-            ),
+            if (session.isActive && (!session.allowQr || !session.allowButton))
+              PrakNotice.warn(
+                icon: 'info',
+                text: !session.allowButton
+                    ? 'Asisten hanya mengaktifkan Pindai QR Code untuk sesi ini. Tombol Hadir + Lokasi tidak bisa dipakai.'
+                    : 'Asisten hanya mengaktifkan Tombol Hadir + Lokasi untuk sesi ini. Pindai QR Code tidak bisa dipakai.',
+              )
+            else
+              const PrakNotice.info(
+                icon: 'signature_freehand',
+                text:
+                    'Setelah verifikasi berhasil, anda diminta tanda tangan lalu '
+                    'presensi dikirim.',
+              ),
           ],
         );
       },
@@ -166,6 +176,7 @@ class _MethodCard extends StatelessWidget {
   final String metaIcon;
   final String meta;
   final String duration;
+  final bool enabled;
   final VoidCallback onTap;
 
   const _MethodCard({
@@ -175,53 +186,72 @@ class _MethodCard extends StatelessWidget {
     required this.metaIcon,
     required this.meta,
     required this.duration,
+    this.enabled = true,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return LabCard(
-      gap: 12,
-      onTap: onTap,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: ItlgColors.primary,
-                borderRadius: BorderRadius.circular(9),
-                boxShadow: LabShadows.neu,
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.58,
+      child: LabCard(
+        gap: 12,
+        onTap: onTap,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: enabled ? ItlgColors.primary : LabColors.divider,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: LabShadows.neu,
+                ),
+                child: LabIcon(icon, size: 20, color: Colors.white),
               ),
-              child: LabIcon(icon, size: 20, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: LabColumn(
-                gap: 4,
-                children: [
-                  Text(title, style: labText(16, w: kBold, c: Colors.black)),
-                  Text(description,
-                      style:
-                          labText(11, w: kMedium, c: ItlgColors.textSubtle)),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: LabColumn(
+                  gap: 4,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(title,
+                              style: labText(16, w: kBold, c: Colors.black)),
+                        ),
+                        if (!enabled) ...[
+                          const SizedBox(width: 8),
+                          const LabChip.idle('Tidak Aktif'),
+                        ],
+                      ],
+                    ),
+                    Text(description,
+                        style:
+                            labText(11, w: kMedium, c: ItlgColors.textSubtle)),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            const LabIcon('chevron_right', size: 18, color: ItlgColors.primary),
-          ],
-        ),
-        const PrakDivider(),
-        Row(
-          children: [
-            LabMeta(icon: metaIcon, text: meta),
-            const SizedBox(width: 16),
-            LabMeta(icon: 'clock', text: duration),
-          ],
-        ),
-      ],
+              const SizedBox(width: 12),
+              LabIcon(
+                enabled ? 'chevron_right' : 'lock_on',
+                size: 18,
+                color: enabled ? ItlgColors.primary : ItlgColors.textSubtle,
+              ),
+            ],
+          ),
+          const PrakDivider(),
+          Row(
+            children: [
+              LabMeta(icon: metaIcon, text: meta),
+              const SizedBox(width: 16),
+              LabMeta(icon: 'clock', text: duration),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
