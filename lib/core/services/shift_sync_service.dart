@@ -178,6 +178,28 @@ class ShiftSyncService extends ChangeNotifier {
   String get accessCode => _accessCode;
   String get accessValidUntil => _accessValidUntil;
 
+  /// Payload QR dinamis 60 detik untuk Presensi Mengajar Asisten (Laboran ↔ Aslab).
+  String get rotatingQrPayload {
+    final minuteBucket = DateTime.now().millisecondsSinceEpoch ~/ 60000;
+    return '$_accessCode|T:$minuteBucket';
+  }
+
+  /// Validasi payload QR 60 detik (termasuk 1 menit masa tenggang) atau kode harian aktif.
+  bool isQrPayloadValid(String raw) {
+    final cleaned = raw.trim().toUpperCase();
+    final expected = _accessCode.trim().toUpperCase();
+    if (cleaned.isEmpty || expected.isEmpty) return false;
+    if (cleaned == expected) return true;
+    final m = RegExp(r'^([A-Z0-9-]+)\|T:(\d+)$').firstMatch(cleaned);
+    if (m != null) {
+      final code = m.group(1)!;
+      final bucket = int.tryParse(m.group(2)!) ?? 0;
+      final nowBucket = DateTime.now().millisecondsSinceEpoch ~/ 60000;
+      return code == expected && (nowBucket - bucket).abs() <= 1;
+    }
+    return cleaned.contains(expected);
+  }
+
   static String initialsOf(String name) {
     final parts = name
         .trim()
@@ -552,7 +574,7 @@ class ShiftSyncService extends ChangeNotifier {
         if (v > maxNum) maxNum = v;
       }
     }
-    return '#TS-${(maxNum + 1).toString().padLeft(3, '0')}';
+    return '#TJ-${(maxNum + 1).toString().padLeft(3, '0')}';
   }
 
   /// Ajukan permintaan tukar shift baru dari halaman Ajukan Tukar Shift.
@@ -652,7 +674,13 @@ class ShiftSyncService extends ChangeNotifier {
         break;
       }
     }
-    if (target == null) return;
+    if (target == null || !target.isPending) return;
+    // Hanya penerima yang dapat menyetujui/menolak permintaan masuk
+    if (!target.isIncoming &&
+        target.requesterName.toLowerCase() ==
+            decidedByName.trim().toLowerCase()) {
+      return;
+    }
 
     final now = DateTime.now();
     final deciderFirst = decidedByName.trim().split(' ').first;
@@ -733,6 +761,47 @@ class ShiftSyncService extends ChangeNotifier {
         debugPrint('[ShiftSync] Decide swap fallback lokal: $e');
       }
     }
+  }
+
+  /// Batalkan pengajuan tukar jadwal (hanya bisa dilakukan pemohon selama masih menunggu).
+  Future<bool> cancelSwap({
+    required String swapCode,
+    required String requesterName,
+  }) async {
+    ShiftSwapRecord? target;
+    for (final s in _swaps) {
+      if (s.swapCode == swapCode) {
+        target = s;
+        break;
+      }
+    }
+    if (target == null || !target.isPending) return false;
+    if (target.isIncoming &&
+        target.requesterName.toLowerCase() !=
+            requesterName.trim().toLowerCase()) {
+      return false;
+    }
+
+    final now = DateTime.now();
+    target.status = 'rejected';
+    target.decidedAt = now;
+    target.metaNote = 'Dibatalkan ${formatDateShort(now)} oleh pemohon';
+    notifyListeners();
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('shift_swap_requests').update({
+          'status': 'rejected',
+          'meta_note': target.metaNote,
+          'decided_at': now.toIso8601String(),
+        }).eq('swap_code', swapCode);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[ShiftSync] cancelSwap error: $e');
+      }
+    }
+    return true;
   }
 
   /// Laboran menghasilkan Kode Akses Presensi Asisten baru & menyimpannya ke BE.

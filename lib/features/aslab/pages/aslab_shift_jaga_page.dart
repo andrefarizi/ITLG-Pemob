@@ -9,8 +9,9 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
+import 'aslab_pindai_qr_laboran_page.dart';
 
-/// Figma: "Shift Jaga-Aslab".
+/// Figma: "Jadwal Mengajar-Aslab" (5497:1743).
 class AslabShiftJagaPage extends StatefulWidget {
   final AslabNav nav;
   const AslabShiftJagaPage({super.key, required this.nav});
@@ -79,12 +80,53 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
         final featuredSwap = _shiftSync.featuredIncomingSwap;
         final pendingCount = _shiftSync.pendingSwapCount;
 
+        final myShiftToday = _shiftSync.allShifts.firstWhere(
+          (s) => s.asistenName == AuthController.instance.userName,
+          orElse: () => _shiftSync.allShifts.first,
+        );
+        final checkedIn = myShiftToday.attendanceStatus == 'Hadir';
+
         return LabSubPage(
           onLogoTap: nav.home,
           children: [
             const LabTitle(
-              title: 'Shift Jaga',
-              subtitle: 'Kalender jadwal tugas jaga laboratorium anda',
+              title: 'Jadwal Mengajar',
+              subtitle: 'Kalender jadwal mengajar praktikum anda',
+            ),
+            LabCard(
+              gap: 12,
+              children: [
+                PrakSpaceRow(
+                  left: const LabSectionTitle(
+                      icon: 'qrcode', text: 'Presensi Mengajar Hari Ini'),
+                  right: checkedIn
+                      ? const LabChip.live('Sudah Check-In')
+                      : const LabChip.warn('Belum Check-In'),
+                ),
+                Text(
+                  '${myShiftToday.dayLabel} • ${myShiftToday.shiftLabel} • ${myShiftToday.timeRange}',
+                  style: labText(13, w: kBold),
+                ),
+                LabMeta(
+                  icon: 'location',
+                  text: '${myShiftToday.room} • check-in dibuka 07:45',
+                ),
+                LabButtonPair(
+                  left: LabOutlineButton(
+                    icon: 'key',
+                    label: 'Masukkan Kode',
+                    onTap: () => showAslabCheckInCodeSheet(context),
+                  ),
+                  right: LabPrimaryButton(
+                    icon: 'qrcode',
+                    label: 'Pindai QR Laboran',
+                    onTap: () => labPush(
+                      context,
+                      AslabPindaiQrLaboranPage(onLogoTap: nav.home),
+                    ),
+                  ),
+                ),
+              ],
             ),
             LabColumn(
               gap: 8,
@@ -130,7 +172,7 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: ItlgShadows.outline,
                 ),
-                child: Text('Tidak ada shift jaga pada hari ini.',
+                child: Text('Tidak ada jadwal mengajar pada hari ini.',
                     textAlign: TextAlign.center,
                     style: labText(12, c: ItlgColors.textSubtle)),
               ),
@@ -140,7 +182,7 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                   PrakSpaceRow(
                     left: const LabSectionTitle(
                         icon: 'arrow_right_left',
-                        text: 'Permintaan Tukar Shift'),
+                        text: 'Permintaan Tukar Jadwal'),
                     right: featuredSwap.isPending
                         ? LabTag.red(
                             '${pendingCount > 0 ? pendingCount : 1} Baru')
@@ -157,15 +199,15 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                           name: featuredSwap.requesterName,
                           caption: featuredSwap.reason.isNotEmpty
                               ? featuredSwap.reason
-                              : 'Meminta bertukar shift dengan anda',
+                              : 'Meminta bertukar jadwal dengan anda',
                         ),
                         AslabSwapRow(
                           left: (
-                            'Shift ${featuredSwap.requesterFirstName}',
+                            'Jadwal ${featuredSwap.requesterFirstName}',
                             featuredSwap.fromShiftLabel
                           ),
                           right: (
-                            'Shift ${featuredSwap.isIncoming ? 'Anda' : featuredSwap.targetFirstName}',
+                            'Jadwal ${featuredSwap.isIncoming ? 'Anda' : featuredSwap.targetFirstName}',
                             featuredSwap.toShiftLabel
                           ),
                         ),
@@ -192,13 +234,13 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
               children: [
                 LabPrimaryButton(
                   icon: 'arrow_right_left',
-                  label: 'Ajukan Tukar Shift',
+                  label: 'Ajukan Tukar Jadwal',
                   large: true,
                   onTap: () => nav.ajukanTukarShift(context),
                 ),
                 LabOutlineButton(
                   icon: 'clock',
-                  label: 'Riwayat Tukar Shift',
+                  label: 'Riwayat Tukar Jadwal',
                   large: true,
                   onTap: () => nav.riwayatTukarShift(context),
                 ),

@@ -184,6 +184,7 @@ class RoomBookingRecord {
   final String requesterRole;
   final String reason;
   RoomStatus status;
+  String? rejectionNote;
   final DateTime createdAt;
 
   RoomBookingRecord({
@@ -198,6 +199,7 @@ class RoomBookingRecord {
     this.requesterRole = 'Asisten Lab',
     required this.reason,
     this.status = RoomStatus.menunggu,
+    this.rejectionNote,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -251,6 +253,7 @@ class RoomBookingRecord {
       requesterRole: (json['requester_role'] ?? 'Asisten Lab').toString(),
       reason: (json['reason'] ?? '').toString(),
       status: parseStatus(json['status'] as String?),
+      rejectionNote: json['rejection_note'] as String?,
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
@@ -802,11 +805,40 @@ class JadwalSyncService extends ChangeNotifier {
     }
   }
 
+  /// Cek apakah ada bentrok jadwal ruangan (booking disetujui lain atau jadwal praktikum rutin).
+  String? checkRoomConflict(RoomBookingRecord req) {
+    final targetLab = req.labName.trim().toLowerCase();
+    final targetDate = req.dateLabel.trim().toLowerCase();
+    final targetDayShort = targetDate.split(',').first.trim();
+    final targetStart = req.timeRange.split(RegExp(r'[–-]')).first.trim();
+
+    for (final other in _roomRequests) {
+      if (other.id == req.id) continue;
+      if (other.status != RoomStatus.disetujui) continue;
+      if (other.labName.trim().toLowerCase() == targetLab &&
+          other.dateLabel.trim().toLowerCase() == targetDate &&
+          other.timeRange.split(RegExp(r'[–-]')).first.trim() == targetStart) {
+        return 'Bentrok dengan peminjaman disetujui: ${other.title} (${other.timeRange})';
+      }
+    }
+
+    for (final s in _schedules) {
+      if (s.room.trim().toLowerCase() == targetLab &&
+          s.dayShort.trim().toLowerCase() == targetDayShort &&
+          s.startTime.trim() == targetStart) {
+        return 'Bentrok dengan jadwal rutin ${s.courseName} (${s.startTime}–${s.endTime})';
+      }
+    }
+    return null;
+  }
+
   /// Setujui / tolak permintaan peminjaman ruangan oleh Laboran dan sinkronkan
   /// ke Supabase (`public.room_booking_requests`) + notifikasi ke Aslab.
-  Future<void> decideRoomRequest({
+  /// Mengembalikan pesan galat jika terdapat bentrok ruangan saat menyetujui.
+  Future<String?> decideRoomRequest({
     required String requestId,
     required RoomStatus status,
+    String? rejectionNote,
   }) async {
     RoomBookingRecord? target;
     for (final r in _roomRequests) {
@@ -815,18 +847,33 @@ class JadwalSyncService extends ChangeNotifier {
         break;
       }
     }
-    if (target == null) return;
+    if (target == null) return 'Permintaan tidak ditemukan';
+
+    if (status == RoomStatus.disetujui) {
+      final conflict = checkRoomConflict(target);
+      if (conflict != null) {
+        return conflict;
+      }
+    }
 
     target.status = status;
+    if (rejectionNote != null && rejectionNote.trim().isNotEmpty) {
+      target.rejectionNote = rejectionNote.trim();
+    }
     notifyListeners();
 
     final approved = status == RoomStatus.disetujui;
+    final notePart = (!approved &&
+            target.rejectionNote != null &&
+            target.rejectionNote!.isNotEmpty)
+        ? ' • Catatan: ${target.rejectionNote}'
+        : '';
     NotificationSyncService.instance.push(
       role: 'aslab',
       icon: approved ? 'circle_check' : 'cross',
       title:
           'Peminjaman ${target.labName} ${approved ? 'Disetujui' : 'Ditolak'}',
-      body: '${target.title} • ${target.dateLabel} (${target.timeRange})',
+      body: '${target.title} • ${target.dateLabel} (${target.timeRange})$notePart',
       targetKey: 'shiftJaga',
       important: true,
     );
@@ -836,6 +883,7 @@ class JadwalSyncService extends ChangeNotifier {
       try {
         await client.from('room_booking_requests').update({
           'status': RoomBookingRecord.serializeStatus(status),
+          'rejection_note': target.rejectionNote,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', requestId);
         _backendAvailable = true;
@@ -843,5 +891,6 @@ class JadwalSyncService extends ChangeNotifier {
         debugPrint('[JadwalSync] decideRoomRequest fallback lokal: $e');
       }
     }
+    return null;
   }
 }

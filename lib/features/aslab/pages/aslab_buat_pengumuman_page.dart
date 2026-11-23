@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
+import '../../laboran/laboran_store.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
@@ -36,10 +37,10 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
     (5, '10:00', '11:40', 'Sab, 03 Okt 2026 • 10:00–11:40 (1j 40m)'),
   ];
   static const List<String> _ruang = [
-    'Lab Komputer 1',
-    'Lab Jaringan 2',
     'Lab Jaringan 1',
-    'Lab AI & Data',
+    'Lab Jaringan 2',
+    'Lab Jaringan 3',
+    'Lab Jaringan 4',
   ];
 
   final TextEditingController _judul =
@@ -176,6 +177,54 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
           label: 'Kirim Pengumuman',
           large: true,
           onTap: _kirim,
+        ),
+        // Figma: Kartu "Status Peminjaman Ruangan" (5486:688)
+        ListenableBuilder(
+          listenable: JadwalSyncService.instance,
+          builder: (_, __) {
+            final reqs = JadwalSyncService.instance.roomRequests;
+            if (reqs.isEmpty) return const SizedBox.shrink();
+            return LabCard(
+              gap: 12,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabSectionTitle(
+                      icon: 'door', text: 'Status Peminjaman Ruangan'),
+                ),
+                for (final r in reqs.take(4))
+                  LabRowCard(
+                    gap: 8,
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      PrakSpaceRow(
+                        left: Text(
+                          '${r.labName} • ${r.title.split('•').first.trim()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: labText(12, w: kBold),
+                        ),
+                        right: r.status == RoomStatus.disetujui
+                            ? const LabChip.live('Disetujui')
+                            : (r.status == RoomStatus.ditolak
+                                ? const LabChip.danger('Ditolak')
+                                : const LabChip.warn('Menunggu')),
+                      ),
+                      LabMeta(
+                        icon: 'clock',
+                        text: '${r.dateLabel} • ${r.timeRange}',
+                      ),
+                      if (r.status == RoomStatus.ditolak &&
+                          (r.rejectionNote?.isNotEmpty ?? r.reason.isNotEmpty))
+                        Text(
+                          'Catatan Laboran (Ditolak): ${r.rejectionNote ?? r.reason}',
+                          style: labText(11, c: ItlgColors.primary),
+                        ),
+                    ],
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );

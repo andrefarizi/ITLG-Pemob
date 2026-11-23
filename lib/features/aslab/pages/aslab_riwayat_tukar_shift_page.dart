@@ -5,7 +5,6 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
-import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
 
@@ -33,35 +32,133 @@ class _AslabRiwayatTukarShiftPageState
   }
 
   void _showDetail(ShiftSwapRecord swap) {
-    final statusLabel = swap.isApproved
-        ? 'Disetujui'
-        : (swap.isRejected ? 'Ditolak' : 'Menunggu Konfirmasi');
-    labShowInfoSheet(
+    final displayCode = swap.swapCode.replaceFirst('#TS-', '#TJ-');
+    final isIncoming = swap.isIncoming;
+    labShowCustomSheet<void>(
       context,
-      title: 'Detail Tukar Shift ${swap.swapCode}',
-      rows: [
-        ('person', 'Asisten', swap.pairNames),
-        ('clock', 'Shift Asal', swap.fromShiftLabel),
-        ('arrow_right_left', 'Shift Tujuan', swap.toShiftLabel),
-        ('circle_check', 'Status', statusLabel),
-      ],
-      note: swap.reason.isNotEmpty ? swap.reason : swap.metaNote,
-      primary: swap.isPending
-          ? (
-              'check',
-              'Setujui Penukaran',
-              () async {
-                await _sync.decideSwap(
+      title: 'Detail Tukar Jadwal',
+      child: LabColumn(
+        gap: 14,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: ItlgShadows.outline,
+            ),
+            child: LabColumn(
+              gap: 12,
+              children: [
+                PrakSpaceRow(
+                  left: LabTag.grey(displayCode),
+                  right: swap.isApproved
+                      ? const LabChip.live('Disetujui')
+                      : (swap.isRejected
+                          ? const LabChip.danger('Ditolak')
+                          : const LabChip.warn('Menunggu')),
+                ),
+                Row(
+                  children: [
+                    AslabAvatarPair(swap.requesterInitials, swap.targetInitials),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: LabColumn(
+                        gap: 2,
+                        children: [
+                          Text(swap.pairNames, style: labText(14, w: kBold)),
+                          Text(
+                            isIncoming
+                                ? 'Diajukan ${swap.requesterFirstName} • menunggu persetujuan anda'
+                                : 'Diajukan anda • menunggu persetujuan ${swap.targetFirstName}',
+                            style: labText(11,
+                                w: kMedium, c: ItlgColors.textSubtle),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                LabInsetBox(
+                  child: AslabSwapRow(
+                    left: ('Jadwal ${swap.requesterFirstName}',
+                        swap.fromShiftLabel),
+                    right: ('Jadwal ${swap.targetFirstName}',
+                        swap.toShiftLabel),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            swap.reason.isNotEmpty
+                ? 'Alasan: ${swap.reason}${isIncoming ? ' Kalau disetujui, jadwal kalian berdua langsung diperbarui.' : ''}'
+                : (isIncoming
+                    ? 'Kalau disetujui, jadwal kalian berdua langsung diperbarui.'
+                    : 'Pengajuan ini masih menunggu persetujuan ${swap.targetName}. Kamu bisa membatalkannya selama belum disetujui.'),
+            style: labText(12, w: kMedium, c: ItlgColors.textMuted),
+          ),
+          if (swap.isPending && isIncoming)
+            LabButtonPair(
+              left: LabOutlineButton(
+                icon: 'cross',
+                label: 'Tolak',
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _sync.decideSwap(
+                    swapCode: swap.swapCode,
+                    accept: false,
+                    decidedByName: AuthController.instance.userName,
+                  );
+                  if (mounted) {
+                    labToast(context, 'Permintaan $displayCode ditolak');
+                  }
+                },
+              ),
+              right: LabPrimaryButton(
+                icon: 'check',
+                label: 'Setujui Penukaran',
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _sync.decideSwap(
+                    swapCode: swap.swapCode,
+                    accept: true,
+                    decidedByName: AuthController.instance.userName,
+                  );
+                  if (!mounted) return;
+                  await labShowResultDialog(
+                    context,
+                    icon: 'circle_check',
+                    title: 'Tukar Jadwal Diterima',
+                    message:
+                        'Jadwal mengajar kamu sudah diperbarui dan pemohon akan menerima notifikasi.',
+                    button: 'Selesai',
+                  );
+                },
+              ),
+            )
+          else if (swap.isPending && !isIncoming)
+            LabSoftDangerButton(
+              icon: 'cross',
+              label: 'Batalkan Permintaan Tukar Jadwal',
+              onTap: () async {
+                Navigator.of(context).pop();
+                final ok = await _sync.cancelSwap(
                   swapCode: swap.swapCode,
-                  accept: true,
-                  decidedByName: AuthController.instance.userName,
+                  requesterName: AuthController.instance.userName,
                 );
                 if (mounted) {
-                  labToast(context, 'Tukar shift ${swap.swapCode} disetujui');
+                  labToast(
+                    context,
+                    ok
+                        ? 'Permintaan $displayCode dibatalkan'
+                        : 'Hanya pemohon yang bisa membatalkan permintaan menunggu',
+                  );
                 }
               },
-            )
-          : null,
+            ),
+        ],
+      ),
     );
   }
 
@@ -79,8 +176,8 @@ class _AslabRiwayatTukarShiftPageState
           onLogoTap: widget.nav.home,
           children: [
             const LabTitle(
-              title: 'Riwayat Tukar Shift',
-              subtitle: 'Catatan penukaran shift jaga anda dan asisten lain',
+              title: 'Riwayat Tukar Jadwal',
+              subtitle: 'Catatan penukaran jadwal mengajar anda dan asisten lain',
             ),
             LabStatRow(
               stats: [
@@ -94,7 +191,7 @@ class _AslabRiwayatTukarShiftPageState
               ],
             ),
             LabTabs(
-              labels: const ['Semua', 'Shift Saya', 'Asisten Lain'],
+              labels: const ['Semua', 'Jadwal Saya', 'Asisten Lain'],
               index: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
@@ -138,7 +235,7 @@ class _SwapCard extends StatelessWidget {
         PrakSpaceRow(
           left: Align(
             alignment: Alignment.centerLeft,
-            child: LabTag.grey(swap.swapCode),
+            child: LabTag.grey(swap.swapCode.replaceFirst('#TS-', '#TJ-')),
           ),
           right: chip,
         ),
@@ -161,8 +258,8 @@ class _SwapCard extends StatelessWidget {
         ),
         LabInsetBox(
           child: AslabSwapRow(
-            left: ('Shift ${swap.requesterFirstName}', swap.fromShiftLabel),
-            right: ('Shift ${swap.targetFirstName}', swap.toShiftLabel),
+            left: ('Jadwal ${swap.requesterFirstName}', swap.fromShiftLabel),
+            right: ('Jadwal ${swap.targetFirstName}', swap.toShiftLabel),
           ),
         ),
       ],

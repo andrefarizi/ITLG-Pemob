@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/notification_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/services/shift_sync_service.dart';
@@ -108,9 +109,9 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
             _grid(
               AslabMenuCard(
                 icon: 'calendar',
-                title: 'Shift Jaga',
+                title: 'Jadwal Mengajar',
                 subtitle: swapBadge > 0
-                    ? '$swapBadge permintaan tukar shift'
+                    ? '$swapBadge permintaan tukar jadwal'
                     : 'Tidak ada permintaan baru',
                 badge: swapBadge,
                 onTap: () => _nav.shiftJaga(context).then(_refresh),
@@ -225,7 +226,15 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
       ),
       child: Row(
         children: [
-          Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+          ListenableBuilder(
+            listenable: ProfilData.aslab,
+            builder: (_, __) => LabInitialAvatar(
+              initials: ProfilData.aslab.initials,
+              size: 64,
+              hasPhotoBadge: ProfilData.aslab.photoSource != null,
+              photoSource: ProfilData.aslab.photoSource,
+            ),
+          ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -259,19 +268,12 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
             ),
           ),
           const SizedBox(width: 11),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _nav.notifikasi(context).then(_refresh),
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: ItlgColors.primary,
-                shape: BoxShape.circle,
-                boxShadow: ItlgShadows.outline,
-              ),
-              child: const LabIcon('m_bell', size: 16.7, color: Colors.white),
+          ListenableBuilder(
+            listenable: NotificationSyncService.instance,
+            builder: (_, __) => LabBellButton(
+              unreadCount:
+                  NotificationSyncService.instance.unreadCountForRole('aslab'),
+              onTap: () => _nav.notifikasi(context).then(_refresh),
             ),
           ),
         ],

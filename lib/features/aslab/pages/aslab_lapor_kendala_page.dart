@@ -20,10 +20,10 @@ class AslabLaporKendalaPage extends StatefulWidget {
 
 class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
   static const List<String> _labs = [
-    'Lab Komputer 1',
-    'Lab Komputer 2',
+    'Lab Jaringan 1',
     'Lab Jaringan 2',
-    'Lab Multimedia',
+    'Lab Jaringan 3',
+    'Lab Jaringan 4',
   ];
 
   static const List<(String, String)> _kategori = [
@@ -129,11 +129,11 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
   Widget _chip(int status) {
     switch (status) {
       case 0:
-        return const LabChip.danger('Reported');
+        return const LabChip.danger('Baru');
       case 1:
-        return const LabChip.warn('In Progress');
+        return const LabChip.warn('Ditangani');
       default:
-        return const LabChip.live('Resolved');
+        return const LabChip.live('Selesai');
     }
   }
 
@@ -173,7 +173,7 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
         LabCard(
           children: [
             const LabOverline(
-              overline: 'Issue Ticketing',
+              overline: 'Pelaporan Kendala',
               title: 'Lapor Kendala Lab',
             ),
             Text('Laporan langsung diteruskan ke Laboran untuk ditangani.',
@@ -200,8 +200,13 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
               ),
             ),
             PrakField(
-              label: 'Nomor Meja / PC',
-              child: PrakInput(controller: _pc, hint: 'Contoh : PC-12'),
+              label: _kat == 0 ? 'Nomor Meja / PC' : 'Detail Unit / Posisi',
+              child: PrakInput(
+                controller: _pc,
+                hint: _kat == 0
+                    ? 'Contoh : PC-12'
+                    : 'Contoh : Proyektor depan / AC tengah / Wi-Fi lab',
+              ),
             ),
             PrakField(
               label: 'Deskripsi Kendala :',

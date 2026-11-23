@@ -108,11 +108,11 @@ class _AslabAjukanTukarShiftPageState extends State<AslabAjukanTukarShiftPage> {
             LabCard(
               children: [
                 const LabOverline(
-                  overline: 'Koordinasi Shift Jaga',
-                  title: 'Ajukan Tukar Shift',
+                  overline: 'Koordinasi Jadwal Mengajar',
+                  title: 'Ajukan Tukar Jadwal',
                 ),
                 Text(
-                  'Pilih shift yang ingin ditukar dan asisten yang akan '
+                  'Pilih jadwal yang ingin ditukar dan asisten yang akan '
                   'menggantikan.',
                   style: labText(12, c: ItlgColors.textMuted),
                 ),
@@ -126,11 +126,11 @@ class _AslabAjukanTukarShiftPageState extends State<AslabAjukanTukarShiftPage> {
                       icon: 'arrow_right_left', text: 'Detail Penukaran'),
                 ),
                 PrakField(
-                  label: 'Shift Saya',
+                  label: 'Jadwal Saya',
                   child: PrakSelect(
                     value: myLabels[safeSaya],
                     onTap: () => _pick(
-                        'Shift Saya', myLabels, safeSaya, (i) => _saya = i),
+                        'Jadwal Saya', myLabels, safeSaya, (i) => _saya = i),
                   ),
                 ),
                 PrakField(
@@ -145,10 +145,10 @@ class _AslabAjukanTukarShiftPageState extends State<AslabAjukanTukarShiftPage> {
                   ),
                 ),
                 PrakField(
-                  label: 'Shift Pengganti',
+                  label: 'Jadwal Pengganti',
                   child: PrakSelect(
                     value: replLabels[safeGanti],
-                    onTap: () => _pick('Shift Pengganti', replLabels, safeGanti,
+                    onTap: () => _pick('Jadwal Pengganti', replLabels, safeGanti,
                         (i) => _ganti = i),
                   ),
                 ),
@@ -156,7 +156,7 @@ class _AslabAjukanTukarShiftPageState extends State<AslabAjukanTukarShiftPage> {
                   label: 'Alasan :',
                   child: PrakTextArea(
                     controller: _alasan,
-                    hint: 'Tulis alasan penukaran shift...',
+                    hint: 'Tulis alasan penukaran jadwal...',
                   ),
                 ),
               ],
