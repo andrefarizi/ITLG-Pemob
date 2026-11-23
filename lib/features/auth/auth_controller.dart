@@ -76,6 +76,36 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update foto profil (avatar_url) di Supabase dan memori lokal.
+  Future<void> updateAvatar(String? avatarUrl) async {
+    if (_currentProfile != null) {
+      await AuthService.instance.updateAvatar(
+        userId: _currentProfile!.id,
+        avatarUrl: avatarUrl,
+      );
+      _currentProfile = _currentProfile!.copyWith(
+        avatarUrl: avatarUrl,
+        clearAvatar: avatarUrl == null,
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Verifikasi kata sandi saat ini dan simpan kata sandi baru ke Supabase Auth.
+  Future<AuthResult> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final profile =
+        _currentProfile ?? AuthService.instance.defaultProfile(_currentRole);
+    return AuthService.instance.changePassword(
+      email: profile.email,
+      identifier: profile.identifier,
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+  }
+
   /// Sinkron login untuk kompatibilitas
   void login({required String identifier, required UserRole role}) {
     _isLoggedIn = true;

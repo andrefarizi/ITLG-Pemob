@@ -54,6 +54,19 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
 
   void _openChangePassword() => widget.nav.ubahKataSandi(context);
 
+  Future<void> _confirmLogout() async {
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'sign_out',
+      title: 'Keluar dari Akun ITLG Mobile?',
+      message:
+          'Kamu perlu masuk lagi dengan NIM/NIP dan kata sandi untuk memakai aplikasi.',
+      cancelLabel: 'Batal',
+      confirmLabel: 'Ya, Keluar',
+    );
+    if (ok) widget.onLogout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = widget.nav.store;
@@ -69,8 +82,12 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
           ),
           child: Row(
             children: [
-              // Avatar yang sama dengan di Figma (dipakai juga oleh Laboran).
-              Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+              LabInitialAvatar(
+                initials: _p.initials,
+                size: 64,
+                hasPhotoBadge: _p.photoSource != null,
+                photoSource: _p.photoSource,
+              ),
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
@@ -124,7 +141,7 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
                 icon: 'school_outline',
                 label: 'Program Studi',
                 value: 'Teknologi Informasi'),
-            const _DataRow(icon: 'calendar', label: 'Angkatan', value: '2023'),
+            const _DataRow(icon: 'calendar', label: 'Angkatan', value: '2024'),
             const _DataRow(
                 icon: 'people_group',
                 label: 'Kelas Praktikum',
@@ -183,7 +200,7 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
           icon: 'sign_out',
           label: 'Keluar dari Akun',
           large: true,
-          onTap: widget.onLogout,
+          onTap: _confirmLogout,
         ),
       ],
     );

@@ -8,6 +8,7 @@ class ProfilData extends ChangeNotifier {
   String _name;
   String _email;
   String _phone;
+  String? _photoSource;
 
   /// "NIM" atau "NIP".
   final String idLabel;
@@ -19,13 +20,48 @@ class ProfilData extends ChangeNotifier {
     required String phone,
     required this.idLabel,
     required this.idValue,
+    String? photoSource,
+    // ignore: prefer_initializing_formals
   })  : _name = name,
+        // ignore: prefer_initializing_formals
         _email = email,
-        _phone = phone;
+        // ignore: prefer_initializing_formals
+        _phone = phone,
+        // ignore: prefer_initializing_formals
+        _photoSource = photoSource;
 
   String get name => _name;
   String get email => _email;
   String get phone => _phone;
+  String? get photoSource => _photoSource;
+
+  /// Inisial 2 huruf sesuai Figma (AF, AR, RB, DC).
+  String get initials {
+    final cleaned = _name
+        .replaceAll(RegExp(r'\b(Dr|Prof|Eng|Ir|H|Hj)\.\s*', caseSensitive: false), '')
+        .split(',')
+        .first
+        .trim();
+    final parts =
+        cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return 'US';
+    if (parts.length == 1) {
+      return parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    if (parts.length >= 3 &&
+        parts[1].length <= 2 &&
+        parts[2].isNotEmpty) {
+      // Misal "Andre Al Farizi Sebayang" -> "AF"
+      return '${parts[0][0]}${parts[2][0]}'.toUpperCase();
+    }
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  Future<void> setPhotoSource(String? source) async {
+    _photoSource = source;
+    notifyListeners();
+    await AuthController.instance.updateAvatar(source);
+  }
 
   Future<void> update({
     required String name,
@@ -61,6 +97,7 @@ class ProfilData extends ChangeNotifier {
       idValue: (p?.identifier != null && p!.identifier.isNotEmpty)
           ? p.identifier
           : _defaultId(role),
+      photoSource: p?.avatarUrl,
     );
   }
 

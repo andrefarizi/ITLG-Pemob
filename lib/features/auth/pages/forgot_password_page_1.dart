@@ -36,7 +36,7 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
     final nim = _nim.text.trim();
     final email = _email.text.trim();
     setState(() {
-      _nimError = nim.isEmpty ? 'Nomor Induk Mahasiswa wajib diisi' : null;
+      _nimError = nim.isEmpty ? 'NIM / NIP wajib diisi' : null;
       _emailError = email.isEmpty
           ? 'Email USU wajib diisi'
           : (_usuEmail.hasMatch(email)
@@ -48,7 +48,7 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
     setState(() => _loading = true);
 
     try {
-      // 1. Cari email berdasarkan NIM di database
+      // 1. Cari email berdasarkan NIM/NIP di database
       final registeredEmail = await AuthService.instance.findEmailByNimOrEmail(nim);
 
       if (!mounted) return;
@@ -56,7 +56,7 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
       if (registeredEmail == null) {
         setState(() {
           _loading = false;
-          _nimError = 'NIM tidak ditemukan dalam sistem';
+          _nimError = 'NIM / NIP tidak ditemukan dalam sistem';
         });
         return;
       }
@@ -65,7 +65,7 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
       if (registeredEmail.toLowerCase() != email.toLowerCase()) {
         setState(() {
           _loading = false;
-          _emailError = 'Email tidak sesuai dengan NIM yang terdaftar';
+          _emailError = 'Email tidak sesuai dengan NIM/NIP yang terdaftar';
         });
         return;
       }
@@ -128,8 +128,8 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ItlgTextField(
-                label: 'Nomor Induk Mahasiswa',
-                hint: 'Contoh : 123456789',
+                label: 'NIM / NIP',
+                hint: 'Contoh : 241402105 atau NIP',
                 icon: Icons.badge_outlined,
                 controller: _nim,
                 keyboardType: TextInputType.number,

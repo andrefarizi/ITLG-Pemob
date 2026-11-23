@@ -56,6 +56,19 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
 
   void _openChangePassword() => widget.nav.ubahKataSandi(context);
 
+  Future<void> _confirmLogout() async {
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'sign_out',
+      title: 'Keluar dari Akun ITLG Mobile?',
+      message:
+          'Kamu perlu masuk lagi dengan NIM/NIP dan kata sandi untuk memakai aplikasi.',
+      cancelLabel: 'Batal',
+      confirmLabel: 'Ya, Keluar',
+    );
+    if (ok) widget.onLogout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = widget.nav.store;
@@ -71,8 +84,12 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
           ),
           child: Row(
             children: [
-              // Avatar yang sama dengan di Figma (dipakai juga oleh Laboran).
-              Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+              LabInitialAvatar(
+                initials: _p.initials,
+                size: 64,
+                hasPhotoBadge: _p.photoSource != null,
+                photoSource: _p.photoSource,
+              ),
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
@@ -151,7 +168,9 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
                     label: 'Rating Asisten',
                     value: '★ ${prak.overallAsistenRatingLabel()} / 5,0'),
                 _DataRow(
-                    icon: 'calendar', label: 'Shift Jaga', value: shiftText),
+                    icon: 'calendar',
+                    label: 'Jadwal Mengajar',
+                    value: shiftText),
                 _DataRow(icon: 'envelope', label: 'Email', value: _p.email),
                 _DataRow(
                     icon: 'phone_outline', label: 'No. HP', value: _p.phone),
@@ -172,7 +191,7 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
                 _SettingItem(
                   icon: 'bell',
                   title: 'Notifikasi Push',
-                  subtitle: 'Tukar shift, izin, dan pengumpulan tugas',
+                  subtitle: 'Tukar jadwal, izin, dan pengumpulan tugas',
                   trailing: _Toggle(
                     value: store.pushOn,
                     onChanged: (v) => setState(() => store.pushOn = v),
@@ -203,7 +222,7 @@ class _AslabProfilPageState extends State<AslabProfilPage> {
           icon: 'sign_out',
           label: 'Keluar dari Akun',
           large: true,
-          onTap: widget.onLogout,
+          onTap: _confirmLogout,
         ),
       ],
     );

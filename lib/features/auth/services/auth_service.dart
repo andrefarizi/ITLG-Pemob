@@ -297,6 +297,106 @@ class AuthService {
     }
   }
 
+  /// Update avatar URL di Supabase (`public.profiles.avatar_url`).
+  Future<void> updateAvatar({
+    required String userId,
+    String? avatarUrl,
+  }) async {
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('profiles').update({
+          'avatar_url': avatarUrl,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', userId);
+        debugPrint('[AuthService] Berhasil update avatar_url di Supabase');
+      } catch (e) {
+        debugPrint('[AuthService] Error saat update avatar_url Supabase: $e');
+      }
+    }
+  }
+
+  /// Verifikasi kata sandi saat ini dan ubah ke kata sandi baru dari halaman Profil.
+  Future<AuthResult> changePassword({
+    required String email,
+    required String identifier,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final lowerEmail = email.toLowerCase().trim();
+    final lowerId = identifier.toLowerCase().trim();
+    final legacyEmail = _legacyAuthEmails[lowerEmail];
+
+    // 1. Cek jika kata sandi sebelumnya diubah dalam sesi runtime
+    final customPw = _customPasswords[lowerId] ??
+        _customPasswords[lowerEmail] ??
+        (legacyEmail != null ? _customPasswords[legacyEmail] : null);
+
+    bool currentValid = false;
+    if (customPw != null) {
+      currentValid = customPw == currentPassword;
+    } else {
+      final client = SupabaseService.instance.client;
+      if (client != null) {
+        bool rpcChecked = false;
+        try {
+          final rpcRes = await client.rpc('verify_user_password', params: {
+            'user_email': lowerEmail,
+            'current_password': currentPassword,
+          });
+          if (rpcRes is bool) {
+            currentValid = rpcRes;
+            rpcChecked = true;
+          }
+        } catch (e) {
+          debugPrint('[AuthService] RPC verify_user_password belum tersedia: $e');
+        }
+
+        if (!rpcChecked) {
+          try {
+            await client.auth.signInWithPassword(
+              email: lowerEmail,
+              password: currentPassword,
+            );
+            currentValid = true;
+          } catch (_) {
+            if (legacyEmail != null) {
+              try {
+                await client.auth.signInWithPassword(
+                  email: legacyEmail,
+                  password: currentPassword,
+                );
+                currentValid = true;
+              } catch (_) {
+                currentValid = false;
+              }
+            } else {
+              currentValid = false;
+            }
+          }
+        }
+      } else {
+        // Fallback offline / dummy
+        final matched = _dummyUsers.cast<_DummyUser?>().firstWhere(
+              (u) => u!.identifiers.any((id) =>
+                  id.toLowerCase() == lowerEmail ||
+                  id.toLowerCase() == lowerId),
+              orElse: () => null,
+            );
+        currentValid = matched != null && matched.password == currentPassword;
+      }
+    }
+
+    if (!currentValid) {
+      return const AuthResult.failure(
+        'Kata sandi saat ini tidak sesuai. Silakan periksa kembali.',
+      );
+    }
+
+    await updatePasswordByEmail(lowerEmail, newPassword);
+    return const AuthResult.success(null);
+  }
+
   /// Ambil profil default untuk role tertentu
   UserProfile defaultProfile(UserRole role) {
     return _dummyUsers.firstWhere((u) => u.profile.role == role).profile;

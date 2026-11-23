@@ -4,9 +4,8 @@ import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../../shared/profil_data.dart';
+import '../../shared/ubah_kata_sandi_page.dart';
 import '../../shared/ubah_profil_page.dart';
-import '../../auth/pages/forgot_password_page_1.dart';
-import '../../auth/widgets/auth_design.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
@@ -56,19 +55,25 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
   }
 
   void _openChangePassword() {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        settings: const RouteSettings(name: kForgotPasswordRoute),
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, __, ___) => const ForgotPasswordPage1(),
-        transitionsBuilder: (_, anim, __, child) => SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
-          child: child,
-        ),
+    labPush(
+      context,
+      UbahKataSandiPage(
+        onLogoTap: () => Navigator.of(context).popUntil((r) => r.isFirst),
       ),
     );
+  }
+
+  Future<void> _confirmLogout() async {
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'sign_out',
+      title: 'Keluar dari Akun ITLG Mobile?',
+      message:
+          'Kamu perlu masuk lagi dengan NIM/NIP dan kata sandi untuk memakai aplikasi.',
+      cancelLabel: 'Batal',
+      confirmLabel: 'Ya, Keluar',
+    );
+    if (ok) widget.onLogout();
   }
 
   @override
@@ -86,7 +91,12 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
           ),
           child: Row(
             children: [
-              Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+              LabInitialAvatar(
+                initials: _p.initials,
+                size: 64,
+                hasPhotoBadge: _p.photoSource != null,
+                photoSource: _p.photoSource,
+              ),
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
@@ -176,7 +186,7 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
                 _SettingItem(
                   icon: 'bell',
                   title: 'Notifikasi Push',
-                  subtitle: 'Tiket perbaikan, ruangan, dan inventaris',
+                  subtitle: 'Laporan kerusakan, ruangan, dan inventaris',
                   minHeight: 64,
                   trailing: _Toggle(
                     value: store.pushOn,
@@ -208,7 +218,7 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
           icon: 'sign_out',
           label: 'Keluar dari Akun',
           large: true,
-          onTap: widget.onLogout,
+          onTap: _confirmLogout,
         ),
       ],
     );

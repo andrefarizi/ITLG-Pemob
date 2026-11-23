@@ -48,6 +48,7 @@ class UserProfile {
     String? email,
     String? phone,
     String? avatarUrl,
+    bool clearAvatar = false,
   }) {
     return UserProfile(
       id: id,
@@ -56,7 +57,7 @@ class UserProfile {
       email: email ?? this.email,
       role: role,
       phone: phone ?? this.phone,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarUrl: clearAvatar ? null : (avatarUrl ?? this.avatarUrl),
     );
   }
 
