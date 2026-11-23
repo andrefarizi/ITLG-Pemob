@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/device_calendar_service.dart';
 import '../../../core/services/jadwal_sync_service.dart';
+import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/notification_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
@@ -131,7 +133,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
   Widget _greeting() {
     return Container(
       constraints: const BoxConstraints(minHeight: 92),
-      padding: const EdgeInsets.fromLTRB(16, 12, 26, 15),
+      padding: const EdgeInsets.fromLTRB(16, 12, 18, 15),
       decoration: BoxDecoration(
         color: ItlgColors.surfaceDark,
         borderRadius: BorderRadius.circular(24),
@@ -139,7 +141,15 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
       ),
       child: Row(
         children: [
-          Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+          ListenableBuilder(
+            listenable: ProfilData.praktikan,
+            builder: (_, __) => LabInitialAvatar(
+              initials: ProfilData.praktikan.initials,
+              size: 64,
+              hasPhotoBadge: ProfilData.praktikan.photoSource != null,
+              photoSource: ProfilData.praktikan.photoSource,
+            ),
+          ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -179,20 +189,13 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _nav.notifikasi(context).then(_refresh),
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              // Lonceng datar (tanpa bayangan) sesuai Figma.
-              decoration: const BoxDecoration(
-                color: ItlgColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: const LabIcon('m_bell', size: 18, color: Colors.white),
+          const SizedBox(width: 10),
+          ListenableBuilder(
+            listenable: NotificationSyncService.instance,
+            builder: (_, __) => LabBellButton(
+              unreadCount: NotificationSyncService.instance
+                  .unreadCountForRole('praktikan'),
+              onTap: () => _nav.notifikasi(context).then(_refresh),
             ),
           ),
         ],
@@ -200,12 +203,13 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
     );
   }
 
-  // Kartu presensi berlangsung (373 x 258).
+  // Kartu presensi berlangsung + kartu pintasan Meja Aktif (Figma 5813:3004).
   Widget _presensiCard() {
     final presensiSync = PresensiSyncService.instance;
     final praktikumSync = PraktikumSyncService.instance;
+    final deskSync = LabDeskSyncService.instance;
     return ListenableBuilder(
-      listenable: Listenable.merge([presensiSync, praktikumSync]),
+      listenable: Listenable.merge([presensiSync, praktikumSync, deskSync]),
       builder: (context, _) {
         final session = presensiSync.activeSession;
         final course = praktikumSync.courseById(session.courseId);
@@ -214,9 +218,16 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
             session.courseId, session.meetingNumber, userId);
         final alreadyPresent =
             myRec != null && myRec.status == PrakAttend.hadir;
+        final myDesk = deskSync.bookedDeskForUser(userId, labName: session.labName) ??
+            _store.bookedDesk;
+        final deskPc = myDesk != null ? 'PC-${myDesk.toString().padLeft(2, '0')}' : null;
+        final localRec = myRec?.recordedAt.toLocal();
+        final clockLabel = localRec != null
+            ? '${localRec.hour.toString().padLeft(2, '0')}:${localRec.minute.toString().padLeft(2, '0')}'
+            : '08:05';
 
         return Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 20, 24),
+          padding: const EdgeInsets.fromLTRB(16, 16, 20, 20),
           decoration: BoxDecoration(
             color: ItlgColors.surfaceDark,
             borderRadius: BorderRadius.circular(24),
@@ -228,7 +239,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: alreadyPresent
-                    ? const PrakLiveChip24('Sudah Presensi')
+                    ? PrakLiveChip24('Sudah Presensi • $clockLabel')
                     : (session.isActive
                         ? const PrakLiveChip24('Presensi Berlangsung')
                         : const LabChip.idle('Sesi Ditutup')),
@@ -240,42 +251,54 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                 room: session.labName,
                 asisten: session.startedBy,
               ),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (alreadyPresent) {
-                    _nav.pilihMejaFromPresensi();
-                  } else if (!session.isActive) {
-                    labToast(
-                        context, 'Sesi presensi sedang ditutup oleh asisten');
-                  } else {
-                    _nav.presensi(context);
-                  }
-                },
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: ItlgColors.primary,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: ItlgShadows.outline,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const LabIcon('m_qr', size: 22, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(
-                          alreadyPresent
-                              ? 'Lihat / Pilih Meja'
-                              : (session.isActive
-                                  ? 'Presensi Sekarang'
-                                  : 'Sesi Ditutup'),
-                          style: labText(16,
-                              w: kBold, c: ItlgColors.surfaceWhite)),
-                    ],
+              if (alreadyPresent && myDesk != null)
+                LabListItem(
+                  leading: const LabIconTile('desktop_device'),
+                  title: 'Meja Aktif: Meja ${myDesk.toString().padLeft(2, '0')} • $deskPc',
+                  subtitle:
+                      '${session.labName} • dipakai sejak $clockLabel • sampai 09:40',
+                  titleSize: 12,
+                  trailing: const LabIcon('chevron_right',
+                      size: 16, color: ItlgColors.primary),
+                  onTap: () => _nav.mejaKamu(context).then(_refresh),
+                )
+              else
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (alreadyPresent) {
+                      _nav.pilihMejaFromPresensi();
+                    } else if (!session.isActive) {
+                      labToast(
+                          context, 'Sesi presensi sedang ditutup oleh asisten');
+                    } else {
+                      _nav.presensi(context);
+                    }
+                  },
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: ItlgColors.primary,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: ItlgShadows.outline,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const LabIcon('m_qr', size: 22, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text(
+                            alreadyPresent
+                                ? 'Pilih Meja Praktikum'
+                                : (session.isActive
+                                    ? 'Presensi Sekarang'
+                                    : 'Sesi Ditutup'),
+                            style: labText(16,
+                                w: kBold, c: ItlgColors.surfaceWhite)),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         );

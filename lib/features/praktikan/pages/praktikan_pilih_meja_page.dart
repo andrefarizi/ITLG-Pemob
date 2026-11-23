@@ -113,7 +113,11 @@ class _PraktikanPilihMejaPageState extends State<PraktikanPilihMejaPage> {
         LabCard(
           children: [
             const LabOverline(
-                overline: 'Lab Komputer 1', title: 'Pilih Meja\nPraktikum'),
+                overline: 'Kom C • Sesi C1', title: 'Pilih Meja\nPraktikum'),
+            Text(
+              '${LabDeskSyncService.defaultLab} • Pemrograman Mobile',
+              style: labText(12, w: kMedium, c: LabColors.textGrey),
+            ),
             Row(
               children: [
                 const Flexible(
@@ -152,7 +156,7 @@ class _PraktikanPilihMejaPageState extends State<PraktikanPilihMejaPage> {
         ),
         LabPrimaryButton(
           icon: 'check',
-          label: 'Booking Meja $sel',
+          label: 'Pilih Meja $sel',
           large: true,
           onTap: _booking,
         ),

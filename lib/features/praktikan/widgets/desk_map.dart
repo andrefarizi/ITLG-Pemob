@@ -4,9 +4,9 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_store.dart';
 
-/// Denah 30 meja (5 baris x 6 meja, lorong di tengah) di kotak putih
-/// cekung. Dipakai di Pilih Meja, Meja Kamu (Praktikan) dan Denah Meja
-/// (Laboran).
+/// Denah 30 meja (6 baris x 5 meja: 3 kiri + lorong + 2 kanan) di kotak putih
+/// cekung (sesuai desain Figma 5712:2948). Dipakai di Pilih Meja, Meja Kamu
+/// (Praktikan) dan Denah Meja (Laboran).
 ///
 /// - Tersedia: putih timbul.
 /// - Terisi: abu-abu cekung.
@@ -48,22 +48,22 @@ class PrakDeskMap extends StatelessWidget {
               style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
             ),
           ),
-          for (var row = 0; row < 5; row++) ...[
+          for (var row = 0; row < 6; row++) ...[
             const SizedBox(height: 10),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (var col = 0; col < 6; col++) ...[
+                  for (var col = 0; col < 5; col++) ...[
                     if (col == 3)
                       const SizedBox(width: 28)
                     else if (col > 0)
                       const SizedBox(width: 8),
                     _Desk(
-                      number: row * 6 + col + 1,
-                      status: desks[row * 6 + col + 1] ?? PrakDesk.taken,
-                      selected: row * 6 + col + 1 == selected,
+                      number: row * 5 + col + 1,
+                      status: desks[row * 5 + col + 1] ?? PrakDesk.taken,
+                      selected: row * 5 + col + 1 == selected,
                       onTap: onTap,
                     ),
                   ],

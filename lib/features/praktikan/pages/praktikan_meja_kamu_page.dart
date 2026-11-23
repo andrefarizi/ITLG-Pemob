@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -9,25 +10,52 @@ import '../praktikan_store.dart';
 import '../widgets/desk_map.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Meja Kamu-Praktikan".
-///
-/// Muncul setelah praktikan membooking meja. Dari sini praktikan bisa
-/// kembali ke Beranda atau melaporkan kendala alat/software di meja yang
-/// sudah dibooking (halaman Laporkan Kerusakan Meja).
+/// Figma: "Meja Kamu-Praktikan" (5712:2948) +
+/// "Pop up Konfirmasi Akhiri Pemakaian Meja" (5812:2631).
 class PraktikanMejaKamuPage extends StatelessWidget {
   final PraktikanNav nav;
   const PraktikanMejaKamuPage({super.key, required this.nav});
+
+  Future<void> _akhiriMeja(
+    BuildContext context, {
+    required String labName,
+    required int deskNumber,
+  }) async {
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'desktop_device',
+      title: 'Akhiri Pemakaian Meja?',
+      message:
+          'Meja $deskNumber akan dikosongkan dan bisa dipilih praktikan lain. Pastikan berkas kamu sudah tersimpan.',
+      cancelLabel: 'Batal',
+      confirmLabel: 'Ya, Akhiri',
+    );
+    if (!ok || !context.mounted) return;
+    final userKey = AuthController.instance.userIdentifier;
+    await LabDeskSyncService.instance.releaseDesk(
+      labName: labName,
+      deskNumber: deskNumber,
+      userKey: userKey,
+    );
+    nav.store.bookedDesk = null;
+    if (!context.mounted) return;
+    nav.home();
+    labToast(context, 'Pemakaian Meja $deskNumber diakhiri dan dikosongkan');
+  }
 
   @override
   Widget build(BuildContext context) {
     final sync = LabDeskSyncService.instance;
     final presensi = PresensiSyncService.instance;
+    final praktikum = PraktikumSyncService.instance;
     final s = nav.store;
 
     return ListenableBuilder(
-      listenable: Listenable.merge([sync, presensi]),
+      listenable: Listenable.merge([sync, presensi, praktikum]),
       builder: (context, _) {
-        final labName = presensi.activeSession.labName;
+        final session = presensi.activeSession;
+        final course = praktikum.courseById(session.courseId);
+        final labName = session.labName;
         final userKey = AuthController.instance.userIdentifier;
         final n = sync.bookedDeskForUser(userKey, labName: labName) ??
             s.bookedDesk ??
@@ -47,12 +75,19 @@ class PraktikanMejaKamuPage extends StatelessWidget {
           children: [
             LabCard(
               children: [
-                LabOverline(overline: labName, title: 'Meja Kamu'),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LabTag.blue('Kom C • Sesi C1'),
+                ),
+                LabOverline(
+                  overline: '$labName • ${course.name}',
+                  title: 'Meja Kamu',
+                ),
                 Row(
                   children: [
-                    const Flexible(
+                    Flexible(
                       child: LabMeta(
-                          icon: 'clock', text: 'Senin • 08:00–09:40 WIB'),
+                          icon: 'clock', text: course.jadwalAbsensi),
                     ),
                     const SizedBox(width: 24),
                     Flexible(
@@ -81,28 +116,43 @@ class PraktikanMejaKamuPage extends StatelessWidget {
               titleSize: 12,
               trailing: (deskRec?.status == PrakDesk.broken || hasActiveTicket)
                   ? const LabChip.danger('Dilaporkan Rusak')
-                  : const LabChip.live('Terbooking'),
+                  : const LabChip.live('Sedang Dipakai'),
             ),
             Text(
-              'Meja $n sudah dibooking atas namamu untuk sesi ini. Kalau ada '
-              'kendala alat atau software di meja ini, laporkan lewat tombol di '
-              'bawah.',
+              'Meja $n tercatat atas namamu sampai sesi berakhir pukul 09:40. '
+              'Kalau PC bermasalah, pindah ke meja lain atau laporkan kendalanya. '
+              'Akhiri pemakaian saat praktikum selesai.',
               style: labText(13, c: LabColors.textGrey).copyWith(height: 1.4),
             ),
             LabColumn(
               gap: 12,
               children: [
                 LabPrimaryButton(
-                  icon: 'check',
-                  label: 'Selesai, ke Beranda',
+                  icon: 'home',
+                  label: 'Kembali ke Beranda',
                   large: true,
                   onTap: nav.home,
                 ),
-                LabOutlineButton(
-                  icon: 'triangle_alert',
-                  label: 'Laporkan Kendala Meja $n',
-                  large: true,
-                  onTap: () => nav.laporkanKerusakan(context),
+                LabButtonPair(
+                  left: LabOutlineButton(
+                    icon: 'arrow_right_left',
+                    label: 'Pindah Meja',
+                    onTap: () => nav.pilihMejaFromPresensi(),
+                  ),
+                  right: LabOutlineButton(
+                    icon: 'triangle_alert',
+                    label: 'Lapor Kendala',
+                    onTap: () => nav.laporkanKerusakan(context),
+                  ),
+                ),
+                LabSoftDangerButton(
+                  icon: 'stop',
+                  label: 'Akhiri Pemakaian Meja',
+                  onTap: () => _akhiriMeja(
+                    context,
+                    labName: labName,
+                    deskNumber: n,
+                  ),
                 ),
               ],
             ),

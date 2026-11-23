@@ -126,11 +126,11 @@ class _PraktikanLaporkanKerusakanPageState
   Widget _chip(int status) {
     switch (status) {
       case 0:
-        return const LabChip.danger('Reported');
+        return const LabChip.danger('Baru');
       case 1:
-        return const LabChip.warn('In Progress');
+        return const LabChip.warn('Ditangani');
       default:
-        return const LabChip.live('Resolved');
+        return const LabChip.live('Selesai');
     }
   }
 
