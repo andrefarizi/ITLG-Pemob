@@ -51,24 +51,24 @@ class _LaboranTiketPageState extends State<LaboranTiketPage> {
     return LabTabBody(
       children: [
         const LabTitle(
-          title: 'Tiket Perbaikan',
-          subtitle: 'Laporan kendala perangkat dari Praktikan & Asisten Lab',
+          title: 'Laporan Kerusakan',
+          subtitle: 'Laporan kerusakan perangkat dari praktikan dan asisten lab',
         ),
         LabStatRow(
           stats: [
             LabStat(
                 icon: 'triangle_alert',
-                label: 'Reported',
+                label: 'Baru',
                 value: '$reportedCount'),
             LabStat(
                 icon: 'wrench_outline',
-                label: 'In Progress',
+                label: 'Ditangani',
                 value: '$inProgressCount'),
-            LabStat(icon: 'check', label: 'Resolved', value: '$resolvedCount'),
+            LabStat(icon: 'check', label: 'Selesai', value: '$resolvedCount'),
           ],
         ),
         LabTabs(
-          labels: ['Reported ($reportedCount)', 'In Progress', 'Resolved'],
+          labels: ['Baru ($reportedCount)', 'Ditangani', 'Selesai'],
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
@@ -96,11 +96,11 @@ class _TicketCard extends StatelessWidget {
   Widget _statusChip() {
     switch (ticket.status) {
       case 1:
-        return const LabChip.warn('In Progress');
+        return const LabChip.warn('Ditangani');
       case 2:
-        return const LabChip.live('Resolved');
+        return const LabChip.live('Selesai');
       default:
-        return const LabChip.danger('Reported');
+        return const LabChip.danger('Baru');
     }
   }
 
@@ -110,7 +110,7 @@ class _TicketCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            LabTag.grey(ticket.id),
+            LabTag.grey(ticket.id.replaceFirst('#TK-', '#LK-')),
             const Spacer(),
             _statusChip(),
           ],

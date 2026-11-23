@@ -1,6 +1,12 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/services/file_download_service.dart';
+import '../../../core/services/file_upload_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
@@ -17,9 +23,9 @@ class LaboranDetailTiketPage extends StatefulWidget {
 }
 
 class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
-  static const List<String> _statuses = ['Reported', 'In Progress', 'Resolved'];
+  static const List<String> _statuses = ['Baru', 'Ditangani', 'Selesai'];
 
-  /// 0 Reported, 1 In Progress, 2 Resolved.
+  /// 0 Baru, 1 Ditangani, 2 Selesai.
   late int _status;
   late final TextEditingController _note;
 
@@ -42,12 +48,175 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
   Widget _statusChip() {
     switch (_status) {
       case 0:
-        return const LabChip.danger('Reported');
+        return const LabChip.danger('Baru');
       case 2:
-        return const LabChip.live('Resolved');
+        return const LabChip.live('Selesai');
       default:
-        return const LabChip.warn('In Progress');
+        return const LabChip.warn('Ditangani');
     }
+  }
+
+  String? _resolvePhotoUrl(String photoName) {
+    final trimmed = photoName.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    final remoteObj = FileUploadService.instance.remotePathForName(trimmed);
+    final client = SupabaseService.instance.client;
+    if (remoteObj != null && client != null) {
+      return client.storage
+          .from(FileUploadService.bucketName)
+          .getPublicUrl(remoteObj);
+    }
+    return null;
+  }
+
+  Future<void> _downloadPhoto(String photoName, LabTicket ticket) async {
+    final res = await FileDownloadService.instance.downloadFile(
+      fileName: photoName,
+      source: 'Laporan Kerusakan ${ticket.id} • ${ticket.lokasi}',
+      contentLines: [
+        'LAMPIRAN LAPORAN KERUSAKAN ITLG',
+        'Kode Tiket : ${ticket.id.replaceFirst('#TK-', '#LK-')}',
+        'Lokasi     : ${ticket.lokasi}',
+        'Kategori   : ${ticket.kategori}',
+        'Judul      : ${ticket.detailTitle}',
+        'Pelapor    : ${ticket.reporter} (${ticket.reportedAt})',
+        'Lampiran   : $photoName',
+        'Deskripsi  : ${ticket.detail}',
+      ],
+    );
+    if (!mounted) return;
+    labToast(
+      context,
+      res.success
+          ? '$photoName tersimpan di ${res.location}'
+          : 'Gagal mengunduh $photoName',
+    );
+  }
+
+  Widget _buildPhotoContent(String photoName) {
+    final localPath = FileUploadService.instance.localPathForName(photoName);
+    if (!kIsWeb && localPath != null && File(localPath).existsSync()) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Image.file(
+          File(localPath),
+          fit: BoxFit.contain,
+          width: double.infinity,
+          height: 320,
+        ),
+      );
+    }
+    final remoteUrl = _resolvePhotoUrl(photoName);
+    if (remoteUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Image.network(
+          remoteUrl,
+          fit: BoxFit.contain,
+          width: double.infinity,
+          height: 320,
+          errorBuilder: (_, __, ___) => _photoPlaceholder(photoName),
+        ),
+      );
+    }
+    return _photoPlaceholder(photoName);
+  }
+
+  Widget _photoPlaceholder(String photoName) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const LabIcon('desktop_device',
+            size: 72, color: Color(0xFFBFC4CC)),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '$photoName • 1,2 MB',
+            style: labText(11, w: kBold, c: ItlgColors.text),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Figma: "Pratinjau Foto Kerusakan-Laboran" (5817:3148).
+  void _showPhotoPreview(String photoName, LabTicket ticket) {
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Pratinjau Foto',
+      barrierColor: const Color(0xFF0A0B0C),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+      transitionBuilder: (ctx, anim, _, __) => FadeTransition(
+        opacity: anim,
+        child: Material(
+          color: const Color(0xFF0A0B0C),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => Navigator.of(ctx).pop(),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const LabIcon('cross',
+                              size: 15, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  width: double.infinity,
+                  height: 320,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF333840), Color(0xFF565D67)],
+                    ),
+                  ),
+                  child: _buildPhotoContent(photoName),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                  child: LabOutlineButton(
+                    icon: 'download',
+                    label: 'Unduh Foto',
+                    large: true,
+                    onTap: () async {
+                      Navigator.of(ctx).pop();
+                      await _downloadPhoto(photoName, ticket);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -82,7 +251,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
           children: [
             Row(
               children: [
-                LabTag.grey(t.id),
+                LabTag.grey(t.id.replaceFirst('#TK-', '#LK-')),
                 const Spacer(),
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
@@ -93,7 +262,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
                 ),
               ],
             ),
-            LabOverline(overline: 'Tiket Perbaikan', title: t.detailTitle),
+            LabOverline(overline: 'Laporan Kerusakan', title: t.detailTitle),
             LabStatRow(
               gap: 13,
               stats: [
@@ -124,12 +293,30 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
                 children: [
                   const LabIconTile('camera'),
                   const SizedBox(height: 7),
-                  Text(hasPhoto ? t.photo : 'Tanpa lampiran foto',
+                  Text(
+                      hasPhoto
+                          ? '${t.photo} • 1,2 MB'
+                          : 'Tanpa lampiran foto',
                       style: labText(12, w: kBold)),
                   const SizedBox(height: 7),
                   Text(photoCaption,
                       style:
                           labText(11, w: kMedium, c: ItlgColors.textSubtle)),
+                  if (hasPhoto) ...[
+                    const SizedBox(height: 12),
+                    LabButtonPair(
+                      left: LabPrimaryButton(
+                        icon: 'eye',
+                        label: 'Lihat Foto Penuh',
+                        onTap: () => _showPhotoPreview(t.photo, t),
+                      ),
+                      right: LabOutlineButton(
+                        icon: 'download',
+                        label: 'Unduh',
+                        onTap: () => _downloadPhoto(t.photo, t),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -147,14 +334,14 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
               children: [
                 _Step(
                   state: _StepState.done,
-                  title: 'Reported',
+                  title: 'Baru',
                   caption: t.reportedAt,
                 ),
                 _Step(
                   state: _status >= 2
                       ? _StepState.done
                       : (_status == 1 ? _StepState.active : _StepState.idle),
-                  title: 'In Progress',
+                  title: 'Ditangani',
                   caption: _status >= 1
                       ? (liveNote.isNotEmpty
                           ? liveNote
@@ -163,7 +350,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
                 ),
                 _Step(
                   state: _status == 2 ? _StepState.done : _StepState.idle,
-                  title: 'Resolved',
+                  title: 'Selesai',
                   caption: _status == 2
                       ? 'Perbaikan selesai • perangkat siap digunakan'
                       : 'Menunggu penyelesaian',

@@ -27,9 +27,10 @@ class LaboranInventarisPage extends StatefulWidget {
 
 class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
   static const List<_Lab> _labs = [
-    _Lab('Komputer 1', 'Lab Komputer 1', 'Gedung C • Lantai 2'),
+    _Lab('Jaringan 1', 'Lab Komputer 1', 'Gedung C • Lantai 2'),
     _Lab('Jaringan 2', 'Lab Jaringan 2', 'Gedung C • Lantai 2'),
-    _Lab('Multimedia', 'Lab Multimedia', 'Gedung D • Lantai 2'),
+    _Lab('Jaringan 3', 'Lab Jaringan 3', 'Gedung D • Lantai 2'),
+    _Lab('Jaringan 4', 'Lab Jaringan 4', 'Gedung D • Lantai 3'),
   ];
 
   static const List<String> _statusFilter = [
@@ -121,6 +122,27 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
   }
 
   Future<void> _toggleSoftware(LabSoftwareRecord sw) async {
+    final choice = await prakShowPicker(
+      context,
+      title: 'Kelola ${sw.name}',
+      options: [
+        sw.installed
+            ? 'Tandai Perlu Instalasi'
+            : 'Tandai Sudah Terpasang',
+        'Hapus Software dari Lab',
+      ],
+      selected: 0,
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 1) {
+      await _sync.deleteSoftware(
+        labName: sw.labName,
+        softwareName: sw.name,
+      );
+      if (!mounted) return;
+      labToast(context, '${sw.name} dihapus dari inventaris BE');
+      return;
+    }
     await _sync.toggleSoftwareInstalled(
       labName: sw.labName,
       softwareName: sw.name,
@@ -130,6 +152,135 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
       context,
       '${sw.name}: ${sw.installed ? 'Terpasang' : 'Perlu instalasi'} (tersinkron ke BE)',
     );
+  }
+
+  /// Figma: "Sheet Tambah Software-Laboran" (5817:3069).
+  Future<void> _openAddSoftwareSheet(_Lab lab) async {
+    final nameCtrl = TextEditingController();
+    final verCtrl = TextEditingController();
+    var installed = false;
+    final added = await labShowCustomSheet<bool>(
+      context,
+      title: 'Tambah Software Baru',
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return LabColumn(
+            gap: 14,
+            children: [
+              PrakField(
+                label: 'Nama Software',
+                child: PrakInput(
+                    controller: nameCtrl, hint: 'Contoh: Docker Desktop'),
+              ),
+              PrakField(
+                label: 'Versi',
+                child: PrakInput(controller: verCtrl, hint: 'Contoh: 4.35'),
+              ),
+              PrakField(
+                label: 'Status Instalasi',
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    for (final opt in const [
+                      (false, 'download', 'Perlu Instalasi'),
+                      (true, 'circle_check', 'Sudah Terpasang'),
+                    ])
+                      GestureDetector(
+                        onTap: () => setSheetState(() => installed = opt.$1),
+                        child: Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: installed == opt.$1
+                                ? ItlgColors.primary
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: installed == opt.$1
+                                ? ItlgShadows.primary
+                                : ItlgShadows.outline,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              LabIcon(
+                                opt.$2,
+                                size: 15,
+                                color: installed == opt.$1
+                                    ? Colors.white
+                                    : ItlgColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                opt.$3,
+                                style: labText(
+                                  12,
+                                  w: kBold,
+                                  c: installed == opt.$1
+                                      ? Colors.white
+                                      : ItlgColors.text,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              PrakField(
+                label: 'Terapkan ke',
+                child: InnerShadowBox(
+                  radius: 12,
+                  height: 48,
+                  color: ItlgColors.field,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Semua PC • Lab ${lab.tab} (30 PC)',
+                          style: labText(12, w: kBold),
+                        ),
+                      ),
+                      const LabIcon('chevron_down',
+                          size: 14, color: ItlgColors.textSubtle),
+                    ],
+                  ),
+                ),
+              ),
+              LabPrimaryButton(
+                icon: 'plus',
+                label: 'Simpan Software',
+                large: true,
+                onTap: () async {
+                  final nm = nameCtrl.text.trim();
+                  if (nm.isEmpty) {
+                    labToast(ctx, 'Nama software wajib diisi');
+                    return;
+                  }
+                  final full = verCtrl.text.trim().isNotEmpty
+                      ? '$nm ${verCtrl.text.trim()}'
+                      : nm;
+                  await _sync.addSoftware(
+                    labName: lab.name,
+                    softwareName: full,
+                    installed: installed,
+                  );
+                  if (!ctx.mounted) return;
+                  Navigator.of(ctx).pop(true);
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    nameCtrl.dispose();
+    verCtrl.dispose();
+    if (added == true && mounted) {
+      labToast(context, 'Software baru ditambahkan ke Lab ${lab.tab}');
+    }
   }
 
   Future<void> _tambah() async {
@@ -269,10 +420,18 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
         ),
         LabCard(
           children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: LabSectionTitle(
-                  icon: 'database_outline', text: 'Kelengkapan Software'),
+            Row(
+              children: [
+                const LabSectionTitle(
+                    icon: 'database_outline', text: 'Kelengkapan Software'),
+                const Spacer(),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openAddSoftwareSheet(lab),
+                  child: Text('+ Tambah Software',
+                      style: labText(12, w: kBold, c: ItlgColors.primary)),
+                ),
+              ],
             ),
             if (shownSoftware.isEmpty)
               Text('Tidak ada software yang cocok dengan pencarian / filter.',

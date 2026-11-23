@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../praktikan/widgets/praktikan_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
@@ -30,15 +31,144 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
     _sync.refreshFromBackend();
   }
 
-  Future<void> _decide(RoomBookingRecord request, RoomStatus status) async {
-    await _sync.decideRoomRequest(requestId: request.id, status: status);
+  Future<void> _decide(
+    RoomBookingRecord request,
+    RoomStatus status, {
+    String? rejectionNote,
+  }) async {
+    final conflictError = await _sync.decideRoomRequest(
+      requestId: request.id,
+      status: status,
+      rejectionNote: rejectionNote,
+    );
     if (!mounted) return;
+    if (conflictError != null) {
+      labToast(context, conflictError);
+      return;
+    }
     labToast(
       context,
       status == RoomStatus.disetujui
           ? 'Peminjaman ${request.labName} disetujui & disinkronkan ke BE'
           : 'Peminjaman ${request.labName} ditolak',
     );
+  }
+
+  /// Figma: "Sheet Alasan Penolakan-Laboran" (5817:3163).
+  Future<void> _openRejectSheet(RoomBookingRecord request) async {
+    const reasons = [
+      ('clipboard', 'Dipakai Ujian'),
+      ('wrench_outline', 'Perbaikan Alat'),
+      ('clock', 'Bentrok Jadwal'),
+      ('info', 'Lainnya'),
+    ];
+    var selected = 0;
+    final noteCtrl = TextEditingController(
+      text:
+          '${request.labName} dipakai ujian susulan pada jam yang sama. Silakan ajukan ruangan lain.',
+    );
+
+    final confirmed = await labShowCustomSheet<bool>(
+      context,
+      title: 'Alasan Penolakan',
+      subtitle:
+          'Alasan ini dikirim ke ${request.requesterName} dan tampil di kartu pengajuan ruangannya.',
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return LabColumn(
+            gap: 14,
+            children: [
+              PrakField(
+                label: 'Pilih Alasan',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < reasons.length; i++)
+                      GestureDetector(
+                        onTap: () => setSheetState(() {
+                          selected = i;
+                          if (i == 0) {
+                            noteCtrl.text =
+                                '${request.labName} dipakai ujian susulan pada jam yang sama. Silakan ajukan ruangan lain.';
+                          } else if (i == 1) {
+                            noteCtrl.text =
+                                '${request.labName} sedang dalam perbaikan alat. Silakan pilih ruangan lain.';
+                          } else if (i == 2) {
+                            noteCtrl.text =
+                                'Jadwal bentrok dengan kelas praktikum lain di ${request.labName}.';
+                          } else {
+                            noteCtrl.clear();
+                          }
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: selected == i
+                                ? ItlgColors.primary
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: selected == i
+                                ? ItlgShadows.primary
+                                : ItlgShadows.outline,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              LabIcon(
+                                reasons[i].$1,
+                                size: 15,
+                                color: selected == i
+                                    ? Colors.white
+                                    : ItlgColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                reasons[i].$2,
+                                style: labText(
+                                  12,
+                                  w: kBold,
+                                  c: selected == i
+                                      ? Colors.white
+                                      : ItlgColors.text,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              PrakField(
+                label: 'Catatan untuk Asisten :',
+                child: PrakTextArea(
+                  controller: noteCtrl,
+                  height: 92,
+                  hint: 'Tulis alasan penolakan untuk asisten...',
+                ),
+              ),
+              LabPrimaryButton(
+                icon: 'cross',
+                label: 'Tolak Peminjaman',
+                large: true,
+                onTap: () => Navigator.of(ctx).pop(true),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    final note = noteCtrl.text.trim();
+    noteCtrl.dispose();
+    if (confirmed == true && mounted) {
+      await _decide(
+        request,
+        RoomStatus.ditolak,
+        rejectionNote: note.isNotEmpty ? note : reasons[selected].$2,
+      );
+    }
   }
 
   @override
@@ -49,6 +179,8 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
         final all = _sync.roomRequests;
         final waiting =
             all.where((r) => r.status == RoomStatus.menunggu).length;
+        final rejected =
+            all.where((r) => r.status == RoomStatus.ditolak).length;
         final shown = all.where((r) => r.status == _order[_tab]).toList();
         return LabTabBody(
           children: [
@@ -59,14 +191,19 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
                   'pengganti',
             ),
             LabTabs(
-              labels: ['Menunggu ($waiting)', 'Disetujui', 'Ditolak'],
+              labels: [
+                'Menunggu ($waiting)',
+                'Disetujui',
+                rejected > 0 ? 'Ditolak ($rejected)' : 'Ditolak',
+              ],
               index: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
             for (final r in shown)
               _RequestCard(
                 request: r.toRoomRequest(),
-                onReject: () => _decide(r, RoomStatus.ditolak),
+                rejectionNote: r.rejectionNote,
+                onReject: () => _openRejectSheet(r),
                 onApprove: () => _decide(r, RoomStatus.disetujui),
               ),
             if (shown.isEmpty)
@@ -87,11 +224,13 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
 
 class _RequestCard extends StatelessWidget {
   final RoomRequest request;
+  final String? rejectionNote;
   final VoidCallback onReject;
   final VoidCallback onApprove;
 
   const _RequestCard({
     required this.request,
+    this.rejectionNote,
     required this.onReject,
     required this.onApprove,
   });
@@ -137,6 +276,19 @@ class _RequestCard extends StatelessWidget {
             ],
           ),
         ),
+        if (r.status == RoomStatus.ditolak &&
+            (rejectionNote?.isNotEmpty ?? false))
+          LabInsetBox(
+            child: LabColumn(
+              gap: 6,
+              children: [
+                Text('Catatan Laboran',
+                    style: labText(12, w: kBold, c: ItlgColors.primary)),
+                Text(rejectionNote!,
+                    style: labText(12, c: ItlgColors.textMuted)),
+              ],
+            ),
+          ),
         if (r.status == RoomStatus.menunggu)
           LabButtonPair(
             left: LabOutlineButton(

@@ -111,6 +111,12 @@ class _LaboranPresensiAsistenPageState
                       LabMeta(
                           icon: 'clock',
                           text: 'Berlaku sampai ${_sync.accessValidUntil}'),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Asisten check-in dengan memindai QR ini atau mengetik kode di menu Jadwal Mengajar.',
+                        textAlign: TextAlign.center,
+                        style: labText(11, c: ItlgColors.textMuted),
+                      ),
                     ],
                   ),
                 ),
@@ -121,9 +127,9 @@ class _LaboranPresensiAsistenPageState
                     onTap: () => labShowQr(
                       context,
                       title: 'QR Presensi Asisten',
-                      code: code,
-                      caption: 'Asisten memindai QR ini untuk presensi shift. '
-                          'Berlaku sampai ${_sync.accessValidUntil}.',
+                      code: _sync.rotatingQrPayload,
+                      caption:
+                          'Minta asisten memindai QR ini dari menu Jadwal Mengajar (diperbarui tiap 60 detik). Kode cadangan $code berlaku sampai ${_sync.accessValidUntil}.',
                     ),
                   ),
                   right: LabPrimaryButton(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/notification_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/services/shift_sync_service.dart';
@@ -46,48 +47,63 @@ class LaboranBerandaPage extends StatelessWidget {
               listenable: Listenable.merge([
                 PresensiSyncService.instance,
                 PraktikumSyncService.instance,
+                LabDeskSyncService.instance,
               ]),
               builder: (_, __) {
                 final presensi = PresensiSyncService.instance;
                 final praktikum = PraktikumSyncService.instance;
+                final deskSync = LabDeskSyncService.instance;
                 final session = presensi.activeSession;
                 final pemob = praktikum.courseById('pemob');
-                final desain = praktikum.courseById('desain');
                 final extraHadir = presensi
                     .recordsForMeeting(session.courseId, session.meetingNumber)
                     .where((r) => r.status == PrakAttend.hadir)
                     .length;
                 final totalHadir = (18 + extraHadir).clamp(0, 24);
+                final lab4Broken = deskSync
+                    .inventoryDesks('Lab Jaringan 4')
+                    .where((d) => !d.isReady)
+                    .length;
                 return LabColumn(
                   gap: 12,
                   children: [
                     _LabCard(
-                      name: pemob.room,
+                      name: 'Lab Jaringan 1',
                       course: 'Praktikum ${pemob.name}',
-                      initials: pemob.asistenInitials,
-                      assistant: pemob.asisten,
+                      initials: 'AR',
+                      assistant: 'Abbil Rizki',
                       verifiedAt: '07:52',
                       attendance: '$totalHadir / 24',
                       fraction: (totalHadir / 24).clamp(0.0, 1.0),
                       active: session.isActive,
                       onTap: onOpenDenahMeja ?? onOpenPresensi,
                     ),
-                    _LabCard(
-                      name: desain.room,
-                      course: 'Praktikum ${desain.name}',
-                      initials: desain.asistenInitials,
-                      assistant: desain.asisten,
-                      verifiedAt: '07:58',
-                      attendance: '19 / 22',
-                      fraction: 292 / 338,
-                      active: true,
-                      onTap: onOpenPresensi,
+                    _SimpleLabCard(
+                      name: 'Lab Jaringan 2',
+                      subtitle: 'Siap digunakan • tidak ada sesi aktif',
+                      chip: const LabChip.info('Siap'),
+                      meta: 'Berikutnya 10:00 • Pemob Kom C Sesi C2',
+                      onTap: onOpenDenahMeja ?? onOpenPresensi,
+                    ),
+                    _SimpleLabCard(
+                      name: 'Lab Jaringan 3',
+                      subtitle: 'Tidak ada sesi berjalan',
+                      chip: const LabChip.idle('Kosong'),
+                      meta: 'Berikutnya 13:00 • Jaringan Komputer',
+                      onTap: onOpenDenahMeja ?? onOpenPresensi,
+                    ),
+                    _SimpleLabCard(
+                      name: 'Lab Jaringan 4',
+                      subtitle: 'Tidak ada sesi hari ini',
+                      chip: const LabChip.warn('Perawatan'),
+                      meta:
+                          '${lab4Broken > 0 ? lab4Broken : 1} PC perlu perawatan • aktif lagi Selasa',
+                      onTap: () => onOpenTab(LaboranShell.tabInventaris),
                     ),
                   ],
                 );
               },
             ),
-            const _EmptyLabCard(),
           ],
         ),
         LabColumn(
@@ -124,7 +140,7 @@ class LaboranBerandaPage extends StatelessWidget {
                       return _MenuCard(
                         icon: 'wrench_outline',
                         badge: count > 0 ? '$count' : null,
-                        title: 'Tiket Perbaikan',
+                        title: 'Laporan Kerusakan',
                         subtitle: '$count laporan baru',
                         onTap: () => onOpenTab(LaboranShell.tabTiket),
                       );
@@ -194,7 +210,15 @@ class _Greeting extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+          ListenableBuilder(
+            listenable: ProfilData.laboran,
+            builder: (_, __) => LabInitialAvatar(
+              initials: ProfilData.laboran.initials,
+              size: 64,
+              hasPhotoBadge: ProfilData.laboran.photoSource != null,
+              photoSource: ProfilData.laboran.photoSource,
+            ),
+          ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -224,25 +248,12 @@ class _Greeting extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onBell,
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: ItlgColors.primary,
-                shape: BoxShape.circle,
-                boxShadow: ItlgShadows.outline,
-              ),
-              child: Image.asset(
-                'assets/icons/ic_bell_filled.png',
-                width: 13.3,
-                height: 16.7,
-                color: Colors.white,
-                filterQuality: FilterQuality.medium,
-              ),
+          ListenableBuilder(
+            listenable: NotificationSyncService.instance,
+            builder: (_, __) => LabBellButton(
+              unreadCount: NotificationSyncService.instance
+                  .unreadCountForRole('laboran'),
+              onTap: onBell,
             ),
           ),
         ],
@@ -289,7 +300,7 @@ class _MonitoringCard extends StatelessWidget {
                 LabStat(
                   icon: 'desktop_device',
                   label: 'Terpakai',
-                  value: session.isActive ? '3 / 5 Lab' : '2 / 5 Lab',
+                  value: session.isActive ? '1 / 4 Lab' : '0 / 4 Lab',
                 ),
                 LabStat(
                   icon: 'shield_check_outline',
@@ -406,28 +417,35 @@ class _LabCard extends StatelessWidget {
           label: 'Kehadiran Mahasiswa',
           value: attendance,
           fraction: fraction,
+          color: LabColors.green,
         ),
       ],
     );
   }
 }
 
-class _EmptyLabCard extends StatelessWidget {
-  const _EmptyLabCard();
+class _SimpleLabCard extends StatelessWidget {
+  final String name;
+  final String subtitle;
+  final Widget chip;
+  final String meta;
+  final VoidCallback onTap;
+
+  const _SimpleLabCard({
+    required this.name,
+    required this.subtitle,
+    required this.chip,
+    required this.meta,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return const LabCard(
+    return LabCard(
+      onTap: onTap,
       children: [
-        _LabHeader(
-          name: 'Lab Multimedia',
-          course: 'Tidak ada sesi berjalan',
-          chip: LabChip.idle('Kosong'),
-        ),
-        LabMeta(
-          icon: 'clock',
-          text: 'Sesi berikutnya 13:00 • Praktikum Jaringan Komputer',
-        ),
+        _LabHeader(name: name, course: subtitle, chip: chip),
+        LabMeta(icon: 'clock', text: meta),
       ],
     );
   }

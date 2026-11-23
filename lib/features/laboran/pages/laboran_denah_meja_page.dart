@@ -34,8 +34,21 @@ class LaboranDenahMejaPage extends StatefulWidget {
 }
 
 class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
+  static const List<String> _labTabs = [
+    'Jaringan 1',
+    'Jaringan 2',
+    'Jaringan 3',
+    'Jaringan 4',
+  ];
+  static const List<String> _labNames = [
+    LabDeskSyncService.defaultLab,
+    'Lab Jaringan 2',
+    'Lab Jaringan 3',
+    'Lab Jaringan 4',
+  ];
   final LabDeskSyncService _sync = LabDeskSyncService.instance;
   int _selectedDesk = 12;
+  int _labIdx = 0;
 
   @override
   void initState() {
@@ -70,7 +83,7 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
     if (ticket != null) {
       final booker = rec?.bookedByName;
       if (booker != null && booker.isNotEmpty) {
-        return 'Dibooking $booker • dilaporkan ${ticket.formattedClock}';
+        return 'Ditempati $booker • dilaporkan ${ticket.formattedClock}';
       }
       return 'Dilaporkan ${ticket.reporterName} • ${ticket.formattedClock}';
     }
@@ -82,7 +95,7 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
       return 'Meja tersedia • kondisi perangkat normal';
     }
     if (rec.bookedByName != null && rec.bookedByName!.isNotEmpty) {
-      return 'Dibooking ${rec.bookedByName}';
+      return 'Ditempati ${rec.bookedByName}';
     }
     return 'Kondisi perangkat normal';
   }
@@ -101,24 +114,35 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
 
   @override
   Widget build(BuildContext context) {
-    final liveMap = _sync.deskStatusMap();
-    final taken = _sync.takenCount();
-    final reportedDesks = _sync.activeReportedDesks();
-    final selectedRec = _sync.deskRecord(_selectedDesk);
-    final selectedTicket = _sync.activeTicketForDesk(_selectedDesk);
+    final activeLab = _labNames[_labIdx];
+    final liveMap = _sync.deskStatusMap(labName: activeLab);
+    final taken = _sync.takenCount(labName: activeLab);
+    final reportedDesks = _sync.activeReportedDesks(labName: activeLab);
+    final selectedRec = _sync.deskRecord(_selectedDesk, labName: activeLab);
+    final selectedTicket =
+        _sync.activeTicketForDesk(_selectedDesk, labName: activeLab);
     final hasReport = selectedTicket != null ||
         selectedRec?.status == PrakDesk.broken;
     final pcLabel = _selectedDesk.toString().padLeft(2, '0');
 
-    // Tiket untuk tombol utama: tiket meja terpilih, atau tiket terbaru
+    // Tiket untuk tombol utama: tiket meja terpilih, atau tiket terbaru di lab ini / semua lab
+    final labTickets =
+        _sync.allTickets.where((t) => t.labName == activeLab).toList();
     final primaryTicketRecord = selectedTicket ??
-        (_sync.allTickets.isNotEmpty ? _sync.allTickets.first : null);
+        (labTickets.isNotEmpty
+            ? labTickets.first
+            : (_sync.allTickets.isNotEmpty ? _sync.allTickets.first : null));
     final primaryTicket =
         primaryTicketRecord?.toLabTicket() ?? widget.store.tickets.first;
 
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
       children: [
+        LabTabs(
+          labels: _labTabs,
+          index: _labIdx,
+          onChanged: (i) => setState(() => _labIdx = i),
+        ),
         // Card 1: Informasi Lab
         LabCard(
           children: [
@@ -126,12 +150,12 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Lab Komputer 1',
+                  'Kom C • Sesi C1',
                   style: labText(14, c: const Color(0xFF640707)),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Denah Meja\nLab',
+                  'Denah Meja\nLab ${_labTabs[_labIdx]}',
                   style: labText(22, w: kBold, c: Colors.black)
                       .copyWith(height: 1.2),
                 ),
@@ -231,25 +255,25 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                           labText(11, w: kMedium, c: const Color(0xFF6B7280)),
                     ),
                   ),
-                  for (var row = 0; row < 5; row++) ...[
+                  for (var row = 0; row < 6; row++) ...[
                     const SizedBox(height: 10),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (var col = 0; col < 6; col++) ...[
+                          for (var col = 0; col < 5; col++) ...[
                             if (col == 3)
-                              const SizedBox(width: 12)
+                              const SizedBox(width: 28)
                             else if (col > 0)
                               const SizedBox(width: 8),
                             _LabDeskTile(
-                              number: row * 6 + col + 1,
-                              status: _statusFor(row * 6 + col + 1, liveMap),
+                              number: row * 5 + col + 1,
+                              status: _statusFor(row * 5 + col + 1, liveMap),
                               hasReport:
-                                  reportedDesks.contains(row * 6 + col + 1),
-                              onTap: () =>
-                                  setState(() => _selectedDesk = row * 6 + col + 1),
+                                  reportedDesks.contains(row * 5 + col + 1),
+                              onTap: () => setState(
+                                  () => _selectedDesk = row * 5 + col + 1),
                             ),
                           ],
                         ],
@@ -329,7 +353,7 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
           children: [
             LabPrimaryButton(
               icon: 'circle_check',
-              label: 'Lihat Tiket ${primaryTicket.id}',
+              label: 'Lihat Laporan ${primaryTicket.id.replaceFirst('#TK-', '#LK-')}',
               large: true,
               onTap: () {
                 labPush(
@@ -343,7 +367,7 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
             ),
             LabOutlineButton(
               icon: 'ticket',
-              label: 'Lihat Semua Tiket',
+              label: 'Lihat Semua Laporan',
               onTap: () {
                 if (widget.onOpenTiketTab != null) {
                   Navigator.of(context).pop();

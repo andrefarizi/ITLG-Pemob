@@ -118,12 +118,13 @@ class LaboranStore {
   static const List<String> inventoryLabs = [
     'Lab Komputer 1',
     'Lab Jaringan 2',
-    'Lab Multimedia',
+    'Lab Jaringan 3',
+    'Lab Jaringan 4',
   ];
 
   /// Daftar meja & PC per lab (indeks sama dengan [inventoryLabs]).
   final List<List<LabDesk>> desks = [
-    for (var i = 0; i < 3; i++)
+    for (var i = 0; i < 4; i++)
       [
         LabDesk('Meja 01 • PC-01', defaultSpec, true),
         LabDesk('Meja 02 • PC-02', defaultSpec, true),
