@@ -13,6 +13,10 @@ class AppNotificationRecord {
   final String title;
   final String body;
   final String targetKey;
+  final String? courseId;
+  final int? meetingNumber;
+  final String? courseName;
+  final String? moduleLabel;
   final bool important;
   bool isRead;
   final DateTime createdAt;
@@ -24,6 +28,10 @@ class AppNotificationRecord {
     required this.title,
     required this.body,
     required this.targetKey,
+    this.courseId,
+    this.meetingNumber,
+    this.courseName,
+    this.moduleLabel,
     this.important = false,
     this.isRead = false,
     required this.createdAt,
@@ -38,6 +46,16 @@ class AppNotificationRecord {
         local.month == now.month &&
         local.day == now.day;
   }
+
+  bool get isYesterday {
+    final yest = DateTime.now().subtract(const Duration(days: 1));
+    final local = createdAt.toLocal();
+    return local.year == yest.year &&
+        local.month == yest.month &&
+        local.day == yest.day;
+  }
+
+  bool get isEarlier => !isToday && !isYesterday;
 
   String get relativeTime {
     final diff = DateTime.now().difference(createdAt.toLocal());
@@ -59,6 +77,10 @@ class AppNotificationRecord {
       title: (json['title'] ?? '').toString(),
       body: (json['body'] ?? '').toString(),
       targetKey: (json['target_key'] ?? '').toString(),
+      courseId: json['course_id'] as String?,
+      meetingNumber: (json['meeting_number'] as num?)?.toInt(),
+      courseName: json['course_name'] as String?,
+      moduleLabel: json['module_label'] as String?,
       important: (json['important'] as bool?) ?? false,
       isRead: (json['is_read'] as bool?) ?? false,
       createdAt: json['created_at'] != null
@@ -342,6 +364,10 @@ class NotificationSyncService extends ChangeNotifier {
     required String title,
     required String body,
     required String targetKey,
+    String? courseId,
+    int? meetingNumber,
+    String? courseName,
+    String? moduleLabel,
     bool important = false,
   }) async {
     final now = DateTime.now();
@@ -353,6 +379,10 @@ class NotificationSyncService extends ChangeNotifier {
       title: title,
       body: body,
       targetKey: targetKey,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      courseName: courseName,
+      moduleLabel: moduleLabel,
       important: important,
       isRead: false,
       createdAt: now,
@@ -371,6 +401,10 @@ class NotificationSyncService extends ChangeNotifier {
               'title': title,
               'body': body,
               'target_key': targetKey,
+              if (courseId != null) 'course_id': courseId,
+              if (meetingNumber != null) 'meeting_number': meetingNumber,
+              if (courseName != null) 'course_name': courseName,
+              if (moduleLabel != null) 'module_label': moduleLabel,
               'important': important,
               'is_read': false,
               'created_at': now.toIso8601String(),

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../auth/pages/forgot_password_page_1.dart';
-import '../auth/widgets/auth_design.dart';
 import '../laboran/widgets/laboran_ui.dart';
+import '../shared/ubah_kata_sandi_page.dart';
 import 'pages/praktikan_ajukan_izin_page.dart';
 import 'pages/praktikan_detail_absensi_page.dart';
 import 'pages/praktikan_detail_materi_page.dart';
@@ -235,21 +234,8 @@ class PraktikanNav {
 
   // --- Profil ----------------------------------------------------------------
 
-  Future<void> ubahKataSandi(BuildContext c) {
-    return Navigator.of(c).push(
-      PageRouteBuilder<void>(
-        settings: const RouteSettings(name: kForgotPasswordRoute),
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, __, ___) => const ForgotPasswordPage1(),
-        transitionsBuilder: (_, anim, __, child) => SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
-          child: child,
-        ),
-      ),
-    );
-  }
+  Future<void> ubahKataSandi(BuildContext c) =>
+      _open(c, UbahKataSandiPage(onLogoTap: home), false);
 
   // --- Notifikasi ------------------------------------------------------------
 

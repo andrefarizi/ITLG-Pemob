@@ -115,8 +115,8 @@ class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
                   onTap: _markAllRead,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text('Tandai Dibaca',
-                        style: labText(12, c: ItlgColors.primary)),
+                    child: Text('Tandai Semua Dibaca',
+                        style: labText(12, w: kSemiBold, c: ItlgColors.primary)),
                   ),
                 ),
               ],

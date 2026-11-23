@@ -129,39 +129,47 @@ class _DosenShellState extends State<DosenShell> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark
           .copyWith(statusBarColor: Colors.transparent),
-      child: Scaffold(
-        backgroundColor: ItlgColors.surfaceWhite,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeOut,
-                layoutBuilder: (current, previous) => Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ...previous,
-                    if (current != null) current,
-                  ],
+      child: PopScope(
+        canPop: _tab == DosenShell.tabBeranda,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _tab != DosenShell.tabBeranda) {
+            _openTab(DosenShell.tabBeranda);
+          }
+        },
+        child: Scaffold(
+          backgroundColor: ItlgColors.surfaceWhite,
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeOut,
+                  layoutBuilder: (current, previous) => Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ...previous,
+                      if (current != null) current,
+                    ],
+                  ),
+                  child: KeyedSubtree(key: ValueKey<int>(_tab), child: _page()),
                 ),
-                child: KeyedSubtree(key: ValueKey<int>(_tab), child: _page()),
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: LabTopBar(
-                onLogoTap: () => _openTab(DosenShell.tabBeranda),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: LabTopBar(
+                  onLogoTap: () => _openTab(DosenShell.tabBeranda),
+                ),
               ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: LabNavBar(
-          items: _items,
-          index: _tab,
-          onChanged: _openTab,
+            ],
+          ),
+          bottomNavigationBar: LabNavBar(
+            items: _items,
+            index: _tab,
+            onChanged: _openTab,
+          ),
         ),
       ),
     );

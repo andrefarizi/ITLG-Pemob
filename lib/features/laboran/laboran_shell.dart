@@ -37,7 +37,7 @@ class _LaboranShellState extends State<LaboranShell> {
 
   static const List<LabNavItem> _items = [
     LabNavItem('Beranda', 'home'),
-    LabNavItem('Tiket', 'ticket'),
+    LabNavItem('Perbaikan', 'ticket'),
     LabNavItem('Ruangan', 'door'),
     LabNavItem('Inventaris', 'desktop_device'),
     LabNavItem('Profil', 'person'),
@@ -146,39 +146,47 @@ class _LaboranShellState extends State<LaboranShell> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark
           .copyWith(statusBarColor: Colors.transparent),
-      child: Scaffold(
-        backgroundColor: ItlgColors.surfaceWhite,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeOut,
-                layoutBuilder: (current, previous) => Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ...previous,
-                    if (current != null) current,
-                  ],
+      child: PopScope(
+        canPop: _tab == LaboranShell.tabBeranda,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _tab != LaboranShell.tabBeranda) {
+            _openTab(LaboranShell.tabBeranda);
+          }
+        },
+        child: Scaffold(
+          backgroundColor: ItlgColors.surfaceWhite,
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeOut,
+                  layoutBuilder: (current, previous) => Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ...previous,
+                      if (current != null) current,
+                    ],
+                  ),
+                  child: KeyedSubtree(key: ValueKey<int>(_tab), child: _page()),
                 ),
-                child: KeyedSubtree(key: ValueKey<int>(_tab), child: _page()),
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: LabTopBar(
-                onLogoTap: () => _openTab(LaboranShell.tabBeranda),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: LabTopBar(
+                  onLogoTap: () => _openTab(LaboranShell.tabBeranda),
+                ),
               ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: LabNavBar(
-          items: _items,
-          index: _tab,
-          onChanged: _openTab,
+            ],
+          ),
+          bottomNavigationBar: LabNavBar(
+            items: _items,
+            index: _tab,
+            onChanged: _openTab,
+          ),
         ),
       ),
     );

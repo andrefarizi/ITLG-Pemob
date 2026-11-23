@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/notification_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 
@@ -54,11 +57,84 @@ class _AslabNotifikasiPageState extends State<AslabNotifikasiPage> {
 
   void _markAllRead() {
     _sync.markAllRead('aslab');
+    labToast(context, 'Semua notifikasi ditandai sudah dibaca');
   }
 
   void _open(AppNotificationRecord n) {
     _sync.markRead(n.id);
+    if (n.title.toLowerCase().contains('arahan') ||
+        n.title.toLowerCase().contains('tindak lanjut') ||
+        n.body.toLowerCase().contains('arahan')) {
+      final fu = NilaiSyncService.instance.allFollowUps.isNotEmpty
+          ? NilaiSyncService.instance.allFollowUps.first
+          : null;
+      _showDosenFollowUpSheet(fu);
+      return;
+    }
     widget.nav.openNotif(context, _targetFor(n.targetKey));
+  }
+
+  /// Figma: "Sheet Arahan Tindak Lanjut Dosen-Aslab" (5816:3389).
+  void _showDosenFollowUpSheet(AssistantFollowUpRecord? fu) {
+    final student = fu?.studentName ?? 'Yoga Siregar';
+    final msg = fu?.message ??
+        'Mohon bantu ingatkan Yoga soal kehadiran dan jadwalkan konsultasi sebelum Pertemuan 6.';
+    final type = fu?.followUpType ?? 'Kehadiran';
+    labShowCustomSheet<void>(
+      context,
+      title: 'Arahan Tindak Lanjut Dosen',
+      child: LabColumn(
+        gap: 14,
+        children: [
+          LabPerson(
+            initials: 'DC',
+            name: 'Dr. Eng. Daniele Christian, M.Kom.',
+            caption: 'Dikirim 05 Okt, 09:12 • Kategori $type',
+          ),
+          LabInsetBox(
+            child: LabColumn(
+              gap: 8,
+              cross: CrossAxisAlignment.start,
+              children: [
+                Text('Praktikan: $student • Kehadiran 50%',
+                    style: labText(12, w: kBold)),
+                Text(msg, style: labText(12, c: ItlgColors.textMuted)),
+              ],
+            ),
+          ),
+          const PrakNotice.info(
+            icon: 'info',
+            text:
+                'Dosen menerima notifikasi setelah arahan ini kamu tandai sudah ditindaklanjuti.',
+          ),
+          LabButtonPair(
+            left: LabOutlineButton(
+              icon: 'phone_outline',
+              label: 'Hubungi Praktikan',
+              onTap: () {
+                Navigator.of(context).pop();
+                labToast(context, 'Pesan pengingat dikirim ke $student');
+              },
+            ),
+            right: LabPrimaryButton(
+              icon: 'check',
+              label: 'Tandai Ditindaklanjuti',
+              onTap: () {
+                if (fu != null) {
+                  NilaiSyncService.instance.markFollowUpDone(
+                    fu.id,
+                    byAslab: AuthController.instance.userName,
+                  );
+                }
+                Navigator.of(context).pop();
+                labToast(
+                    context, 'Arahan ditandai ditindaklanjuti & Dosen diberi tahu');
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _group(String label, List<AppNotificationRecord> items) {
@@ -106,8 +182,8 @@ class _AslabNotifikasiPageState extends State<AslabNotifikasiPage> {
                   onTap: _markAllRead,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text('Tandai Dibaca',
-                        style: labText(12, c: ItlgColors.primary)),
+                    child: Text('Tandai Semua Dibaca',
+                        style: labText(12, w: kSemiBold, c: ItlgColors.primary)),
                   ),
                 ),
               ],
