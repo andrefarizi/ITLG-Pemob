@@ -113,12 +113,13 @@ Future<void> dosenShowResult(
 // =============================================================================
 
 /// Panel bawah #FDFEFE radius atas 24: pegangan 40x4, judul Bold 16, opsi
-/// putih 48 px. Mengembalikan indeks yang dipilih (null bila ditutup).
+/// putih 48 px dengan dukungan scroll jika daftar panjang (Figma: "Sheet Pilih Kelas & Sesi (Scroll)").
 Future<int?> dosenShowPicker(
   BuildContext context, {
   required String title,
   required List<String> options,
   required int selected,
+  String? footerHint,
 }) {
   return showGeneralDialog<int>(
     context: context,
@@ -131,63 +132,87 @@ Future<int?> dosenShowPicker(
       anim,
       Align(
         alignment: Alignment.bottomCenter,
-        child: Material(
-          color: ItlgColors.surfaceWhite,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-                16, 12, 16, 32 + MediaQuery.of(sheetContext).padding.bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD9D9D9),
-                      borderRadius: BorderRadius.circular(2),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.72,
+          ),
+          child: Material(
+            color: ItlgColors.surfaceWhite,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                  16, 12, 16, 24 + MediaQuery.of(sheetContext).padding.bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD9D9D9),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(title, style: labText(16, w: kBold, c: Colors.black)),
-                const SizedBox(height: 12),
-                for (var i = 0; i < options.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => Navigator.of(sheetContext).pop(i),
-                    child: Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: ItlgShadows.outline,
-                      ),
-                      child: Row(
+                  const SizedBox(height: 12),
+                  Text(title, style: labText(16, w: kBold, c: Colors.black)),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: Text(
-                              options[i],
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: labText(12),
+                          for (var i = 0; i < options.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 8),
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => Navigator.of(sheetContext).pop(i),
+                              child: Container(
+                                height: 48,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: ItlgShadows.outline,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        options[i],
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: labText(12),
+                                      ),
+                                    ),
+                                    if (i == selected) ...[
+                                      const SizedBox(width: 8),
+                                      const LabIcon('check',
+                                          size: 16, color: ItlgColors.primary),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                          if (i == selected) ...[
-                            const SizedBox(width: 8),
-                            const LabIcon('check',
-                                size: 16, color: ItlgColors.primary),
                           ],
                         ],
                       ),
                     ),
                   ),
+                  if (footerHint != null && footerHint.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      footerHint,
+                      textAlign: TextAlign.center,
+                      style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

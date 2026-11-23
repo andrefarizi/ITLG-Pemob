@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -138,16 +141,31 @@ Future<void> labOpenGyro(BuildContext context) {
   );
 }
 
+/// Toast global ITLG (Figma: "Toast Semua Notifikasi Dibaca" 5828:3303):
+/// batang #202124 radius 14, ikon centang hijau 20px, teks SemiBold 13px putih.
 void labToast(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: ItlgColors.primary,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: const Color(0xFF202124),
         duration: const Duration(seconds: 2),
-        content: Text(message,
-            style: labText(12, w: kBold, c: ItlgColors.surfaceWhite)),
+        content: Row(
+          children: [
+            const LabIcon('circle_check', size: 20, color: LabColors.green),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: labText(13, w: kSemiBold, c: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
 }
@@ -1507,4 +1525,804 @@ class LabStatusDot extends StatelessWidget {
       child: LabIcon(icon, size: 14, color: Colors.white),
     );
   }
+}
+
+// =============================================================================
+// Komponen UX Baru (Figma: Avatar Inisial, Badge Lonceng, Pop up Konfirmasi,
+// Pop up Hasil, Sheet Scrollable, & Date-Time Picker)
+// =============================================================================
+
+/// Avatar inisial bulat bergaya Figma (`#F3E6E6`, border `#D9B8B8`, teks `#850909`).
+/// Jika [photoSource] berisi URL Supabase atau path file lokal yang valid,
+/// menampilkan foto profil nyata secara bulat dengan fallback otomatis ke inisial.
+class LabInitialAvatar extends StatelessWidget {
+  final String initials;
+  final double size;
+  final double? fontSize;
+  final bool hasPhotoBadge;
+  final String? photoSource;
+
+  const LabInitialAvatar({
+    super.key,
+    required this.initials,
+    this.size = 64,
+    this.fontSize,
+    this.hasPhotoBadge = false,
+    this.photoSource,
+  });
+
+  Widget _initialsWidget(double fs) {
+    return Text(
+      initials,
+      style: labText(
+        fs,
+        w: kBold,
+        c: hasPhotoBadge ? ItlgColors.secondary : ItlgColors.primary,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fs = fontSize ?? (size * 0.34);
+    final src = photoSource?.trim();
+    Widget content = _initialsWidget(fs);
+
+    if (src != null && src.isNotEmpty) {
+      if (src.startsWith('http://') || src.startsWith('https://')) {
+        content = ClipOval(
+          child: Image.network(
+            src,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Center(child: _initialsWidget(fs)),
+          ),
+        );
+      } else if (!kIsWeb && File(src).existsSync()) {
+        content = ClipOval(
+          child: Image.file(
+            File(src),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Center(child: _initialsWidget(fs)),
+          ),
+        );
+      }
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: hasPhotoBadge ? const Color(0xFFEAF2FB) : const Color(0xFFF3E6E6),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: hasPhotoBadge
+              ? const Color(0xFFB6D2F2)
+              : const Color(0xFFD9B8B8),
+          width: 1.2,
+        ),
+      ),
+      child: content,
+    );
+  }
+}
+
+/// Tombol lonceng notifikasi bulat merah 40x40 (Figma 5813:3004 / 5497:1559 /
+/// 5479:186 / 5479:1160) dengan badge bulat putih berbingkai merah di kanan atas.
+class LabBellButton extends StatelessWidget {
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  const LabBellButton({
+    super.key,
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: ItlgColors.primary,
+                shape: BoxShape.circle,
+                boxShadow: ItlgShadows.primary,
+              ),
+              child: const LabIcon('bell_filled', size: 19, color: Colors.white),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                top: -1,
+                right: -1,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: ItlgColors.primary, width: 1.6),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: labText(10, w: kBold, c: ItlgColors.primary),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Tombol merah lembut bergaya Figma ("Akhiri Pemakaian Meja" 5712:2948 &
+/// "Batalkan Permintaan Tukar Jadwal" 5814:3113): latar #FCEAEA, teks #850909 Bold.
+class LabSoftDangerButton extends StatelessWidget {
+  final String icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const LabSoftDangerButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFCEAEA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            LabIcon(icon, size: 18, color: ItlgColors.primary),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labText(14, w: kBold, c: ItlgColors.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Figma: "Sheet Filter & Urutkan" (5828:3158).
+Future<({int sortIndex, int statusIndex})?> labShowFilterSortSheet(
+  BuildContext context, {
+  int initialSort = 0,
+  int initialStatus = 0,
+  List<String> sortOptions = const ['Terbaru', 'Terlama', 'Nama A–Z'],
+  List<String> statusOptions = const ['Semua', 'Perlu Tindakan', 'Selesai'],
+}) {
+  var sortIdx = initialSort;
+  var statusIdx = initialStatus;
+  return labShowCustomSheet<({int sortIndex, int statusIndex})>(
+    context,
+    title: 'Filter & Urutkan',
+    child: StatefulBuilder(
+      builder: (ctx, setSheetState) {
+        Widget chipRow(
+            List<String> labels, int active, ValueChanged<int> onPick) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < labels.length; i++)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onPick(i),
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: i == active ? ItlgColors.primary : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: i == active
+                          ? ItlgShadows.primary
+                          : ItlgShadows.outline,
+                    ),
+                    child: Text(
+                      labels[i],
+                      style: labText(
+                        12,
+                        w: kBold,
+                        c: i == active ? Colors.white : ItlgColors.text,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }
+
+        return LabColumn(
+          gap: 14,
+          children: [
+            LabColumn(
+              gap: 8,
+              children: [
+                Text('Urutkan', style: labText(13, c: ItlgColors.textMuted)),
+                chipRow(sortOptions, sortIdx,
+                    (i) => setSheetState(() => sortIdx = i)),
+              ],
+            ),
+            LabColumn(
+              gap: 8,
+              children: [
+                Text('Status', style: labText(13, c: ItlgColors.textMuted)),
+                chipRow(statusOptions, statusIdx,
+                    (i) => setSheetState(() => statusIdx = i)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            LabButtonPair(
+              left: LabOutlineButton(
+                icon: 'arrow_cycle',
+                label: 'Reset',
+                onTap: () => Navigator.of(ctx)
+                    .pop((sortIndex: 0, statusIndex: 0)),
+              ),
+              right: LabPrimaryButton(
+                icon: 'check',
+                label: 'Terapkan',
+                onTap: () => Navigator.of(ctx)
+                    .pop((sortIndex: sortIdx, statusIndex: statusIdx)),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// Pop-up konfirmasi dua tombol bergaya Figma ("Keluar Akun", "Akhiri Meja",
+/// "Selesai Kuis", "Batalkan Pengumpulan"). Mengembalikan true jika dikonfirmasi.
+Future<bool> labShowConfirmDialog(
+  BuildContext context, {
+  required String icon,
+  required String title,
+  required String message,
+  String cancelLabel = 'Batal',
+  required String confirmLabel,
+}) async {
+  final res = await showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: const Color(0x660A0B0C),
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    transitionBuilder: (dialogCtx, anim, _, __) => FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 370),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 22, 16, 20),
+                decoration: BoxDecoration(
+                  color: ItlgColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: ItlgShadows.outline,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: InnerShadowBox(
+                        width: 79.5,
+                        height: 79.5,
+                        radius: 20,
+                        color: ItlgColors.field,
+                        shadows: ItlgShadows.innerLarge,
+                        child: Center(
+                          child: LabIcon(icon,
+                              size: 40, color: ItlgColors.primary),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: labText(20, w: kBold, c: ItlgColors.text),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: labText(14, c: ItlgColors.textMuted),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => Navigator.of(dialogCtx).pop(false),
+                            child: Container(
+                              height: 50,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: LabColors.bar,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white, width: 1.5),
+                                boxShadow: ItlgShadows.outline,
+                              ),
+                              child: Text(
+                                cancelLabel,
+                                textAlign: TextAlign.center,
+                                style: labText(14,
+                                    w: kBold, c: ItlgColors.primary),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => Navigator.of(dialogCtx).pop(true),
+                            child: Container(
+                              height: 50,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: ItlgColors.primary,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: ItlgShadows.primary,
+                              ),
+                              child: Text(
+                                confirmLabel,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: labText(14,
+                                    w: kBold, c: ItlgColors.surfaceWhite),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  return res ?? false;
+}
+
+/// Pop-up hasil 1 tombol bergaya Figma ("Kata Sandi Diperbarui",
+/// "Check-In Berhasil", "Sanggahan Disetujui", "Nilai Diperbarui").
+Future<void> labShowResultDialog(
+  BuildContext context, {
+  required String icon,
+  required String title,
+  required String message,
+  String button = 'Selesai',
+  VoidCallback? onPressed,
+}) {
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    barrierLabel: title,
+    barrierColor: const Color(0x660A0B0C),
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    transitionBuilder: (dialogCtx, anim, _, __) => FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 370),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 22, 16, 20),
+                decoration: BoxDecoration(
+                  color: ItlgColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: ItlgShadows.outline,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: InnerShadowBox(
+                        width: 79.5,
+                        height: 79.5,
+                        radius: 20,
+                        color: ItlgColors.field,
+                        shadows: ItlgShadows.innerLarge,
+                        child: Center(
+                          child: LabIcon(icon,
+                              size: 40, color: ItlgColors.primary),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: labText(20, w: kBold, c: ItlgColors.text),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: labText(14, c: ItlgColors.textMuted),
+                    ),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        Navigator.of(dialogCtx).pop();
+                        onPressed?.call();
+                      },
+                      child: Container(
+                        height: 50,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: ItlgColors.primary,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: ItlgShadows.primary,
+                        ),
+                        child: Text(
+                          button,
+                          style: labText(16,
+                              w: kBold, c: ItlgColors.surfaceWhite),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Bottom sheet umum ITLG dengan handle bar 40x4 dan scroll otomatis.
+Future<T?> labShowCustomSheet<T>(
+  BuildContext context, {
+  required String title,
+  String? subtitle,
+  required Widget child,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x660A0B0C),
+    builder: (sheetCtx) {
+      final bottomInset = MediaQuery.of(sheetCtx).viewInsets.bottom +
+          MediaQuery.of(sheetCtx).padding.bottom;
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetCtx).size.height * 0.85,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: ItlgColors.surfaceWhite,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + bottomInset),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD9D9D9),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(title, style: labText(16, w: kBold, c: Colors.black)),
+                if (subtitle != null && subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle,
+                      style: labText(12, c: ItlgColors.textSubtle)),
+                ],
+                const SizedBox(height: 16),
+                child,
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// Figma: "Sheet Pilih Tanggal & Jam" (5816:3260).
+Future<DateTime?> labShowDateTimePicker(
+  BuildContext context, {
+  DateTime? initial,
+  String title = 'Pilih Tanggal & Jam',
+}) async {
+  DateTime selectedDate = initial ?? DateTime(2026, 10, 5, 23, 59);
+  int selectedHour = selectedDate.hour;
+  int selectedMinute = selectedDate.minute;
+
+  const monthNames = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
+  const dayNames = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+
+  return showModalBottomSheet<DateTime>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x660A0B0C),
+    builder: (sheetCtx) {
+      return StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final firstOfMonth =
+              DateTime(selectedDate.year, selectedDate.month, 1);
+          final daysInMonth =
+              DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
+          final leadingEmpty = firstOfMonth.weekday - 1;
+          final totalCells = leadingEmpty + daysInMonth;
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: ItlgColors.surfaceWhite,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              12,
+              16,
+              24 + MediaQuery.of(ctx).padding.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD9D9D9),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(title, style: labText(16, w: kBold, c: Colors.black)),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setSheetState(() {
+                          selectedDate = DateTime(
+                              selectedDate.year, selectedDate.month - 1, 1);
+                        }),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: ItlgShadows.outline,
+                          ),
+                          child: const LabIcon('arrow_left',
+                              size: 16, color: ItlgColors.primary),
+                        ),
+                      ),
+                      Text(
+                        '${monthNames[selectedDate.month - 1]} ${selectedDate.year}',
+                        style: labText(14, w: kBold),
+                      ),
+                      GestureDetector(
+                        onTap: () => setSheetState(() {
+                          selectedDate = DateTime(
+                              selectedDate.year, selectedDate.month + 1, 1);
+                        }),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: ItlgShadows.outline,
+                          ),
+                          child: const LabIcon('arrow_right',
+                              size: 16, color: ItlgColors.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      for (final d in dayNames)
+                        Expanded(
+                          child: Center(
+                            child: Text(d,
+                                style: labText(11,
+                                    w: kSemiBold, c: ItlgColors.textSubtle)),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: totalCells,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      mainAxisSpacing: 6,
+                      crossAxisSpacing: 6,
+                    ),
+                    itemBuilder: (_, idx) {
+                      if (idx < leadingEmpty) return const SizedBox.shrink();
+                      final day = idx - leadingEmpty + 1;
+                      final active = day == selectedDate.day;
+                      return GestureDetector(
+                        onTap: () => setSheetState(() {
+                          selectedDate = DateTime(
+                              selectedDate.year, selectedDate.month, day);
+                        }),
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: active ? ItlgColors.primary : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: active
+                                ? ItlgShadows.primary
+                                : ItlgShadows.outline,
+                          ),
+                          child: Text(
+                            '$day',
+                            style: labText(12,
+                                w: active ? kBold : kMedium,
+                                c: active ? Colors.white : ItlgColors.text),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Jam (WIB)',
+                                style: labText(12,
+                                    w: kSemiBold, c: ItlgColors.textSubtle)),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final slot in const [
+                                  (8, 0, '08:00'),
+                                  (10, 0, '10:00'),
+                                  (13, 0, '13:00'),
+                                  (15, 0, '15:00'),
+                                  (17, 0, '17:00'),
+                                  (23, 59, '23:59'),
+                                ])
+                                  GestureDetector(
+                                    onTap: () => setSheetState(() {
+                                      selectedHour = slot.$1;
+                                      selectedMinute = slot.$2;
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 7),
+                                      decoration: BoxDecoration(
+                                        color: (selectedHour == slot.$1 &&
+                                                selectedMinute == slot.$2)
+                                            ? ItlgColors.primary
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: ItlgShadows.outline,
+                                      ),
+                                      child: Text(
+                                        slot.$3,
+                                        style: labText(
+                                          11,
+                                          w: kBold,
+                                          c: (selectedHour == slot.$1 &&
+                                                  selectedMinute == slot.$2)
+                                              ? Colors.white
+                                              : ItlgColors.text,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  LabPrimaryButton(
+                    icon: 'check',
+                    label: 'Terapkan Tanggal & Jam',
+                    large: true,
+                    onTap: () => Navigator.of(ctx).pop(DateTime(
+                      selectedDate.year,
+                      selectedDate.month,
+                      selectedDate.day,
+                      selectedHour,
+                      selectedMinute,
+                    )),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }

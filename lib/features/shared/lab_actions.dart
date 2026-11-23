@@ -180,61 +180,150 @@ String _fileKind(String name) {
   }
 }
 
-/// Pratinjau berkas lampiran: nama, jenis, ukuran, dan tombol Unduh.
+/// Pratinjau dokumen PDF layar penuh (Figma: "Pratinjau Dokumen PDF" 5828:3279):
+/// latar #2B2D31, bar atas tombol tutup + nama berkas + info halaman/ukuran,
+/// lembar dokumen putih, dan tombol merah "Unduh Berkas" di bawah.
 Future<void> labShowFilePreview(
   BuildContext context, {
   required String name,
-  String size = '—',
+  String size = '3,2 MB',
   String source = 'Lampiran praktikum',
 }) {
-  return labShowInfoSheet(
-    context,
-    title: 'Pratinjau Berkas',
-    header: Container(
-      height: 120,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: ItlgColors.surfaceDark,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: ItlgShadows.outline,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const LabIcon('file', size: 40, color: ItlgColors.primary),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(name,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: labText(12, w: kBold)),
+  final kind = _fileKind(name);
+  final cleanTitle = name
+      .replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '')
+      .replaceAll('_', ' ');
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Pratinjau Dokumen',
+    barrierColor: const Color(0xFF2B2D31),
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    transitionBuilder: (dialogCtx, anim, _, __) => FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+      child: Material(
+        color: const Color(0xFF2B2D31),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(dialogCtx).pop(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: LabIcon('cross', size: 22, color: Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: labText(14, w: kBold, c: Colors.white),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$kind • $size',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: labText(11,
+                                w: kMedium, c: const Color(0xFFBFC4CC)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            source,
+                            style: labText(12,
+                                w: kSemiBold, c: ItlgColors.primary),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            cleanTitle,
+                            style: labText(18,
+                                w: kBold, c: const Color(0xFF202124)),
+                          ),
+                          const SizedBox(height: 16),
+                          for (final wFactor in const [
+                            1.0,
+                            0.92,
+                            1.0,
+                            0.8,
+                            1.0,
+                            0.86,
+                            0.66,
+                          ]) ...[
+                            FractionallySizedBox(
+                              widthFactor: wFactor,
+                              child: Container(
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE5E8EB),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Dokumen siap diunduh ke perangkat Anda dalam format $kind.',
+                            style: labText(12, c: ItlgColors.textSubtle),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                LabPrimaryButton(
+                  icon: 'download',
+                  label: 'Unduh Berkas',
+                  large: true,
+                  onTap: () async {
+                    Navigator.of(dialogCtx).pop();
+                    final res = await FileDownloadService.instance.downloadFile(
+                      fileName: name,
+                      source: source,
+                    );
+                    if (!context.mounted) return;
+                    labToast(
+                      context,
+                      res.success
+                          ? 'Tersimpan di ${res.location}'
+                          : 'Gagal mengunduh $name',
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
-    ),
-    rows: [
-      ('file', 'Jenis', _fileKind(name)),
-      ('download', 'Ukuran', size),
-      ('book_open', 'Sumber', source),
-    ],
-    primary: (
-      'download',
-      'Unduh Berkas',
-      () async {
-        final res = await FileDownloadService.instance.downloadFile(
-          fileName: name,
-          source: source,
-        );
-        if (!context.mounted) return;
-        labToast(
-          context,
-          res.success
-              ? 'Tersimpan di ${res.location}'
-              : 'Gagal mengunduh $name',
-        );
-      },
     ),
   );
 }
@@ -261,47 +350,95 @@ Future<void> labShowLink(
   );
 }
 
-/// QR besar untuk dipindai (gambar QR yang sama dengan sesi presensi).
+/// Pop-up QR besar di tengah layar (Figma: "Pop up QR Presensi Asisten-Laboran" 5828:3324):
+/// kartu #F5F5F5 radius 24, QR 200x200, judul Bold 22, keterangan Regular 14,
+/// tombol merah penuh "Tutup".
 Future<void> labShowQr(
   BuildContext context, {
   required String title,
   required String code,
   String caption = 'Tunjukkan QR ini untuk dipindai.',
 }) {
-  return _showSheet<void>(
-    context,
-    title: title,
-    body: (sheet) => LabColumn(
-      gap: 12,
-      children: [
-        InnerShadowBox(
-          radius: 12,
-          color: Colors.white,
-          padding: const EdgeInsets.all(20),
-            child: Column(
-            children: [
-              QrImageView(
-                data: code,
-                version: QrVersions.auto,
-                size: 220,
-                backgroundColor: Colors.white,
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: const Color(0x660A0B0C),
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    transitionBuilder: (dialogCtx, anim, _, __) => FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 370),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 22, 16, 20),
+                decoration: BoxDecoration(
+                  color: ItlgColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: ItlgShadows.outline,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: QrImageView(
+                          data: code,
+                          version: QrVersions.auto,
+                          size: 200,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: labText(22, w: kBold, c: ItlgColors.text),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      caption,
+                      textAlign: TextAlign.center,
+                      style: labText(14, c: ItlgColors.textMuted),
+                    ),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(dialogCtx).pop(),
+                      child: Container(
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: ItlgColors.primary,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: ItlgShadows.primary,
+                        ),
+                        child: Text(
+                          'Tutup',
+                          style: labText(16,
+                              w: kBold, c: ItlgColors.surfaceWhite),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(code,
-                  style: labText(22, w: kBold, c: ItlgColors.primary)),
-            ],
+            ),
           ),
         ),
-        Text(caption,
-            textAlign: TextAlign.center,
-            style: labText(12, c: ItlgColors.textMuted)),
-        LabOutlineButton(
-          icon: 'cross',
-          label: 'Tutup',
-          large: true,
-          onTap: () => Navigator.of(sheet).pop(),
-        ),
-      ],
+      ),
     ),
   );
 }
@@ -331,17 +468,17 @@ Future<void> labShowHelpCenter(BuildContext context) {
   );
 }
 
-/// Label status laporan kendala (0 Reported, 1 In Progress, 2 Resolved).
-const List<String> kLabReportStatus = ['Reported', 'In Progress', 'Resolved'];
+/// Label status laporan kendala (0 Baru, 1 Ditangani, 2 Selesai).
+const List<String> kLabReportStatus = ['Baru', 'Ditangani', 'Selesai'];
 
 Widget labReportChip(int status) {
   switch (status) {
     case 0:
-      return const LabChip.danger('Reported');
+      return const LabChip.danger('Baru');
     case 1:
-      return const LabChip.warn('In Progress');
+      return const LabChip.warn('Ditangani');
     default:
-      return const LabChip.live('Resolved');
+      return const LabChip.live('Selesai');
   }
 }
 
@@ -381,16 +518,17 @@ Future<void> labShowReportDetail(
   String? handlingNote,
 }) {
   const steps = [
-    'Laporan diterima Laboran.',
-    'Laboran sedang menangani kendala.',
-    'Kendala selesai ditangani.',
+    'Laporan diterima Laboran dan menunggu penanganan.',
+    'Laboran sedang menangani kendala perangkat.',
+    'Kendala selesai ditangani oleh Laboran.',
   ];
   final hasPhoto = photoName != null &&
       photoName.trim().isNotEmpty &&
       photoName != 'tanpa_foto.jpg';
+  final displayCode = ticketCode?.replaceFirst('#TK-', '#LK-');
   final rows = <LabInfoRow>[
-    if (ticketCode != null && ticketCode.isNotEmpty)
-      ('ticket', 'Kode Tiket', ticketCode),
+    if (displayCode != null && displayCode.isNotEmpty)
+      ('ticket', 'Kode Laporan', displayCode),
     ('location', 'Lokasi & Tanggal', meta),
     ('wrench_outline', 'Status', kLabReportStatus[status.clamp(0, 2)]),
     if (hasPhoto) ('camera', 'Lampiran', photoName),
@@ -420,9 +558,9 @@ Future<void> labShowReportDetail(
   );
 }
 
-/// Halaman "Riwayat Laporan" (Lihat Semua) dengan tab status.
+/// Halaman "Riwayat Laporan" (Figma: "Riwayat Laporan-Praktikan" 5813:3258 &
+/// "Riwayat Laporan-Aslab" 5816:3063) dengan progress 3 tahap & catatan Laboran.
 class LabRiwayatLaporanPage extends StatefulWidget {
-  /// (icon, judul, meta, status)
   final List<(String, String, String, int)> reports;
   final Listenable? listenable;
   final List<LabReportDetailItem> Function()? liveItemsBuilder;
@@ -441,6 +579,7 @@ class LabRiwayatLaporanPage extends StatefulWidget {
 }
 
 class _LabRiwayatLaporanPageState extends State<LabRiwayatLaporanPage> {
+  /// 0 Semua, 1 Diproses (Baru + Ditangani), 2 Selesai.
   int _tab = 0;
 
   @override
@@ -469,31 +608,83 @@ class _LabRiwayatLaporanPageState extends State<LabRiwayatLaporanPage> {
     ];
   }
 
+  Widget _stepTimeline(int status) {
+    const labels = ['Baru', 'Ditangani', 'Selesai'];
+    return Row(
+      children: [
+        for (var i = 0; i < 3; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: i <= status
+                        ? ItlgColors.primary
+                        : const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  labels[i],
+                  style: labText(
+                    11,
+                    w: i <= status ? kSemiBold : kMedium,
+                    c: i <= status
+                        ? ItlgColors.primary
+                        : ItlgColors.textSubtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _historyStatusChip(int status) {
+    switch (status) {
+      case 0:
+        return const LabChip.info('Baru');
+      case 1:
+        return const LabChip.warn('Sedang Ditangani');
+      default:
+        return const LabChip.live('Selesai');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final all = _resolveItems();
-    final shown =
-        _tab == 0 ? all : all.where((r) => r.status == _tab - 1).toList();
-    int count(int s) => all.where((r) => r.status == s).length;
+    final shown = switch (_tab) {
+      1 => all.where((r) => r.status < 2).toList(),
+      2 => all.where((r) => r.status == 2).toList(),
+      _ => all,
+    };
     return LabSubPage(
       onLogoTap: widget.onLogoTap,
       children: [
         LabCard(
           children: [
             const LabOverline(
-              overline: 'Issue Ticketing',
+              overline: 'Laporan Saya',
               title: 'Riwayat Laporan',
             ),
-            Text('${all.length} laporan kendala yang pernah anda kirim.',
-                style: labText(12, c: ItlgColors.textMuted)),
+            Text(
+              'Pantau status laporan kerusakan yang kamu kirim dan catatan penanganan dari Laboran.',
+              style: labText(12, c: ItlgColors.textMuted),
+            ),
           ],
         ),
         LabTabs(
           labels: [
             'Semua (${all.length})',
-            'Reported (${count(0)})',
-            'In Progress (${count(1)})',
-            'Resolved (${count(2)})',
+            'Diproses',
+            'Selesai',
           ],
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
@@ -507,27 +698,91 @@ class _LabRiwayatLaporanPageState extends State<LabRiwayatLaporanPage> {
           )
         else
           LabColumn(
-            gap: 8,
+            gap: 12,
             children: [
-              for (final r in shown)
-                LabListItem(
-                  leading: LabIconTile(r.icon),
-                  title: r.title,
-                  subtitle: r.meta,
-                  titleSize: 12,
-                  trailing: labReportChip(r.status),
-                  onTap: () => labShowReportDetail(
-                    context,
-                    icon: r.icon,
-                    title: r.title,
-                    meta: r.meta,
-                    status: r.status,
-                    ticketCode: r.ticketCode,
-                    description: r.description,
-                    photoName: r.photoName,
-                    handlingNote: r.handlingNote,
-                  ),
-                ),
+              for (var idx = 0; idx < shown.length; idx++)
+                () {
+                  final r = shown[idx];
+                  final code = (r.ticketCode ?? '#LK-09${21 - idx}')
+                      .replaceFirst('#TK-', '#LK-');
+                  return LabCard(
+                    gap: 12,
+                    onTap: () => labShowReportDetail(
+                      context,
+                      icon: r.icon,
+                      title: r.title,
+                      meta: r.meta,
+                      status: r.status,
+                      ticketCode: code,
+                      description: r.description,
+                      photoName: r.photoName,
+                      handlingNote: r.handlingNote,
+                    ),
+                    children: [
+                      Row(
+                        children: [
+                          LabTag.grey(code),
+                          const Spacer(),
+                          _historyStatusChip(r.status),
+                        ],
+                      ),
+                      Text(r.title,
+                          style: labText(16, w: kBold, c: Colors.black)),
+                      LabColumn(
+                        gap: 4,
+                        children: [
+                          LabMeta(icon: 'location', text: r.meta),
+                          LabMeta(
+                            icon: 'clock',
+                            text: r.status == 2
+                                ? 'Dikirim ${r.meta.split('•').last.trim()} • selesai ditangani'
+                                : 'Dikirim ${r.meta.split('•').last.trim()}',
+                          ),
+                        ],
+                      ),
+                      _stepTimeline(r.status),
+                      if (r.handlingNote != null &&
+                          r.handlingNote!.trim().isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: LabColors.tagBlueBg,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.only(top: 1),
+                                child: LabIcon('info',
+                                    size: 18, color: LabColors.blueDark),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Catatan Laboran',
+                                      style: labText(12,
+                                          w: kBold, c: LabColors.blueDark),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      r.handlingNote!.trim(),
+                                      style: labText(12,
+                                          w: kMedium, c: LabColors.blueDark),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                }(),
             ],
           ),
       ],
