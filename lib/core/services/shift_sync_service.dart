@@ -60,7 +60,7 @@ class ShiftRecord {
       shiftLabel: (json['shift_label'] as String?) ?? 'Shift Pagi',
       courseName: (json['course_name'] as String?) ?? 'Praktikum Lab',
       timeRange: (json['time_range'] as String?) ?? '08:00–09:40 WIB',
-      room: (json['room'] as String?) ?? 'Lab Komputer 1',
+      room: (json['room'] as String?) ?? 'Lab Jaringan 1',
       asistenName: name,
       asistenInitials:
           (json['asisten_initials'] as String?) ?? ShiftSyncService.initialsOf(name),
@@ -156,9 +156,7 @@ class ShiftSwapRecord {
   }
 }
 
-/// Service pusat sinkronisasi Shift Jaga, Tukar Shift & Presensi Asisten
-/// lintas role (Aslab ↔ Laboran) dengan backend Supabase + Realtime dan
-/// fallback memori bersama otomatis.
+/// Layanan sinkronisasi shift jaga dan presensi asisten.
 class ShiftSyncService extends ChangeNotifier {
   static final ShiftSyncService instance = ShiftSyncService._internal();
   ShiftSyncService._internal() {
@@ -169,6 +167,7 @@ class ShiftSyncService extends ChangeNotifier {
   final List<ShiftSwapRecord> _swaps = [];
   String _accessCode = 'ITLG-4821';
   String _accessValidUntil = '17:00 WIB';
+  DateTime? _accessUpdatedAt;
 
   RealtimeChannel? _channel;
   bool _initialized = false;
@@ -177,6 +176,24 @@ class ShiftSyncService extends ChangeNotifier {
 
   String get accessCode => _accessCode;
   String get accessValidUntil => _accessValidUntil;
+
+  /// Kode akses kedaluwarsa bila bukan dibuat hari ini (WIB) atau jam
+  /// "berlaku sampai" sudah lewat.
+  bool get isAccessCodeExpired {
+    final nowWib = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final made = _accessUpdatedAt?.toUtc().add(const Duration(hours: 7));
+    if (made == null ||
+        made.year != nowWib.year ||
+        made.month != nowWib.month ||
+        made.day != nowWib.day) {
+      return true;
+    }
+    final m = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(_accessValidUntil);
+    if (m == null) return false;
+    final until = DateTime(nowWib.year, nowWib.month, nowWib.day,
+        int.parse(m.group(1)!), int.parse(m.group(2)!));
+    return nowWib.isAfter(until);
+  }
 
   /// Payload QR dinamis 60 detik untuk Presensi Mengajar Asisten (Laboran ↔ Aslab).
   String get rotatingQrPayload {
@@ -189,6 +206,7 @@ class ShiftSyncService extends ChangeNotifier {
     final cleaned = raw.trim().toUpperCase();
     final expected = _accessCode.trim().toUpperCase();
     if (cleaned.isEmpty || expected.isEmpty) return false;
+    if (isAccessCodeExpired) return false;
     if (cleaned == expected) return true;
     final m = RegExp(r'^([A-Z0-9-]+)\|T:(\d+)$').firstMatch(cleaned);
     if (m != null) {
@@ -235,7 +253,7 @@ class ShiftSyncService extends ChangeNotifier {
           shiftLabel: 'Sesi C1',
           courseName: 'Praktikum Pemrograman Mobile (Kom C)',
           timeRange: '08:00–09:40 WIB',
-          room: 'Lab Komputer 1',
+          room: 'Lab Jaringan 1',
           asistenName: 'Abbil Rizki',
           asistenInitials: 'AR',
           partnerName: 'Andi Pratama',
@@ -250,7 +268,7 @@ class ShiftSyncService extends ChangeNotifier {
           shiftLabel: 'Sesi C2',
           courseName: 'Praktikum Pemrograman Mobile (Kom C)',
           timeRange: '10:00–11:40 WIB',
-          room: 'Lab Komputer 1',
+          room: 'Lab Jaringan 1',
           asistenName: 'Andi Pratama',
           asistenInitials: 'AP',
           partnerName: 'Abbil Rizki',
@@ -295,7 +313,7 @@ class ShiftSyncService extends ChangeNotifier {
           shiftLabel: 'Sesi C1',
           courseName: 'Praktikum Machine Learning (Kom C)',
           timeRange: '13:00–14:40 WIB',
-          room: 'Lab AI & Data',
+          room: 'Lab Jaringan 3',
           asistenName: 'Abbil Rizki',
           asistenInitials: 'AR',
           partnerName: 'Rizky Harahap',
@@ -310,7 +328,7 @@ class ShiftSyncService extends ChangeNotifier {
           shiftLabel: 'Sesi C2',
           courseName: 'Praktikum Machine Learning (Kom C)',
           timeRange: '15:00–16:40 WIB',
-          room: 'Lab AI & Data',
+          room: 'Lab Jaringan 3',
           asistenName: 'Rizky Harahap',
           asistenInitials: 'RH',
           partnerName: 'Abbil Rizki',
@@ -438,6 +456,8 @@ class ShiftSyncService extends ChangeNotifier {
         _accessCode = (codeRow['code'] as String?) ?? _accessCode;
         _accessValidUntil =
             (codeRow['valid_until'] as String?) ?? _accessValidUntil;
+        _accessUpdatedAt =
+            DateTime.tryParse((codeRow['updated_at'] ?? '').toString());
         _backendAvailable = true;
       }
 
@@ -482,9 +502,7 @@ class ShiftSyncService extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Getter untuk Aslab & Laboran
-  // ---------------------------------------------------------------------------
 
   List<ShiftRecord> get allShifts => List.unmodifiable(_shifts);
 
@@ -504,6 +522,22 @@ class ShiftSyncService extends ChangeNotifier {
   }
 
   int get totalShifts => _shifts.length;
+
+  /// Indeks hari ini (0 = Senin … 5 = Sabtu, -1 = Minggu) dalam WIB.
+  static int get todayIndex {
+    final wd = DateTime.now().toUtc().add(const Duration(hours: 7)).weekday;
+    return wd == DateTime.sunday ? -1 : wd - 1;
+  }
+
+  /// Shift yang berlangsung hari ini (shift bersifat mingguan per `day_index`).
+  List<ShiftRecord> get todayShifts =>
+      _shifts.where((s) => s.dayIndex == todayIndex).toList();
+
+  int get todayAttendedCount => todayShifts
+      .where((s) =>
+          s.attendanceStatus.toLowerCase() == 'hadir' ||
+          s.attendanceStatus.toLowerCase() == 'terlambat')
+      .length;
 
   int get attendedShiftCount => _shifts
       .where((s) =>
@@ -561,9 +595,7 @@ class ShiftSyncService extends ChangeNotifier {
     return List.unmodifiable(_swaps);
   }
 
-  // ---------------------------------------------------------------------------
   // Aksi tulis ke BE Supabase + sinkronisasi lintas role
-  // ---------------------------------------------------------------------------
 
   String _nextSwapCode() {
     var maxNum = 15;
@@ -649,11 +681,15 @@ class ShiftSyncService extends ChangeNotifier {
           'is_incoming': rec.isIncoming,
           'is_mine': rec.isMine,
           'meta_note': rec.metaNote,
-          'created_at': now.toIso8601String(),
+          'created_at': now.toUtc().toIso8601String(),
         });
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[ShiftSync] Insert swap request fallback lokal: $e');
+        // Kembalikan data lokal ke kondisi server lalu laporkan galat.
+        await refreshFromBackend();
+        throw StateError(
+            'Permintaan tukar jadwal gagal dikirim. Periksa koneksi lalu coba lagi.');
       }
     }
 
@@ -661,7 +697,6 @@ class ShiftSyncService extends ChangeNotifier {
   }
 
   /// Terima / Tolak permintaan tukar shift. Jika disetujui, jadwal shift di
-  /// `lab_shifts` otomatis tertukar dan tersinkron ke Aslab & Laboran.
   Future<void> decideSwap({
     required String swapCode,
     required bool accept,
@@ -742,7 +777,7 @@ class ShiftSyncService extends ChangeNotifier {
         await client.from('shift_swap_requests').update({
           'status': target.status,
           'meta_note': target.metaNote,
-          'decided_at': now.toIso8601String(),
+          'decided_at': now.toUtc().toIso8601String(),
         }).eq('swap_code', swapCode);
 
         if (accept) {
@@ -751,7 +786,7 @@ class ShiftSyncService extends ChangeNotifier {
               await client.from('lab_shifts').update({
                 'asisten_name': sh.asistenName,
                 'asisten_initials': sh.asistenInitials,
-                'updated_at': now.toIso8601String(),
+                'updated_at': now.toUtc().toIso8601String(),
               }).eq('id', sh.id);
             }
           }
@@ -759,6 +794,10 @@ class ShiftSyncService extends ChangeNotifier {
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[ShiftSync] Decide swap fallback lokal: $e');
+        // Kembalikan data lokal ke kondisi server lalu laporkan galat.
+        await refreshFromBackend();
+        throw StateError(
+            'Keputusan tukar jadwal gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -794,11 +833,15 @@ class ShiftSyncService extends ChangeNotifier {
         await client.from('shift_swap_requests').update({
           'status': 'rejected',
           'meta_note': target.metaNote,
-          'decided_at': now.toIso8601String(),
+          'decided_at': now.toUtc().toIso8601String(),
         }).eq('swap_code', swapCode);
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[ShiftSync] cancelSwap error: $e');
+        // Kembalikan data lokal ke kondisi server lalu laporkan galat.
+        await refreshFromBackend();
+        throw StateError(
+            'Pembatalan tukar jadwal gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
     return true;
@@ -807,14 +850,30 @@ class ShiftSyncService extends ChangeNotifier {
   /// Laboran menghasilkan Kode Akses Presensi Asisten baru & menyimpannya ke BE.
   Future<String> generateAccessCode({required String generatedBy}) async {
     final nextCode = 'ITLG-${1000 + Random().nextInt(9000)}';
+    // Berlaku 3 jam sejak dibuat (paling lambat 23:59 WIB), bukan selalu
+    // "17:00 WIB" walau dibuat sore/malam.
+    final nowWib = DateTime.now().toUtc().add(const Duration(hours: 7));
+    var until = nowWib.add(const Duration(hours: 3));
+    if (until.day != nowWib.day) {
+      until = DateTime(nowWib.year, nowWib.month, nowWib.day, 23, 59);
+    }
+    final previousCode = _accessCode;
+    final previousUntil = _accessValidUntil;
+    final previousAt = _accessUpdatedAt;
     _accessCode = nextCode;
+    _accessUpdatedAt = DateTime.now();
+    _accessValidUntil =
+        '${until.hour.toString().padLeft(2, '0')}:${until.minute.toString().padLeft(2, '0')} WIB';
     notifyListeners();
 
+    // Kode TIDAK dikirim lewat notifikasi: asisten harus memindai QR /
+    // menanyakan kode ke Laboran di lab (mencegah check-in dari jauh).
     NotificationSyncService.instance.push(
       role: 'aslab',
       icon: 'key',
       title: 'Kode Akses Shift Diperbarui',
-      body: 'Kode presensi shift hari ini: $nextCode (berlaku s/d $_accessValidUntil)',
+      body: 'Minta kode atau pindai QR dari Laboran di lab untuk check-in '
+          '(berlaku s/d $_accessValidUntil).',
       targetKey: 'shiftJaga',
       important: true,
     );
@@ -828,13 +887,20 @@ class ShiftSyncService extends ChangeNotifier {
             'code': nextCode,
             'valid_until': _accessValidUntil,
             'generated_by': generatedBy,
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           },
           onConflict: 'id',
         );
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[ShiftSync] Update access code fallback lokal: $e');
+        _accessCode = previousCode;
+        _accessValidUntil = previousUntil;
+        _accessUpdatedAt = previousAt;
+        // Kembalikan data lokal ke kondisi server lalu laporkan galat.
+        await refreshFromBackend();
+        throw StateError(
+            'Kode akses gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
 
@@ -887,11 +953,15 @@ class ShiftSyncService extends ChangeNotifier {
           'attendance_status': rec.attendanceStatus,
           'check_in_time': rec.checkInTime,
           'discipline_pct': rec.disciplinePct,
-          'updated_at': now.toIso8601String(),
+          'updated_at': now.toUtc().toIso8601String(),
         }).eq('id', shiftId);
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[ShiftSync] Update attendance fallback lokal: $e');
+        // Kembalikan data lokal ke kondisi server lalu laporkan galat.
+        await refreshFromBackend();
+        throw StateError(
+            'Presensi asisten gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }

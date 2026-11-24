@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/aslab/aslab_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
 import 'notification_sync_service.dart';
+import 'file_upload_service.dart';
 import 'supabase_service.dart';
 
 /// Data pengumpulan tugas praktikan yang tersinkron ke Supabase & Aslab.
@@ -43,9 +44,15 @@ class TugasSubmissionRecord {
     final files = <PrakFile>[];
     for (final f in rawFiles) {
       if (f is Map) {
+        final name = (f['name'] ?? 'Berkas Tugas').toString();
+        final path = f['path']?.toString();
+        FileUploadService.instance.registerRemote(name, path);
         files.add(PrakFile(
-          (f['name'] ?? 'Berkas Tugas').toString(),
-          (f['meta'] ?? 'Diunggah').toString(),
+          name,
+          (f['meta'] ?? 'Diunggah')
+              .toString()
+              .replaceAll('Tersimpan di BE', 'Tersimpan di server'),
+          path: path,
         ));
       }
     }
@@ -166,9 +173,7 @@ class AsistenRatingRecord {
   }
 }
 
-/// Service backend & sinkronisasi real-time untuk fitur Praktikum (4 mata
-/// kuliah Semester Ganjil 2026/2027: Pemrograman Mobile, Desain Interaksi,
-/// Analisis Desain Jaringan, dan Machine Learning) antar Praktikan & Aslab.
+/// Layanan sinkronisasi data praktikum, tugas, dan kuis.
 class PraktikumSyncService extends ChangeNotifier {
   static final PraktikumSyncService instance = PraktikumSyncService._internal();
   PraktikumSyncService._internal() {
@@ -199,8 +204,7 @@ class PraktikumSyncService extends ChangeNotifier {
           .toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
 
-  /// Daftar nilai efektif praktikan per mata kuliah (menggabungkan nilai
-  /// terbaru dari Aslab untuk semua modul 1..4 termasuk hasil revisi sanggahan).
+  /// Daftar nilai efektif praktikan per mata kuliah.
   List<PrakGrade> effectiveGradesForCourse(
       PrakCourse course, String userIdentifier) {
     return [
@@ -240,7 +244,6 @@ class PraktikumSyncService extends ChangeNotifier {
   }
 
   /// Konversi 4 praktikum sinkron ke model [AslabCourse] agar halaman
-  /// Praktikum Saya & Absensi milik Aslab memakai sumber data yang sama.
   List<AslabCourse> get aslabCourses {
     return [
       for (final c in _courses)
@@ -272,19 +275,19 @@ class PraktikumSyncService extends ChangeNotifier {
                       AslabItem(
                         0,
                         m.materiTitle,
-                        '${m.materiFile.isNotEmpty ? m.materiFile : 'PDF • 3,2 MB'} • dilihat 21 / 24',
+                        m.materiFile.isNotEmpty ? m.materiFile : 'Belum ada berkas',
                       ),
                     if (m.tugasTitle.isNotEmpty)
                       AslabItem(
                         1,
                         m.tugasTitle,
-                        '${m.tugasDeadline.isNotEmpty ? m.tugasDeadline : c.tugasDeadline} • ${(20 + submissionsForCourse(c.id, m.number).length).clamp(0, 24)} / 24 terkumpul',
+                        '${m.tugasDeadline.isNotEmpty ? m.tugasDeadline : c.tugasDeadline} • ${submissionsForCourse(c.id, m.number).length} terkumpul',
                       ),
                     if (m.kuisTitle.isNotEmpty)
                       AslabItem(
                         2,
                         m.kuisTitle,
-                        '${questionsForCourse(c.id).length} soal • 10 menit • ${(22 + _quizAttempts.values.where((q) => q.courseId == c.id && q.meetingNumber == m.number).length).clamp(0, 24)} / 24 mengerjakan',
+                        '${questionsForCourse(c.id).length} soal • 10 menit • ${_quizAttempts.values.where((q) => q.courseId == c.id && q.meetingNumber == m.number).length} mengerjakan',
                       ),
                   ],
                 ),
@@ -316,7 +319,6 @@ class PraktikumSyncService extends ChangeNotifier {
   }
 
   /// Simpan nilai & feedback dari Aslab (Penilaian Tugas) ke Supabase dan
-  /// sinkronkan langsung ke sisi Praktikan & Dosen.
   Future<void> gradeTugasSubmission({
     required String courseId,
     required int meetingNumber,
@@ -328,38 +330,8 @@ class PraktikumSyncService extends ChangeNotifier {
     final now = DateTime.now();
     final key = _subKey(courseId, meetingNumber, userIdentifier);
     final old = _submissions[key];
-    _submissions[key] = TugasSubmissionRecord(
-      courseId: courseId,
-      meetingNumber: meetingNumber,
-      userIdentifier: userIdentifier,
-      userName: userName,
-      files: old?.files ?? const [PrakFile('laporan_tugas.pdf', 'PDF • 1,2 MB')],
-      repoUrl: old?.repoUrl ?? '',
-      note: old?.note ?? '',
-      status: 'graded',
-      score: score,
-      feedback: feedback,
-      updatedAt: now,
-    );
-    notifyListeners();
 
-    final cName = courseById(courseId).name;
-    NotificationSyncService.instance.push(
-      role: 'praktikan',
-      icon: 'trophy',
-      title: 'Nilai Modul $meetingNumber Tersedia',
-      body: 'Praktikum $cName: nilai anda $score / 100 telah dipublikasikan',
-      targetKey: 'detailNilai',
-      important: true,
-    );
-    NotificationSyncService.instance.push(
-      role: 'dosen',
-      icon: 'circle_check',
-      title: 'Penilaian Modul $meetingNumber Diperbarui',
-      body: '$userName ($cName) dinilai $score / 100 oleh asisten',
-      targetKey: 'validasi',
-    );
-
+    // Simpan perubahan ke database
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
@@ -372,15 +344,56 @@ class PraktikumSyncService extends ChangeNotifier {
             'status': 'graded',
             'score': score,
             'feedback': feedback,
-            'updated_at': now.toIso8601String(),
+            'updated_at': now.toUtc().toIso8601String(),
           },
           onConflict: 'course_id,meeting_number,user_identifier',
         );
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PraktikumSync] gradeTugasSubmission error: $e');
+        throw StateError(
+            'Nilai gagal disimpan. Periksa koneksi internet lalu coba lagi.');
       }
     }
+
+    _submissions[key] = TugasSubmissionRecord(
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      userIdentifier: userIdentifier,
+      userName: userName,
+      files: old?.files ?? const [],
+      repoUrl: old?.repoUrl ?? '',
+      note: old?.note ?? '',
+      status: 'graded',
+      score: score,
+      feedback: feedback,
+      updatedAt: now,
+    );
+    notifyListeners();
+
+    final cName = courseById(courseId).name;
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      targetUser: userIdentifier,
+      icon: 'trophy',
+      title: 'Nilai Modul $meetingNumber Tersedia',
+      body: 'Praktikum $cName: nilai anda $score / 100 telah dipublikasikan',
+      targetKey: 'detailNilai',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      courseName: cName,
+      important: true,
+    );
+    NotificationSyncService.instance.push(
+      role: 'dosen',
+      icon: 'circle_check',
+      title: 'Penilaian Modul $meetingNumber Diperbarui',
+      body: '$userName ($cName) dinilai $score / 100 oleh asisten',
+      targetKey: 'validasi',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      courseName: cName,
+    );
   }
 
   PrakCourse courseById(String id) {
@@ -443,31 +456,48 @@ class PraktikumSyncService extends ChangeNotifier {
 
   String averageRatingLabelForCourse(String courseId) {
     final avg = averageRatingForCourse(courseId);
-    if (avg <= 0) return '4,8';
+    if (avg <= 0) return '-';
     return avg.toStringAsFixed(1).replaceAll('.', ',');
   }
 
   /// Rata-rata penilaian seluruh praktikum yang diterima asisten.
   String overallAsistenRatingLabel() {
-    if (_ratingRecords.isEmpty) return '4,8';
+    if (_ratingRecords.isEmpty) return '-';
     final sum = _ratingRecords.values
         .fold<double>(0, (acc, r) => acc + r.average);
     return (sum / _ratingRecords.length).toStringAsFixed(1).replaceAll('.', ',');
   }
 
   /// Jumlah item yang belum selesai pada pertemuan aktif (Tugas + Kuis).
+  double? classAverageScoreForCourse(String courseId) {
+    final scores = [
+      for (final r in _submissions.values)
+        if (r.courseId == courseId && r.status == 'graded' && r.score != null)
+          r.score!.toDouble(),
+    ];
+    if (scores.isEmpty) return null;
+    return scores.reduce((a, b) => a + b) / scores.length;
+  }
+
+  /// Jumlah tugas yang sudah dinilai di praktikum ini.
+  int gradedCountForCourse(String courseId) => _submissions.values
+      .where((r) => r.courseId == courseId && r.status == 'graded')
+      .length;
+
   int pendingItemsCount(String courseId, int meetingNumber, String userId) {
     if (meetingNumber < 4) return 0;
+    final m = meetingFor(courseId, meetingNumber);
+    final hasTugas = meetingNumber == 4 || (m != null && m.tugasTitle.isNotEmpty);
+    final hasKuis = meetingNumber == 4 || (m != null && m.kuisTitle.isNotEmpty);
     var pending = 0;
     final sub = submissionFor(courseId, meetingNumber, userId);
-    if (sub == null || !sub.isSubmitted) pending++;
+    if (hasTugas && (sub == null || !sub.isSubmitted)) pending++;
     final attempt = quizAttemptFor(courseId, meetingNumber, userId);
-    if (attempt == null) pending++;
+    if (hasKuis && attempt == null) pending++;
     return pending;
   }
 
-  /// Soal kuis spesifik untuk masing-masing dari 4 praktikum (termasuk soal
-  /// baru yang diterbitkan Aslab).
+  /// Soal kuis spesifik untuk masing-masing dari 4 praktikum.
   List<PrakQuestion> questionsForCourse(String courseId) {
     final custom = _customQuestionsByCourse[courseId];
     if (custom != null && custom.isNotEmpty) {
@@ -719,7 +749,7 @@ class PraktikumSyncService extends ChangeNotifier {
           asisten: 'Andi Pratama',
           asistenInitials: 'AP',
           kelas: 'TIF 3001 - Kom C (C1 & C2)',
-          room: 'Lab Komputer 1',
+          room: 'Lab Jaringan 1',
           jadwalDaftar: 'Sen • C1 08:00 | C2 10:00',
           jadwalDetail: 'Sen, C1 08:00–09:40 • C2 10:00–11:40',
           jadwalAbsensi: 'Sen, C1 08:00–09:40 | C2 10:00–11:40',
@@ -1046,7 +1076,7 @@ class PraktikumSyncService extends ChangeNotifier {
           asisten: 'Rizky Harahap',
           asistenInitials: 'RH',
           kelas: 'TIF 3004 - Kom C (C1 & C2)',
-          room: 'Lab AI & Data',
+          room: 'Lab Jaringan 3',
           jadwalDaftar: 'Kam • C1 13:00 | C2 15:00',
           jadwalDetail: 'Kam, C1 13:00–14:40 • C2 15:00–16:40',
           jadwalAbsensi: 'Kam, C1 13:00–14:40 | C2 15:00–16:40',
@@ -1281,7 +1311,7 @@ class PraktikumSyncService extends ChangeNotifier {
             // Migrasi otomatis data lama (Kelas C / Desain Senin) ke Kom C (C1 & C2) beda hari
             _seedDefaults();
             try {
-              final nowIso = DateTime.now().toIso8601String();
+              final nowIso = DateTime.now().toUtc().toIso8601String();
               for (final c in _courses) {
                 await client.from('praktikum_courses').update({
                   'code': c.kelas,
@@ -1326,6 +1356,35 @@ class PraktikumSyncService extends ChangeNotifier {
         final rec = KuisAttemptRecord.fromJson(Map<String, dynamic>.from(r));
         _quizAttempts[
             _subKey(rec.courseId, rec.meetingNumber, rec.userIdentifier)] = rec;
+      }
+
+      // Ambil soal kuis buatan Aslab (tabel opsional; abaikan bila belum ada)
+      try {
+        final qRows = await client
+            .from('quiz_questions')
+            .select()
+            .order('position', ascending: true);
+        final byCourse = <String, List<PrakQuestion>>{};
+        for (final r in qRows) {
+          final m = Map<String, dynamic>.from(r);
+          final opts = (m['options'] as List?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+              const <String>[];
+          if (opts.length < 2) continue;
+          byCourse.putIfAbsent(m['course_id'].toString(), () => []).add(
+                PrakQuestion(
+                  (m['question'] ?? '').toString(),
+                  opts,
+                  (m['answer_index'] as num?)?.toInt() ?? 0,
+                ),
+              );
+        }
+        for (final e in byCourse.entries) {
+          _customQuestionsByCourse[e.key] = e.value;
+        }
+      } catch (e) {
+        debugPrint('[PraktikumSync] quiz_questions belum tersedia: $e');
       }
 
       // Ambil penilaian asisten dari praktikan
@@ -1389,9 +1448,7 @@ class PraktikumSyncService extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Aksi Backend: Pengumpulan Tugas, Kuis, Rating Asisten, & Materi Aslab
-  // ---------------------------------------------------------------------------
 
   Future<void> saveTugasSubmission({
     required String courseId,
@@ -1414,18 +1471,12 @@ class PraktikumSyncService extends ChangeNotifier {
       status: 'submitted',
       updatedAt: now,
     );
+    final previous =
+        _submissions[_subKey(courseId, meetingNumber, userIdentifier)];
     _submissions[_subKey(courseId, meetingNumber, userIdentifier)] = rec;
     notifyListeners();
 
     final cName = courseById(courseId).name;
-    NotificationSyncService.instance.push(
-      role: 'aslab',
-      icon: 'clipboard',
-      title: 'Tugas Baru Dikumpulkan',
-      body: '$userName ($userIdentifier) mengunggah Tugas $meetingNumber • $cName',
-      targetKey: 'evaluasi',
-      important: true,
-    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -1437,20 +1488,44 @@ class PraktikumSyncService extends ChangeNotifier {
             'user_identifier': userIdentifier,
             'user_name': userName,
             'files_json': [
-              for (final f in files) {'name': f.name, 'meta': f.meta}
+              for (final f in files)
+                {
+                  'name': f.name,
+                  'meta': f.meta,
+                  if (f.path != null) 'path': f.path,
+                }
             ],
             'repo_url': repoUrl,
             'note': note,
             'status': 'submitted',
-            'updated_at': now.toIso8601String(),
+            'updated_at': now.toUtc().toIso8601String(),
           },
           onConflict: 'course_id,meeting_number,user_identifier',
         );
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PraktikumSync] saveTugasSubmission error: $e');
+        if (previous == null) {
+          _submissions.remove(_subKey(courseId, meetingNumber, userIdentifier));
+        } else {
+          _submissions[_subKey(courseId, meetingNumber, userIdentifier)] = previous;
+        }
+        notifyListeners();
+        throw StateError(
+            'Tugas gagal dikumpulkan. Periksa koneksi lalu coba lagi.');
       }
     }
+
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'clipboard',
+      title: 'Tugas Baru Dikumpulkan',
+      body: '$userName ($userIdentifier) mengunggah Tugas $meetingNumber • $cName',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      targetKey: 'evaluasi',
+      important: true,
+    );
   }
 
   Future<void> cancelTugasSubmission({
@@ -1466,7 +1541,7 @@ class PraktikumSyncService extends ChangeNotifier {
       try {
         await client
             .from('tugas_submissions')
-            .update({'status': 'cancelled', 'updated_at': DateTime.now().toIso8601String()})
+            .update({'status': 'cancelled', 'updated_at': DateTime.now().toUtc().toIso8601String()})
             .eq('course_id', courseId)
             .eq('meeting_number', meetingNumber)
             .eq('user_identifier', userIdentifier);
@@ -1484,8 +1559,7 @@ class PraktikumSyncService extends ChangeNotifier {
     required Map<int, int> answers,
     required int durationSeconds,
   }) async {
-    // Idempotent: jika praktikan sudah pernah mengirim kuis untuk modul ini,
-    // kembalikan hasil sebelumnya tanpa menimpa.
+    // Idempotent: jika praktikan sudah pernah mengirim kuis untuk modul ini
     final key = _subKey(courseId, meetingNumber, userIdentifier);
     final existing = _quizAttempts[key];
     if (existing != null) {
@@ -1513,17 +1587,11 @@ class PraktikumSyncService extends ChangeNotifier {
       durationSeconds: durationSeconds,
       submittedAt: now,
     );
+    const KuisAttemptRecord? previous = null;
     _quizAttempts[_subKey(courseId, meetingNumber, userIdentifier)] = rec;
     notifyListeners();
 
     final cName = courseById(courseId).name;
-    NotificationSyncService.instance.push(
-      role: 'aslab',
-      icon: 'question',
-      title: 'Kuis Diselesaikan • $userName',
-      body: '$cName Modul $meetingNumber • Skor $score ($correct/${questions.length} benar)',
-      targetKey: 'hasilKuis',
-    );
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -1541,15 +1609,33 @@ class PraktikumSyncService extends ChangeNotifier {
             'correct_count': correct,
             'wrong_count': wrong,
             'duration_seconds': durationSeconds,
-            'submitted_at': now.toIso8601String(),
+            'submitted_at': now.toUtc().toIso8601String(),
           },
           onConflict: 'course_id,meeting_number,user_identifier',
         );
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PraktikumSync] submitKuisAttempt error: $e');
+        if (previous == null) {
+          _quizAttempts.remove(_subKey(courseId, meetingNumber, userIdentifier));
+        } else {
+          _quizAttempts[_subKey(courseId, meetingNumber, userIdentifier)] = previous;
+        }
+        notifyListeners();
+        throw StateError(
+            'Jawaban kuis gagal dikirim. Periksa koneksi lalu coba lagi.');
       }
     }
+
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'question',
+      title: 'Kuis Diselesaikan • $userName',
+      body: '$cName Modul $meetingNumber • Skor $score ($correct/${questions.length} benar)',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      targetKey: 'hasilKuis',
+    );
     return rec;
   }
 
@@ -1613,7 +1699,7 @@ class PraktikumSyncService extends ChangeNotifier {
             'rating_waktu': normalized[2],
             'rating_kesigapan': normalized[3],
             'comment': comment,
-            'created_at': now.toIso8601String(),
+            'created_at': now.toUtc().toIso8601String(),
           },
           onConflict: 'course_id,user_identifier',
         );
@@ -1626,18 +1712,56 @@ class PraktikumSyncService extends ChangeNotifier {
   }
 
   /// Simpan soal kuis kustom yang dibuat Aslab agar langsung muncul di sisi
-  /// Praktikan saat mengerjakan kuis.
-  void saveQuizQuestionsFromAslab({
+  /// Simpan soal kuis buatan Aslab ke `public.quiz_questions` (per praktikum,
+  /// urutan = `position`) agar terlihat di perangkat praktikan mana pun.
+  /// Bila tabel belum dibuat di Supabase, soal tetap dipakai di perangkat ini
+  /// dan galat dilaporkan.
+  Future<void> saveQuizQuestionsFromAslab({
     required String courseId,
     required List<PrakQuestion> questions,
-  }) {
+    int meetingNumber = 0,
+  }) async {
     if (questions.isEmpty) return;
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        final now = DateTime.now().toUtc().toIso8601String();
+        await client.from('quiz_questions').upsert(
+          [
+            for (var i = 0; i < questions.length; i++)
+              {
+                'course_id': courseId,
+                'meeting_number': meetingNumber,
+                'position': i,
+                'question': questions[i].text,
+                'options': questions[i].options,
+                'answer_index': questions[i].answer,
+                'updated_at': now,
+              },
+          ],
+          onConflict: 'course_id,position',
+        );
+        // Soal lama yang melebihi jumlah soal baru dihapus.
+        await client
+            .from('quiz_questions')
+            .delete()
+            .eq('course_id', courseId)
+            .gte('position', questions.length);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[PraktikumSync] saveQuizQuestionsFromAslab error: $e');
+        _customQuestionsByCourse[courseId] = List<PrakQuestion>.from(questions);
+        notifyListeners();
+        throw StateError(
+            'Judul kuis tersimpan, tetapi soal gagal disimpan ke server '
+            '(tabel quiz_questions belum tersedia atau koneksi terputus).');
+      }
+    }
     _customQuestionsByCourse[courseId] = List<PrakQuestion>.from(questions);
     notifyListeners();
   }
 
   /// Sinkronisasi dari Aslab: Tambah / perbarui materi, tugas, atau kuis pada
-  /// suatu pertemuan agar langsung terlihat di halaman Praktikan.
   Future<void> upsertMeetingContentFromAslab({
     required String courseId,
     required int meetingNumber,
@@ -1648,6 +1772,95 @@ class PraktikumSyncService extends ChangeNotifier {
     String? fileName,
     String? deadline,
   }) async {
+    // Simpan perubahan ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        final payload = <String, dynamic>{
+          'id': '$courseId-m$meetingNumber',
+          'course_id': courseId,
+          'meeting_number': meetingNumber,
+          'date_label': dateLabel,
+          'updated_at': nowIso,
+        };
+        // Pertemuan baru: jangan biarkan default tabel
+        final isNew = !_courses.any((c) =>
+            c.id == courseId && c.meetings.any((m) => m.number == meetingNumber));
+        if (isNew) {
+          payload.addAll({
+            'module_title': 'Modul $meetingNumber • $title',
+            'attend_status': 'upcoming',
+            'materi_title': '',
+            'materi_file': '',
+            'tugas_title': '',
+            'tugas_deadline': '',
+            'kuis_title': '',
+          });
+        }
+        if (kind == 0) {
+          payload['module_title'] = 'Modul $meetingNumber • $title';
+          payload['materi_title'] = title;
+          if (description.isNotEmpty) payload['description'] = description;
+          if (fileName != null && fileName.isNotEmpty) {
+            payload['materi_file'] = fileName;
+          }
+        } else if (kind == 1) {
+          payload['tugas_title'] = title;
+          if (description.isNotEmpty) payload['description'] = description;
+          if (deadline != null && deadline.isNotEmpty) {
+            payload['tugas_deadline'] = deadline;
+          }
+        } else {
+          payload['kuis_title'] = title;
+          if (description.isNotEmpty) payload['description'] = description;
+        }
+        if (isNew) {
+          await client.from('praktikum_meetings').upsert(
+            payload,
+            onConflict: 'course_id,meeting_number',
+          );
+        } else {
+          // Baris sudah ada: UPDATE saja. UPSERT tanpa `module_title` selalu
+          payload.remove('id');
+          await client
+              .from('praktikum_meetings')
+              .update(payload)
+              .eq('course_id', courseId)
+              .eq('meeting_number', meetingNumber);
+        }
+
+        if (meetingNumber == 4) {
+          final coursePatch = <String, dynamic>{'updated_at': nowIso};
+          if (kind == 0) {
+            coursePatch['modul_title'] = title;
+            coursePatch['materi_title'] = title;
+            if (description.isNotEmpty) coursePatch['modul_desc'] = description;
+            if (fileName != null && fileName.isNotEmpty) {
+              coursePatch['materi_file'] = fileName;
+            }
+          } else if (kind == 1) {
+            coursePatch['tugas_title'] = title;
+            if (deadline != null && deadline.isNotEmpty) {
+              coursePatch['tugas_deadline'] = deadline;
+            }
+          } else {
+            coursePatch['pre_test_title'] = title;
+          }
+          await client
+              .from('praktikum_courses')
+              .update(coursePatch)
+              .eq('id', courseId);
+        }
+
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[PraktikumSync] upsertMeetingContentFromAslab error: $e');
+        throw StateError(
+            'Materi gagal disimpan ke server. Periksa koneksi lalu coba lagi.');
+      }
+    }
+
     final idx = _courses.indexWhere((c) => c.id == courseId);
     if (idx != -1) {
       final c = _courses[idx];
@@ -1695,7 +1908,6 @@ class PraktikumSyncService extends ChangeNotifier {
       }
 
       // Ikut perbarui ringkasan mata kuliah bila yang diedit adalah pertemuan 4
-      // (pertemuan aktif) agar semua layar Praktikan & Aslab langsung sinkron.
       if (meetingNumber == 4) {
         _courses[idx] = PrakCourse(
           id: c.id,
@@ -1741,112 +1953,29 @@ class PraktikumSyncService extends ChangeNotifier {
         body:
             'Praktikum $cName • Pertemuan $meetingNumber telah diperbarui asisten',
         targetKey: kind == 2 ? 'kuis' : 'editTugas',
+        courseId: courseId,
+        meetingNumber: meetingNumber,
+        courseName: cName,
         important: true,
       );
     }
 
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        final nowIso = DateTime.now().toIso8601String();
-        final payload = <String, dynamic>{
-          'id': '$courseId-m$meetingNumber',
-          'course_id': courseId,
-          'meeting_number': meetingNumber,
-          'date_label': dateLabel,
-          'updated_at': nowIso,
-        };
-        if (kind == 0) {
-          payload['module_title'] = 'Modul $meetingNumber • $title';
-          payload['materi_title'] = title;
-          if (description.isNotEmpty) payload['description'] = description;
-          if (fileName != null && fileName.isNotEmpty) {
-            payload['materi_file'] = fileName;
-          }
-        } else if (kind == 1) {
-          payload['tugas_title'] = title;
-          if (description.isNotEmpty) payload['description'] = description;
-          if (deadline != null && deadline.isNotEmpty) {
-            payload['tugas_deadline'] = deadline;
-          }
-        } else {
-          payload['kuis_title'] = title;
-          if (description.isNotEmpty) payload['description'] = description;
-        }
-        await client.from('praktikum_meetings').upsert(
-          payload,
-          onConflict: 'course_id,meeting_number',
-        );
-
-        if (meetingNumber == 4) {
-          final coursePatch = <String, dynamic>{'updated_at': nowIso};
-          if (kind == 0) {
-            coursePatch['modul_title'] = title;
-            coursePatch['materi_title'] = title;
-            if (description.isNotEmpty) coursePatch['modul_desc'] = description;
-            if (fileName != null && fileName.isNotEmpty) {
-              coursePatch['materi_file'] = fileName;
-            }
-          } else if (kind == 1) {
-            coursePatch['tugas_title'] = title;
-            if (deadline != null && deadline.isNotEmpty) {
-              coursePatch['tugas_deadline'] = deadline;
-            }
-          } else {
-            coursePatch['pre_test_title'] = title;
-          }
-          await client
-              .from('praktikum_courses')
-              .update(coursePatch)
-              .eq('id', courseId);
-        }
-
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[PraktikumSync] upsertMeetingContentFromAslab error: $e');
-      }
-    }
   }
 
   /// Hapus modul / tugas / kuis pada suatu pertemuan dari sisi Aslab dan
-  /// sinkronkan penghapusan ke Supabase + Praktikan.
   Future<void> deleteMeetingContentFromAslab({
     required String courseId,
     required int meetingNumber,
     required int kind, // 0 modul, 1 tugas, 2 kuis
   }) async {
-    final idx = _courses.indexWhere((c) => c.id == courseId);
-    if (idx != -1) {
-      final c = _courses[idx];
-      final mIdx = c.meetings.indexWhere((m) => m.number == meetingNumber);
-      if (mIdx != -1) {
-        final old = c.meetings[mIdx];
-        c.meetings[mIdx] = PrakMeeting(
-          number: old.number,
-          module: old.module,
-          date: old.date,
-          status: old.status,
-          noteIcon: old.noteIcon,
-          note: old.note,
-          izinFile: old.izinFile,
-          description: old.description,
-          materiTitle: kind == 0 ? '' : old.materiTitle,
-          materiFile: kind == 0 ? '' : old.materiFile,
-          tugasTitle: kind == 1 ? '' : old.tugasTitle,
-          tugasDeadline: kind == 1 ? '' : old.tugasDeadline,
-          kuisTitle: kind == 2 ? '' : old.kuisTitle,
-        );
-      }
-      notifyListeners();
-    }
-
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
         final patch = <String, dynamic>{
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         };
         if (kind == 0) {
+          patch['module_title'] = 'Modul $meetingNumber';
           patch['materi_title'] = '';
           patch['materi_file'] = '';
         } else if (kind == 1) {
@@ -1863,7 +1992,34 @@ class PraktikumSyncService extends ChangeNotifier {
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PraktikumSync] deleteMeetingContentFromAslab error: $e');
+        throw StateError('Gagal menghapus di server. Periksa koneksi lalu coba lagi.');
       }
     }
+
+    final idx = _courses.indexWhere((c) => c.id == courseId);
+    if (idx != -1) {
+      final c = _courses[idx];
+      final mIdx = c.meetings.indexWhere((m) => m.number == meetingNumber);
+      if (mIdx != -1) {
+        final old = c.meetings[mIdx];
+        c.meetings[mIdx] = PrakMeeting(
+          number: old.number,
+          module: kind == 0 ? 'Modul $meetingNumber' : old.module,
+          date: old.date,
+          status: old.status,
+          noteIcon: old.noteIcon,
+          note: old.note,
+          izinFile: old.izinFile,
+          description: old.description,
+          materiTitle: kind == 0 ? '' : old.materiTitle,
+          materiFile: kind == 0 ? '' : old.materiFile,
+          tugasTitle: kind == 1 ? '' : old.tugasTitle,
+          tugasDeadline: kind == 1 ? '' : old.tugasDeadline,
+          kuisTitle: kind == 2 ? '' : old.kuisTitle,
+        );
+      }
+      notifyListeners();
+    }
+
   }
 }

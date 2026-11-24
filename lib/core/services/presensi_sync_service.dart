@@ -3,8 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/aslab/aslab_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
+import 'file_upload_service.dart';
 import 'lab_desk_sync_service.dart';
 import 'notification_sync_service.dart';
+import 'praktikum_sync_service.dart';
 import 'supabase_service.dart';
 
 /// State sesi presensi aktif (dibuka / diakhiri oleh Aslab, terbaca oleh Praktikan).
@@ -54,7 +56,7 @@ class AttendanceSessionRecord {
       id: (json['id'] ?? 'pemob-p5').toString(),
       courseId: (json['course_id'] ?? 'pemob').toString(),
       meetingNumber: (json['meeting_number'] as num?)?.toInt() ?? 5,
-      labName: (json['lab_name'] ?? 'Lab Komputer 1').toString(),
+      labName: (json['lab_name'] ?? 'Lab Jaringan 1').toString(),
       lat: (json['lat'] as num?)?.toDouble() ?? 3.5621,
       lng: (json['lng'] as num?)?.toDouble() ?? 98.6600,
       radiusMeters: (json['radius_m'] as num?)?.toDouble() ?? 50.0,
@@ -185,7 +187,7 @@ class AttendanceRecord {
       hasSignature: (json['has_signature'] as bool?) ?? true,
       recordedAt: json['recorded_at'] != null
           ? (DateTime.tryParse(json['recorded_at'].toString()) ??
-              DateTime.now())
+                DateTime.now())
           : DateTime.now(),
     );
   }
@@ -223,8 +225,8 @@ class LeaveRequestRecord {
     this.status = 0,
     List<Map<String, dynamic>>? decisionHistory,
     DateTime? createdAt,
-  })  : decisionHistory = decisionHistory ?? <Map<String, dynamic>>[],
-        createdAt = createdAt ?? DateTime.now();
+  }) : decisionHistory = decisionHistory ?? <Map<String, dynamic>>[],
+       createdAt = createdAt ?? DateTime.now();
 
   String get initials {
     final parts = userName
@@ -243,8 +245,18 @@ class LeaveRequestRecord {
 
   String get submittedLabel {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
     ];
     final local = createdAt.toLocal();
     final dd = local.day.toString().padLeft(2, '0');
@@ -289,8 +301,7 @@ class LeaveRequestRecord {
   }
 }
 
-/// Service pusat sinkronisasi status Presensi, Sesi Aktif, dan Persetujuan Izin
-/// antar peran (Praktikan ↔ Aslab ↔ Laboran) melalui Supabase + Realtime.
+/// Layanan sinkronisasi sesi presensi dan pengajuan izin.
 class PresensiSyncService extends ChangeNotifier {
   static final PresensiSyncService instance = PresensiSyncService._internal();
   PresensiSyncService._internal() {
@@ -303,10 +314,116 @@ class PresensiSyncService extends ChangeNotifier {
 
   RealtimeChannel? _channel;
   bool _initialized = false;
+
+  /// Id sesi yang dibuka dari perangkat ini (Aslab). Selama terisi, perangkat
+  String? _pinnedSessionId;
+
+  String _courseName(String courseId) =>
+      PraktikumSyncService.instance.courseById(courseId).name;
+
+  /// Dipanggil saat logout: perangkat berhenti mengikuti sesi milik akun
+  Future<void> onLogout() async {
+    _pinnedSessionId = null;
+    await refreshFromBackend();
+  }
   bool _backendAvailable = false;
   bool get isBackendAvailable => _backendAvailable;
 
   AttendanceSessionRecord get activeSession => _activeSession;
+
+  /// Lokasi berkas tanda tangan presensi di Storage (satu per praktikan per
+  /// pertemuan; menandatangani ulang menimpa berkas yang sama).
+  static String signatureObjectPath(
+      String courseId, int meetingNumber, String userIdentifier) {
+    final nim = userIdentifier.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    return 'tanda-tangan/${courseId}_p${meetingNumber}_$nim.png';
+  }
+
+  /// URL publik tanda tangan; [version] mencegah gambar lama dari cache.
+  String? signatureUrl(String courseId, int meetingNumber,
+      String userIdentifier, {DateTime? version}) {
+    final client = SupabaseService.instance.client;
+    if (client == null) return null;
+    final url = client.storage.from(FileUploadService.bucketName).getPublicUrl(
+        signatureObjectPath(courseId, meetingNumber, userIdentifier));
+    return version == null ? url : '$url?v=${version.millisecondsSinceEpoch}';
+  }
+
+  /// Unggah gambar goresan tanda tangan (PNG). Gagal → [StateError] agar
+  /// presensi tidak terkirim tanpa bukti tanda tangan.
+  Future<void> uploadSignature({
+    required String courseId,
+    required int meetingNumber,
+    required String userIdentifier,
+    required Uint8List png,
+  }) async {
+    final client = SupabaseService.instance.client;
+    if (client == null) {
+      throw StateError(
+          'Tanda tangan gagal disimpan. Periksa koneksi lalu coba lagi.');
+    }
+    try {
+      await client.storage.from(FileUploadService.bucketName).uploadBinary(
+            signatureObjectPath(courseId, meetingNumber, userIdentifier),
+            png,
+            fileOptions:
+                const FileOptions(contentType: 'image/png', upsert: true),
+          );
+    } catch (e) {
+      debugPrint('[PresensiSync] uploadSignature error: $e');
+      throw StateError(
+          'Tanda tangan gagal disimpan ke server. Periksa koneksi lalu coba lagi.');
+    }
+  }
+
+  /// Jumlah praktikan yang tercatat di praktikum ini (punya presensi atau
+  /// pengumpulan tugas). Tidak ada tabel daftar peserta di server.
+  int knownStudentCount(String courseId) {
+    final ids = <String>{
+      for (final r in recordsForCourse(courseId)) r.userIdentifier,
+      for (final sub in PraktikumSyncService.instance.allSubmissions)
+        if (sub.courseId == courseId) sub.userIdentifier,
+    }..removeWhere((e) => e.isEmpty);
+    return ids.length;
+  }
+
+  /// Gedung & lantai tiap lab (tabel `labs.building_floor`). Nilai awal sama
+  /// dengan daftar titik lokasi di Buat Sesi.
+  final Map<String, String> _labBuildings = {
+    'Lab Jaringan 1': 'Gedung C Lantai 2',
+    'Lab Jaringan 2': 'Gedung C Lantai 2',
+    'Lab Jaringan 3': 'Gedung D Lantai 2',
+    'Lab Jaringan 4': 'Gedung D Lantai 3',
+  };
+  bool _labBuildingsLoaded = false;
+
+  /// "Lab Jaringan 1, Gedung C Lantai 2" (tanpa gedung bila tidak dikenal).
+  String labPlaceLabel(String labName) {
+    final b = _labBuildings[labName];
+    return (b == null || b.isEmpty) ? labName : '$labName, $b';
+  }
+
+  /// Muat gedung lab dari server sekali per sesi aplikasi.
+  Future<void> loadLabBuildings() async {
+    if (_labBuildingsLoaded) return;
+    final client = SupabaseService.instance.client;
+    if (client == null) return;
+    try {
+      final rows = await client.from('labs').select('name, building_floor');
+      for (final r in rows) {
+        final name = (r['name'] ?? '').toString();
+        final floor = (r['building_floor'] ?? '')
+            .toString()
+            .replaceAll(RegExp(r'\s*•\s*'), ' ')
+            .trim();
+        if (name.isNotEmpty && floor.isNotEmpty) _labBuildings[name] = floor;
+      }
+      _labBuildingsLoaded = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[PresensiSync] Gagal memuat gedung lab: $e');
+    }
+  }
   List<LeaveRequestRecord> get leaves => List.unmodifiable(_leaves);
   int get pendingLeaveCount => _leaves.where((l) => l.status == 0).length;
 
@@ -318,7 +435,7 @@ class PresensiSyncService extends ChangeNotifier {
       id: 'pemob-p5',
       courseId: 'pemob',
       meetingNumber: 5,
-      labName: 'Lab Komputer 1',
+      labName: 'Lab Jaringan 1',
       lat: 3.5621,
       lng: 98.6600,
       radiusMeters: 50.0,
@@ -328,7 +445,9 @@ class PresensiSyncService extends ChangeNotifier {
       durationMinutes: 15,
       status: 'active',
       startedBy: 'Andi Pratama',
-      startedAt: DateTime.now().subtract(const Duration(minutes: 24, seconds: 18)),
+      startedAt: DateTime.now().subtract(
+        const Duration(minutes: 24, seconds: 18),
+      ),
     );
 
     _records.clear();
@@ -437,8 +556,7 @@ class PresensiSyncService extends ChangeNotifier {
           userName: 'Dimas Saputra',
           leaveType: 'Kendala Perangkat',
           pertemuanLabel: '4 • Sen, 28 Sep',
-          note:
-              'Kamera ponsel rusak sehingga tidak dapat memindai QR. Saya hadir di Lab Komputer 1.',
+          note: 'Kamera ponsel rusak sehingga tidak dapat memindai QR. Saya hadir di Lab Komputer 1.',
           status: 0,
         ),
       ]);
@@ -456,14 +574,40 @@ class PresensiSyncService extends ChangeNotifier {
     if (client == null) return;
 
     try {
-      final sessionRows = await client
-          .from('attendance_sessions')
-          .select()
-          .eq('id', 'pemob-p5')
-          .maybeSingle();
-      if (sessionRows != null) {
-        _activeSession =
-            AttendanceSessionRecord.fromJson(Map<String, dynamic>.from(sessionRows));
+      // Sesi yang ditampilkan ke semua peran = sesi AKTIF terbaru
+      final notFuture = DateTime.now()
+          .toUtc()
+          .add(const Duration(minutes: 5))
+          .toIso8601String();
+      final pinned = _pinnedSessionId;
+      final pinnedRows = pinned == null
+          ? const <Map<String, dynamic>>[]
+          : await client
+                .from('attendance_sessions')
+                .select()
+                .eq('id', pinned)
+                .limit(1);
+      final activeRows = pinnedRows.isNotEmpty
+          ? pinnedRows
+          : await client
+                .from('attendance_sessions')
+                .select()
+                .eq('status', 'active')
+                .lte('started_at', notFuture)
+                .order('started_at', ascending: false)
+                .limit(1);
+      final sessionRows = activeRows.isNotEmpty
+          ? activeRows
+          : await client
+                .from('attendance_sessions')
+                .select()
+                .lte('started_at', notFuture)
+                .order('started_at', ascending: false)
+                .limit(1);
+      if (sessionRows.isNotEmpty) {
+        _activeSession = AttendanceSessionRecord.fromJson(
+          Map<String, dynamic>.from(sessionRows.first),
+        );
         _backendAvailable = true;
       }
 
@@ -473,9 +617,12 @@ class PresensiSyncService extends ChangeNotifier {
           .order('recorded_at', ascending: false);
       if (recordRows.isNotEmpty) {
         for (final r in recordRows) {
-          final rec =
-              AttendanceRecord.fromJson(Map<String, dynamic>.from(r));
-          _records[_recKey(rec.courseId, rec.meetingNumber, rec.userIdentifier)] =
+          final rec = AttendanceRecord.fromJson(Map<String, dynamic>.from(r));
+          _records[_recKey(
+                rec.courseId,
+                rec.meetingNumber,
+                rec.userIdentifier,
+              )] =
               rec;
         }
         _backendAvailable = true;
@@ -488,18 +635,23 @@ class PresensiSyncService extends ChangeNotifier {
       if (leaveRows.isNotEmpty) {
         _leaves
           ..clear()
-          ..addAll(leaveRows
-              .map((r) => LeaveRequestRecord.fromJson(Map<String, dynamic>.from(r))));
+          ..addAll(
+            leaveRows.map(
+              (r) => LeaveRequestRecord.fromJson(Map<String, dynamic>.from(r)),
+            ),
+          );
         _backendAvailable = true;
       }
 
       notifyListeners();
       debugPrint(
-          '[PresensiSync] Berhasil sinkronisasi (${recordRows.length} catatan hadir, ${leaveRows.length} izin).');
+        '[PresensiSync] Berhasil sinkronisasi (${recordRows.length} catatan hadir, ${leaveRows.length} izin).',
+      );
     } catch (e) {
       _backendAvailable = false;
       debugPrint(
-          '[PresensiSync] Menggunakan sinkronisasi memori bersama (Supabase belum dijalankan / offline): $e');
+        '[PresensiSync] Menggunakan sinkronisasi memori bersama (Supabase belum dijalankan / offline): $e',
+      );
     }
   }
 
@@ -534,19 +686,22 @@ class PresensiSyncService extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Getter untuk Praktikan & Aslab
-  // ---------------------------------------------------------------------------
 
   AttendanceRecord? recordFor(
-      String courseId, int meetingNumber, String userIdentifier) {
+    String courseId,
+    int meetingNumber,
+    String userIdentifier,
+  ) {
     return _records[_recKey(courseId, meetingNumber, userIdentifier)];
   }
 
-  /// Status efektif pertemuan untuk seorang praktikan (menggabungkan record BE
-  /// + status bawaan pertemuan).
+  /// Status efektif pertemuan untuk seorang praktikan.
   PrakAttend effectiveStatus(
-      String courseId, PrakMeeting meeting, String userIdentifier) {
+    String courseId,
+    PrakMeeting meeting,
+    String userIdentifier,
+  ) {
     final rec = recordFor(courseId, meeting.number, userIdentifier);
     if (rec != null) return rec.status;
     return meeting.status;
@@ -554,7 +709,10 @@ class PresensiSyncService extends ChangeNotifier {
 
   /// Catatan kehadiran efektif (hijau) untuk sebuah pertemuan.
   (String icon, String note) effectiveNote(
-      String courseId, PrakMeeting meeting, String userIdentifier) {
+    String courseId,
+    PrakMeeting meeting,
+    String userIdentifier,
+  ) {
     final rec = recordFor(courseId, meeting.number, userIdentifier);
     if (rec != null && rec.note.isNotEmpty) {
       return (rec.noteIcon, rec.note);
@@ -564,7 +722,9 @@ class PresensiSyncService extends ChangeNotifier {
 
   /// Rekap jumlah hadir / izin / alpa untuk sebuah mata kuliah praktikan.
   ({int hadir, int izin, int alpa, int doneMeetings}) summaryForCourse(
-      PrakCourse course, String userIdentifier) {
+    PrakCourse course,
+    String userIdentifier,
+  ) {
     var hadir = 0;
     var izin = 0;
     var alpa = 0;
@@ -586,17 +746,30 @@ class PresensiSyncService extends ChangeNotifier {
   }
 
   /// Daftar mahasiswa yang hadir pada sesi aktif (Pertemuan 5).
+  List<AttendanceRecord> recordsForCourse(String courseId) =>
+      _records.values.where((r) => r.courseId == courseId).toList();
+
+  /// Jumlah catatan presensi (semua praktikan) di praktikum ini.
+  int recordCountForCourse(String courseId) =>
+      _records.values.where((r) => r.courseId == courseId).length;
+
+  int? attendancePercentForCourse(String courseId) {
+    final recs = _records.values.where((r) => r.courseId == courseId).toList();
+    if (recs.isEmpty) return null;
+    final hadir = recs.where((r) => r.status == PrakAttend.hadir).length;
+    return (hadir * 100 / recs.length).round();
+  }
+
   List<AttendanceRecord> recordsForMeeting(String courseId, int meetingNumber) {
     return _records.values
-        .where((r) =>
-            r.courseId == courseId && r.meetingNumber == meetingNumber)
+        .where(
+          (r) => r.courseId == courseId && r.meetingNumber == meetingNumber,
+        )
         .toList()
       ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
   }
 
-  // ---------------------------------------------------------------------------
   // Aksi Backend: Sesi Aktif, Catat Hadir, Ajukan Izin, Keputusan Izin, Edit Manual
-  // ---------------------------------------------------------------------------
 
   static String buildQrToken({
     required String courseId,
@@ -609,8 +782,6 @@ class PresensiSyncService extends ChangeNotifier {
   }
 
   /// Putar token QR dinamis sesi aktif (dipanggil setiap 5 menit dari Aslab)
-  /// dan sinkronkan ke Supabase agar praktikan lintas perangkat memvalidasi
-  /// token yang sedang berlaku.
   Future<String> rotateActiveQrToken(int generation) async {
     final now = DateTime.now();
     final token = buildQrToken(
@@ -627,10 +798,13 @@ class PresensiSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client.from('attendance_sessions').update({
-          'qr_token': token,
-          'qr_expires_at': expiresAt.toIso8601String(),
-        }).eq('id', _activeSession.id);
+        await client
+            .from('attendance_sessions')
+            .update({
+              'qr_token': token,
+              'qr_expires_at': expiresAt.toUtc().toIso8601String(),
+            })
+            .eq('id', _activeSession.id);
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PresensiSync] rotateActiveQrToken info: $e');
@@ -640,10 +814,9 @@ class PresensiSyncService extends ChangeNotifier {
   }
 
   /// Validasi QR Code yang dipindai Praktikan.
-  /// Mendukung QR dinamis yang di-generate Aslab untuk semua 4 praktikum
-  /// maupun QR dummy uji coba.
   ({String? error, String courseId, int meetingNumber}) validateScannedQr(
-      String raw) {
+    String raw,
+  ) {
     final code = raw.trim();
     if (code == 'ITLG-PEMOB-PERTEMUAN5-TEST') {
       return (
@@ -670,12 +843,11 @@ class PresensiSyncService extends ChangeNotifier {
     }
 
     // Format baru: ITLG-{COURSE}-P{MEETING}-GEN{N}-{EPOCH}
-    final mNew =
-        RegExp(r'^ITLG-([A-Z0-9_]+)-P(\d+)-GEN\d+-(\d+)$').firstMatch(code);
+    final mNew = RegExp(r'^ITLG-([A-Z0-9_]+)-P(\d+)-GEN\d+-(\d+)$')
+        .firstMatch(code);
     // Format lama: ITLG-{COURSE}-PERTEMUAN{MEETING}-GEN{N}-{EPOCH}
-    final mOld =
-        RegExp(r'^ITLG-([A-Z0-9_]+)-PERTEMUAN(\d+)-GEN\d+-(\d+)$')
-            .firstMatch(code);
+    final mOld = RegExp(r'^ITLG-([A-Z0-9_]+)-PERTEMUAN(\d+)-GEN\d+-(\d+)$')
+        .firstMatch(code);
     final match = mNew ?? mOld;
     if (match == null) {
       return (
@@ -708,11 +880,7 @@ class PresensiSyncService extends ChangeNotifier {
       );
     }
 
-    return (
-      error: null,
-      courseId: parsedCourse,
-      meetingNumber: parsedMeeting,
-    );
+    return (error: null, courseId: parsedCourse, meetingNumber: parsedMeeting);
   }
 
   Future<void> startSession({
@@ -736,8 +904,58 @@ class PresensiSyncService extends ChangeNotifier {
       now: now,
     );
     final expiresAt = now.add(const Duration(minutes: 5, seconds: 30));
+    final sessionId = '$courseId-p$meetingNumber';
+
+    // Simpan sesi baru ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      final basePayload = <String, dynamic>{
+        'id': sessionId,
+        'course_id': courseId,
+        'meeting_number': meetingNumber,
+        'lab_name': labName,
+        'lat': lat,
+        'lng': lng,
+        'radius_m': radiusMeters,
+        'allow_qr': allowQr,
+        'allow_button': allowButton,
+        'require_signature': requireSignature,
+        'duration_minutes': durationMinutes,
+        'status': 'active',
+        'started_by': startedBy,
+        'started_at': now.toUtc().toIso8601String(),
+        'ended_at': null,
+      };
+      try {
+        await client.from('attendance_sessions').upsert({
+          ...basePayload,
+          'qr_token': initialToken,
+          'qr_expires_at': expiresAt.toUtc().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[PresensiSync] startSession error: $e');
+        throw StateError(
+          'Sesi presensi gagal dibuka. Periksa koneksi internet lalu coba lagi.',
+        );
+      }
+      _backendAvailable = true;
+
+      // Satu kelas hanya boleh punya satu sesi aktif: tutup sesi aktif lain
+      try {
+        await client
+            .from('attendance_sessions')
+            .update({'status': 'closed', 'ended_at': now.toUtc().toIso8601String()})
+            .eq('course_id', courseId)
+            .eq('status', 'active')
+            .neq('id', sessionId);
+      } catch (e) {
+        debugPrint('[PresensiSync] gagal menutup sesi lama: $e');
+      }
+    }
+
+    _pinnedSessionId = sessionId;
     _activeSession = AttendanceSessionRecord(
-      id: '$courseId-p$meetingNumber',
+      id: sessionId,
       courseId: courseId,
       meetingNumber: meetingNumber,
       labName: labName,
@@ -759,8 +977,11 @@ class PresensiSyncService extends ChangeNotifier {
     NotificationSyncService.instance.push(
       role: 'praktikan',
       icon: 'qrcode',
-      title: 'Presensi Berlangsung',
+      title: 'Presensi Berlangsung • ${_courseName(courseId)}',
       body: 'Pertemuan $meetingNumber • $labName dibuka oleh $startedBy',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+      courseName: _courseName(courseId),
       targetKey: 'presensi',
       important: true,
     );
@@ -768,87 +989,61 @@ class PresensiSyncService extends ChangeNotifier {
       role: 'laboran',
       icon: 'key',
       title: 'Sesi Lab Dibuka',
-      body: '$labName • Pertemuan $meetingNumber dimulai oleh $startedBy',
+      body:
+          '$labName • ${_courseName(courseId)} Pertemuan $meetingNumber dimulai oleh $startedBy',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
       targetKey: 'presensi',
     );
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      final basePayload = <String, dynamic>{
-        'id': _activeSession.id,
-        'course_id': courseId,
-        'meeting_number': meetingNumber,
-        'lab_name': labName,
-        'lat': lat,
-        'lng': lng,
-        'radius_m': radiusMeters,
-        'allow_qr': allowQr,
-        'allow_button': allowButton,
-        'require_signature': requireSignature,
-        'duration_minutes': durationMinutes,
-        'status': 'active',
-        'started_by': startedBy,
-        'started_at': now.toIso8601String(),
-        'ended_at': null,
-      };
-      try {
-        await client.from('attendance_sessions').upsert(
-          {
-            ...basePayload,
-            'qr_token': initialToken,
-            'qr_expires_at': expiresAt.toIso8601String(),
-          },
-          onConflict: 'id',
-        );
-        _backendAvailable = true;
-      } catch (e) {
-        try {
-          await client
-              .from('attendance_sessions')
-              .upsert(basePayload, onConflict: 'id');
-          _backendAvailable = true;
-        } catch (e2) {
-          debugPrint('[PresensiSync] startSession error: $e2');
-        }
-      }
-    }
   }
 
   Future<void> endActiveSession() async {
-    _activeSession.status = 'closed';
+    // Simpan data sesi yang diakhiri: setelah notifyListeners sesi aktif
+    final ending = _activeSession;
+    final endingId = ending.id;
+    final endingLab = ending.labName;
+    final endingCourse = ending.courseId;
+    final endingMeeting = ending.meetingNumber;
+    final client0 = SupabaseService.instance.client;
+    if (client0 != null) {
+      try {
+        await client0
+            .from('attendance_sessions')
+            .update({
+              'status': 'closed',
+              'ended_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', endingId);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[PresensiSync] endActiveSession error: $e');
+        throw StateError(
+          'Sesi gagal diakhiri. Periksa koneksi internet lalu coba lagi.',
+        );
+      }
+    }
+    ending.status = 'closed';
+    _pinnedSessionId = null;
     notifyListeners();
 
     // Kosongkan meja yang masih ditempati secara otomatis saat sesi berakhir
-    await LabDeskSyncService.instance
-        .releaseSessionDesks(labName: _activeSession.labName);
+    await LabDeskSyncService.instance.releaseSessionDesks(
+      labName: endingLab,
+    );
 
     NotificationSyncService.instance.push(
       role: 'praktikan',
       icon: 'clock',
       title: 'Sesi Presensi Ditutup',
       body:
-          'Presensi Pertemuan ${_activeSession.meetingNumber} di ${_activeSession.labName} telah diakhiri',
+          'Presensi ${_courseName(endingCourse)} Pertemuan $endingMeeting di $endingLab telah diakhiri',
       targetKey: 'detailAbsensi',
-      courseId: _activeSession.courseId,
-      meetingNumber: _activeSession.meetingNumber,
+      courseId: endingCourse,
+      meetingNumber: endingMeeting,
     );
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('attendance_sessions').update({
-          'status': 'closed',
-          'ended_at': DateTime.now().toIso8601String(),
-        }).eq('id', _activeSession.id);
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[PresensiSync] endActiveSession error: $e');
-      }
-    }
   }
 
   /// Catat presensi HADIR oleh Praktikan (setelah Tanda Tangan dikirim).
-  /// Menolak metode yang dinonaktifkan Aslab pada sesi aktif.
   Future<void> submitPresence({
     String courseId = 'pemob',
     int meetingNumber = 5,
@@ -870,12 +1065,15 @@ class PresensiSyncService extends ChangeNotifier {
       }
       if (method == 'location' && !_activeSession.allowButton) {
         throw StateError(
-            'Metode Tombol Hadir & Lokasi sedang dinonaktifkan oleh asisten.');
+          'Metode Tombol Hadir & Lokasi sedang dinonaktifkan oleh asisten.',
+        );
       }
     }
     final now = DateTime.now();
-    final hh = now.hour.toString().padLeft(2, '0');
-    final mm = now.minute.toString().padLeft(2, '0');
+    // Label "WIB" harus benar-benar UTC+7, tidak bergantung zona waktu HP.
+    final wib = now.toUtc().add(const Duration(hours: 7));
+    final hh = wib.hour.toString().padLeft(2, '0');
+    final mm = wib.minute.toString().padLeft(2, '0');
     final note = method == 'location'
         ? 'Tercatat $hh:$mm WIB melalui tombol hadir & lokasi'
         : 'Tercatat $hh:$mm WIB melalui pindai QR';
@@ -895,47 +1093,58 @@ class PresensiSyncService extends ChangeNotifier {
       recordedAt: now,
     );
 
-    _records[_recKey(courseId, meetingNumber, userIdentifier)] = rec;
+    final key = _recKey(courseId, meetingNumber, userIdentifier);
+    final previous = _records[key];
+    _records[key] = rec;
     notifyListeners();
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('attendance_records').upsert({
+          'course_id': courseId,
+          'meeting_number': meetingNumber,
+          'user_identifier': userIdentifier,
+          'user_name': userName,
+          'status': 'hadir',
+          'method': method,
+          'note': note,
+          'lat': lat,
+          'lng': lng,
+          'distance_m': distanceMeters,
+          'has_signature': hasSignature,
+          'recorded_at': now.toUtc().toIso8601String(),
+          'updated_at': now.toUtc().toIso8601String(),
+        }, onConflict: 'course_id,meeting_number,user_identifier');
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[PresensiSync] submitPresence error: $e');
+        // Pastikan data presensi tersimpan di server
+        if (previous != null) {
+          _records[key] = previous;
+        } else {
+          _records.remove(key);
+        }
+        notifyListeners();
+        throw StateError(
+          'Presensi gagal tersimpan. Periksa koneksi internet lalu coba lagi.',
+        );
+      }
+    }
 
     NotificationSyncService.instance.push(
       role: 'aslab',
       icon: 'circle_check',
       title: 'Presensi Tercatat • $userName',
-      body: 'Pertemuan $meetingNumber ($userIdentifier) • $note',
+      body:
+          '${_courseName(courseId)} Pertemuan $meetingNumber ($userIdentifier) • $note',
+      courseId: courseId,
+      meetingNumber: meetingNumber,
       targetKey: 'detailPresensi',
     );
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('attendance_records').upsert(
-          {
-            'course_id': courseId,
-            'meeting_number': meetingNumber,
-            'user_identifier': userIdentifier,
-            'user_name': userName,
-            'status': 'hadir',
-            'method': method,
-            'note': note,
-            'lat': lat,
-            'lng': lng,
-            'distance_m': distanceMeters,
-            'has_signature': hasSignature,
-            'recorded_at': now.toIso8601String(),
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'course_id,meeting_number,user_identifier',
-        );
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[PresensiSync] submitPresence error: $e');
-      }
-    }
   }
 
   /// Praktikan mengajukan izin → masuk ke `leave_requests` & status pertemuan
-  /// menjadi `pending` (Izin Diajukan), langsung tampil di Persetujuan Izin Aslab.
   Future<void> submitLeaveRequest({
     required String courseId,
     required int meetingNumber,
@@ -966,8 +1175,11 @@ class PresensiSyncService extends ChangeNotifier {
     _leaves.insert(0, leave);
 
     // Tandai status pertemuan praktikan menjadi pending (Izin Diajukan)
-    _records[_recKey(courseId, meetingNumber, userIdentifier)] =
-        AttendanceRecord(
+    _records[_recKey(
+      courseId,
+      meetingNumber,
+      userIdentifier,
+    )] = AttendanceRecord(
       courseId: courseId,
       meetingNumber: meetingNumber,
       userIdentifier: userIdentifier,
@@ -984,7 +1196,8 @@ class PresensiSyncService extends ChangeNotifier {
       role: 'aslab',
       icon: 'file',
       title: 'Pengajuan $leaveType Baru',
-      body: '$userName ($userIdentifier) mengajukan $leaveType • Pertemuan $meetingNumber',
+      body:
+          '$userName ($userIdentifier) mengajukan $leaveType • Pertemuan $meetingNumber',
       targetKey: 'persetujuanIzin',
       important: true,
     );
@@ -1005,43 +1218,46 @@ class PresensiSyncService extends ChangeNotifier {
               'file_name': fileName,
               'desk_number': deskNumber,
               'status': 0,
-              'created_at': now.toIso8601String(),
-              'updated_at': now.toIso8601String(),
+              'created_at': now.toUtc().toIso8601String(),
+              'updated_at': now.toUtc().toIso8601String(),
             })
             .select()
             .maybeSingle();
 
         if (inserted != null) {
-          final real =
-              LeaveRequestRecord.fromJson(Map<String, dynamic>.from(inserted));
+          final real = LeaveRequestRecord.fromJson(
+            Map<String, dynamic>.from(inserted),
+          );
           final idx = _leaves.indexWhere((l) => l.id == localId);
           if (idx != -1) _leaves[idx] = real;
         }
 
-        await client.from('attendance_records').upsert(
-          {
-            'course_id': courseId,
-            'meeting_number': meetingNumber,
-            'user_identifier': userIdentifier,
-            'user_name': userName,
-            'status': 'pending',
-            'method': 'izin',
-            'note': 'Pengajuan $leaveType sedang diperiksa asisten',
-            'has_signature': false,
-            'recorded_at': now.toIso8601String(),
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'course_id,meeting_number,user_identifier',
-        );
+        await client.from('attendance_records').upsert({
+          'course_id': courseId,
+          'meeting_number': meetingNumber,
+          'user_identifier': userIdentifier,
+          'user_name': userName,
+          'status': 'pending',
+          'method': 'izin',
+          'note': 'Pengajuan $leaveType sedang diperiksa asisten',
+          'has_signature': false,
+          'recorded_at': now.toUtc().toIso8601String(),
+          'updated_at': now.toUtc().toIso8601String(),
+        }, onConflict: 'course_id,meeting_number,user_identifier');
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PresensiSync] submitLeaveRequest error: $e');
+        _leaves.removeWhere((l) => l.id == localId);
+        _records.remove(_recKey(courseId, meetingNumber, userIdentifier));
+        notifyListeners();
+        throw StateError(
+          'Pengajuan gagal terkirim. Periksa koneksi internet lalu coba lagi.',
+        );
       }
     }
   }
 
   /// Aslab menyetujui / menolak izin → otomatis menyinkronkan status pertemuan
-  /// praktikan (`izin` / `hadir` / `alpa`) di Supabase & UI Praktikan!
   Future<void> decideLeaveRequest({
     required LeaveRequestRecord leave,
     required bool approve,
@@ -1054,23 +1270,26 @@ class PresensiSyncService extends ChangeNotifier {
       'from_status': prevStatus,
       'to_status': leave.status,
       'decided_by': decidedBy,
-      'decided_at': now.toIso8601String(),
+      'decided_at': now.toUtc().toIso8601String(),
     });
 
     final newAttendStatus = approve
         ? (leave.leaveType.toLowerCase().contains('kendala')
-            ? PrakAttend.hadir
-            : PrakAttend.izin)
+              ? PrakAttend.hadir
+              : PrakAttend.izin)
         : PrakAttend.alpa;
 
     final newNote = approve
         ? (newAttendStatus == PrakAttend.hadir
-            ? 'Ditandai hadir oleh $decidedBy (kendala perangkat)'
-            : 'Izin disetujui oleh $decidedBy')
+              ? 'Ditandai hadir oleh $decidedBy (kendala perangkat)'
+              : 'Izin disetujui oleh $decidedBy')
         : 'Pengajuan izin ditolak oleh $decidedBy';
 
-    _records[_recKey(leave.courseId, leave.meetingNumber, leave.userIdentifier)] =
-        AttendanceRecord(
+    _records[_recKey(
+      leave.courseId,
+      leave.meetingNumber,
+      leave.userIdentifier,
+    )] = AttendanceRecord(
       courseId: leave.courseId,
       meetingNumber: leave.meetingNumber,
       userIdentifier: leave.userIdentifier,
@@ -1085,9 +1304,13 @@ class PresensiSyncService extends ChangeNotifier {
 
     NotificationSyncService.instance.push(
       role: 'praktikan',
+      targetUser: leave.userIdentifier,
       icon: approve ? 'circle_check' : 'triangle_alert',
       title: approve ? 'Pengajuan Izin Disetujui' : 'Pengajuan Izin Ditolak',
-      body: 'Pertemuan ${leave.meetingNumber}: $newNote',
+      body:
+          '${_courseName(leave.courseId)} Pertemuan ${leave.meetingNumber}: $newNote',
+      courseId: leave.courseId,
+      meetingNumber: leave.meetingNumber,
       targetKey: 'detailAbsensi',
       important: true,
     );
@@ -1096,33 +1319,41 @@ class PresensiSyncService extends ChangeNotifier {
     if (client != null) {
       try {
         if (!leave.id.startsWith('seed-') && !leave.id.startsWith('leave-')) {
-          await client.from('leave_requests').update({
-            'status': leave.status,
-            'decided_by': decidedBy,
-            'decision_history_json': leave.decisionHistory,
-            'updated_at': now.toIso8601String(),
-          }).eq('id', leave.id);
+          await client
+              .from('leave_requests')
+              .update({
+                'status': leave.status,
+                'decided_by': decidedBy,
+                'decision_history_json': leave.decisionHistory,
+                'updated_at': now.toUtc().toIso8601String(),
+              })
+              .eq('id', leave.id);
         }
 
-        await client.from('attendance_records').upsert(
-          {
-            'course_id': leave.courseId,
-            'meeting_number': leave.meetingNumber,
-            'user_identifier': leave.userIdentifier,
-            'user_name': leave.userName,
-            'status': AttendanceRecord.serializeStatus(newAttendStatus),
-            'method': newAttendStatus == PrakAttend.hadir ? 'manual' : 'izin',
-            'note': newNote,
-            'has_signature': false,
-            'updated_by': decidedBy,
-            'recorded_at': now.toIso8601String(),
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'course_id,meeting_number,user_identifier',
-        );
+        await client.from('attendance_records').upsert({
+          'course_id': leave.courseId,
+          'meeting_number': leave.meetingNumber,
+          'user_identifier': leave.userIdentifier,
+          'user_name': leave.userName,
+          'status': AttendanceRecord.serializeStatus(newAttendStatus),
+          'method': newAttendStatus == PrakAttend.hadir ? 'manual' : 'izin',
+          'note': newNote,
+          'has_signature': false,
+          'updated_by': decidedBy,
+          'recorded_at': now.toUtc().toIso8601String(),
+          'updated_at': now.toUtc().toIso8601String(),
+        }, onConflict: 'course_id,meeting_number,user_identifier');
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PresensiSync] decideLeaveRequest error: $e');
+        leave.status = prevStatus;
+        if (leave.decisionHistory.isNotEmpty) {
+          leave.decisionHistory.removeLast();
+        }
+        await refreshFromBackend();
+        throw StateError(
+          'Keputusan gagal disimpan. Periksa koneksi internet lalu coba lagi.',
+        );
       }
     }
   }
@@ -1146,8 +1377,11 @@ class PresensiSyncService extends ChangeNotifier {
         AslabAttend.izin => 'Status izin dicatat oleh $updatedBy',
         AslabAttend.alpa => 'Ditandai alpa oleh $updatedBy',
       };
-      _records[_recKey(courseId, meetingNumber, p.student.nim)] =
-          AttendanceRecord(
+      _records[_recKey(
+        courseId,
+        meetingNumber,
+        p.student.nim,
+      )] = AttendanceRecord(
         courseId: courseId,
         meetingNumber: meetingNumber,
         userIdentifier: p.student.nim,
@@ -1180,16 +1414,22 @@ class PresensiSyncService extends ChangeNotifier {
               'note': 'Diperbarui oleh $updatedBy',
               'has_signature': false,
               'updated_by': updatedBy,
-              'updated_at': now.toIso8601String(),
-            }
+              'updated_at': now.toUtc().toIso8601String(),
+            },
         ];
-        await client.from('attendance_records').upsert(
+        await client
+            .from('attendance_records')
+            .upsert(
               rows,
               onConflict: 'course_id,meeting_number,user_identifier',
             );
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[PresensiSync] saveManualStatuses error: $e');
+        await refreshFromBackend();
+        throw StateError(
+          'Perubahan presensi gagal disimpan. Periksa koneksi internet lalu coba lagi.',
+        );
       }
     }
   }

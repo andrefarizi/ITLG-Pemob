@@ -5,6 +5,7 @@ import '../../features/dosen/dosen_store.dart';
 import '../../features/shared/profil_data.dart';
 import 'notification_sync_service.dart';
 import 'praktikum_sync_service.dart';
+import '../../features/praktikan/praktikan_store.dart';
 import 'presensi_sync_service.dart';
 import 'supabase_service.dart';
 
@@ -12,7 +13,7 @@ import 'supabase_service.dart';
 class GradeValidationRecord {
   final String courseId;
 
-  /// 'draft' | 'pending' (diajukan) | 'revision_requested' (revisi) | 'validated' (divalidasi)
+  /// 'draft' | 'pending' (diajukan) | 'revision_requested' (revisi) | 'validated'.
   String status;
   String? revisionPart;
   String? revisionNote;
@@ -82,10 +83,9 @@ class GradeAppealRecord {
   bool get isRecommendedApprove => status == 'recommended_approve';
   bool get isRecommendedReject => status == 'recommended_reject';
   bool get isWaitingAslab => status == 'pending';
+  /// Menunggu keputusan Dosen = sudah diberi rekomendasi oleh Aslab.
   bool get isWaitingDosen =>
-      status == 'pending' ||
-      status == 'recommended_approve' ||
-      status == 'recommended_reject';
+      status == 'recommended_approve' || status == 'recommended_reject';
   bool get isApproved => status == 'approved' || status == 'resolved';
   bool get isRejected => status == 'rejected';
 
@@ -165,7 +165,7 @@ class AssistantFollowUpRecord {
   }
 }
 
-/// Riwayat unduhan laporan Dosen yang tersinkron ke Supabase (`public.report_downloads`).
+/// Riwayat unduhan laporan Dosen yang tersinkron ke Supabase.
 class ReportDownloadRecord {
   final String id;
   final String title;
@@ -234,8 +234,7 @@ class ReportDownloadRecord {
   }
 }
 
-/// Service pusat sinkronisasi Nilai Akhir, Validasi Dosen, Revisi Asisten,
-/// Sanggahan Nilai Praktikan, dan Tindak Lanjut lintas role via Supabase.
+/// Layanan sinkronisasi nilai, validasi dosen, dan sanggahan.
 class NilaiSyncService extends ChangeNotifier {
   static final NilaiSyncService instance = NilaiSyncService._internal();
   NilaiSyncService._internal() {
@@ -257,7 +256,6 @@ class NilaiSyncService extends ChangeNotifier {
       List.unmodifiable(_reportDownloads);
 
   /// Rincian nilai per modul berbasis data live [PraktikumSyncService] &
-  /// [PresensiSyncService] untuk tampilan "Sheet Rincian Nilai per Modul" Dosen.
   List<({String label, int? tugasScore, int? kuisScore, bool hadir, int? finalScore})>
       moduleBreakdownForStudent({
     required String courseId,
@@ -301,7 +299,7 @@ class NilaiSyncService extends ChangeNotifier {
         }
       }
 
-      // Jika mahasiswa lain belum punya row modul di DB, gunakan nilai tugas live/base untuk modul selesai
+      // Jika mahasiswa lain belum punya row modul di DB, gunakan nilai tugas live/base
       final isDoneMeeting = m.status.name != 'upcoming';
       if (!isMainUser && tugas == null && isDoneMeeting && fallbackBase != null) {
         tugas = fallbackBase;
@@ -367,7 +365,7 @@ class NilaiSyncService extends ChangeNotifier {
           'size_label': sizeLabel,
           'local_path': localPath,
           'downloaded_by': downloadedBy,
-          'created_at': now.toIso8601String(),
+          'created_at': now.toUtc().toIso8601String(),
         });
         _backendAvailable = true;
       } catch (e) {
@@ -392,75 +390,90 @@ class NilaiSyncService extends ChangeNotifier {
   List<DosenStudent> liveAtRiskStudents(List<DosenStudent> baseStudents) {
     final prak = PraktikumSyncService.instance;
     final presensi = PresensiSyncService.instance;
-    final pemob = prak.courseById('pemob');
     final result = <DosenStudent>[];
 
-    for (final s in baseStudents) {
-      final sub = prak.submissionFor('pemob', 4, s.nim);
-      final liveScore =
-          (sub != null && sub.status == 'graded' && sub.score != null)
-              ? sub.score!
-              : s.score;
-      final liveHighRisk = s.attendance < 75 && liveScore < 70;
-      result.add(
-        DosenStudent(
-          initials: s.initials,
-          name: s.name,
-          nim: s.nim,
-          kelas: s.kelas,
-          attendance: s.attendance,
-          score: liveScore,
-          highRisk: liveHighRisk || s.highRisk,
-          hadir: s.hadir,
-          izin: s.izin,
-          alpa: s.alpa,
-          meetings: s.meetings,
-          asisten: s.asisten,
-          asistenInitials: s.asistenInitials,
-          followUp: s.followUp,
-          message: s.message,
-        ),
-      );
-    }
+    for (final course in prak.courses) {
+      final names = <String, String>{};
+      final recsByNim = <String, List<AttendanceRecord>>{};
+      for (final r in presensi.recordsForCourse(course.id)) {
+        names[r.userIdentifier] = r.userName;
+        recsByNim.putIfAbsent(r.userIdentifier, () => []).add(r);
+      }
+      final scoresByNim = <String, List<int>>{};
+      for (final sub in prak.allSubmissions) {
+        if (sub.courseId != course.id) continue;
+        names.putIfAbsent(sub.userIdentifier, () => sub.userName);
+        if (sub.status == 'graded' && sub.score != null) {
+          scoresByNim.putIfAbsent(sub.userIdentifier, () => []).add(sub.score!);
+        }
+      }
 
-    // Jika praktikan utama yang login saat ini nilainya < 70 atau hadir < 75%,
-    // otomatis muncul di Peringatan Dini Dosen secara real-time!
-    final mainNim = ProfilData.praktikan.idValue;
-    final mainName = ProfilData.praktikan.name;
-    final mainAvg = double.tryParse(
-            prak.effectiveAverageForCourse(pemob, mainNim).replaceAll(',', '.')) ??
-        88.0;
-    final mainSum = presensi.summaryForCourse(pemob, mainNim);
-    final denom = mainSum.doneMeetings > 0 ? mainSum.doneMeetings : 4;
-    final mainAtt = ((mainSum.hadir * 100) / denom).round().clamp(0, 100);
-    if ((mainAtt < 75 || mainAvg < 70) &&
-        !result.any((x) => x.nim == mainNim)) {
-      final parts = mainName.trim().split(RegExp(r'\s+'));
-      final init = parts.length >= 2
-          ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-          : 'PR';
-      result.insert(
-        0,
-        DosenStudent(
-          initials: init,
-          name: mainName,
-          nim: mainNim,
-          kelas: 'Kelas C',
-          attendance: mainAtt,
-          score: mainAvg.round(),
-          highRisk: mainAtt < 75 && mainAvg < 70,
-          hadir: mainSum.hadir,
-          izin: mainSum.izin,
-          alpa: mainSum.alpa,
-          meetings: const [],
-          asisten: pemob.asisten,
-          asistenInitials: pemob.asistenInitials,
-          followUp: mainAtt < 75 ? 0 : 2,
-          message:
-              'Halo ${pemob.asisten.split(' ').first}, mohon bantu tindak lanjut untuk $mainName ($mainNim) terkait capaian praktikum.',
-        ),
-      );
+      for (final nim in names.keys) {
+        final recs = recsByNim[nim] ?? const <AttendanceRecord>[];
+        final hadir = recs.where((r) => r.status == PrakAttend.hadir).length;
+        final izin = recs.where((r) => r.status == PrakAttend.izin).length;
+        final alpa = recs.where((r) => r.status == PrakAttend.alpa).length;
+        final att = recs.isEmpty ? 100 : ((hadir * 100) / recs.length).round();
+        final sc = scoresByNim[nim];
+        final score = (sc == null || sc.isEmpty)
+            ? -1
+            : (sc.reduce((x, y) => x + y) / sc.length).round();
+        final lowAtt = recs.isNotEmpty && att < 75;
+        final lowScore = score >= 0 && score < 70;
+        if (!lowAtt && !lowScore) continue;
+
+        final name = names[nim]!;
+        final parts = name.trim().split(RegExp(r'\s+'));
+        final init = parts.length >= 2 && parts[1].isNotEmpty
+            ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+            : (name.isNotEmpty ? name[0].toUpperCase() : 'PR');
+        final sortedRecs = [...recs]
+          ..sort((x, y) => x.meetingNumber.compareTo(y.meetingNumber));
+        result.add(
+          DosenStudent(
+            initials: init,
+            name: name,
+            nim: nim,
+            kelas: course.name,
+            attendance: att,
+            score: score,
+            highRisk: lowAtt && lowScore,
+            hadir: hadir,
+            izin: izin,
+            alpa: alpa,
+            meetings: [
+              for (final r in sortedRecs)
+                DosenMeeting(
+                  number: r.meetingNumber,
+                  module:
+                      prak.meetingFor(course.id, r.meetingNumber)?.module ??
+                          'Pertemuan ${r.meetingNumber}',
+                  date: (prak.meetingFor(course.id, r.meetingNumber)?.date ??
+                          '')
+                      .split(' • ')
+                      .first,
+                  status: switch (r.status) {
+                    PrakAttend.hadir => MeetingStatus.hadir,
+                    PrakAttend.izin || PrakAttend.pending => MeetingStatus.izin,
+                    PrakAttend.alpa => MeetingStatus.alpa,
+                    _ => MeetingStatus.upcoming,
+                  },
+                  note: r.note.isEmpty ? null : r.note,
+                ),
+            ],
+            asisten: course.asisten,
+            asistenInitials: course.asistenInitials,
+            followUp: lowAtt ? 0 : 2,
+            message:
+                'Halo ${course.asisten.split(' ').first}, mohon bantu tindak lanjut untuk $name ($nim) di Praktikum ${course.name} terkait capaian praktikum.',
+          ),
+        );
+      }
     }
+    result.sort((x, y) {
+      if (x.highRisk != y.highRisk) return x.highRisk ? -1 : 1;
+      return x.attendance.compareTo(y.attendance);
+    });
     return result;
   }
 
@@ -508,7 +521,6 @@ class NilaiSyncService extends ChangeNotifier {
   }
 
   /// Tandai sanggahan nilai sebagai selesai ditinjau saat Aslab menyimpan
-  /// nilai revisi, lalu sinkronkan ke Supabase & kirim notifikasi ke Praktikan.
   Future<void> resolveAppeal({
     required String courseId,
     required int modul,
@@ -532,6 +544,7 @@ class NilaiSyncService extends ChangeNotifier {
     final course = PraktikumSyncService.instance.courseById(courseId);
     NotificationSyncService.instance.push(
       role: 'praktikan',
+      targetUser: userIdentifier,
       icon: 'circle_check',
       title: 'Sanggahan Modul $modul Diselesaikan',
       body:
@@ -572,8 +585,6 @@ class NilaiSyncService extends ChangeNotifier {
       _appeals.where((a) => a.isWaitingDosen).length;
 
   /// Rekomendasi sanggahan (Aslab) atau Keputusan akhir sanggahan (Dosen).
-  /// Sesuai desain: Aslab hanya memberi rekomendasi; keputusan akhir & perubahan
-  /// nilai resmi (+ log `public.grade_change_logs`) dilakukan oleh Dosen.
   Future<void> decideAppeal({
     required GradeAppealRecord appeal,
     required bool approve,
@@ -588,15 +599,78 @@ class NilaiSyncService extends ChangeNotifier {
     final compLabel = appeal.components.isNotEmpty
         ? appeal.components.first
         : 'Modul ${appeal.modul}';
+    // Nama bergelar sering diakhiri titik ("M.Kom.") — hindari "M.Kom..".
+    final decidedByClean = decidedBy.trim().replaceAll(RegExp(r'\.+$'), '');
+
+    final newStatus = byDosen
+        ? (approve ? 'approved' : 'rejected')
+        : (approve ? 'recommended_approve' : 'recommended_reject');
+    final newRecommendation = byDosen
+        ? appeal.assistantRecommendation
+        : (approve
+            ? 'Rekomendasi Asisten ($decidedBy): setujui ($finalScore), rubrik poin sudah terpenuhi.'
+            : 'Rekomendasi Asisten ($decidedBy): tolak${cleanReason.isNotEmpty ? ' • $cleanReason' : ''}.');
+
+    // Simpan ke server lebih dulu agar status, nilai, dan log selalu sama.
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      try {
+        await client
+            .from('grade_appeals')
+            .update({
+              'status': newStatus,
+              'proposed_score': finalScore,
+              'assistant_recommendation': newRecommendation,
+              if (cleanReason.isNotEmpty) 'rejection_reason': cleanReason,
+              if (byDosen) 'decided_by': decidedBy,
+              'updated_at': nowIso,
+            })
+            .eq('course_id', appeal.courseId)
+            .eq('modul', appeal.modul)
+            .eq('user_identifier', appeal.userIdentifier);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] decideAppeal error: $e');
+        throw StateError(
+            'Keputusan sanggahan gagal disimpan. Periksa koneksi lalu coba lagi.');
+      }
+    }
+
+    if (byDosen && approve) {
+      // Melempar StateError bila nilai gagal disimpan.
+      await PraktikumSyncService.instance.gradeTugasSubmission(
+        courseId: appeal.courseId,
+        meetingNumber: appeal.modul,
+        userIdentifier: appeal.userIdentifier,
+        userName: appeal.userName,
+        score: finalScore,
+        feedback: 'Nilai diperbarui melalui keputusan sanggahan oleh $decidedBy',
+      );
+      if (client != null) {
+        try {
+          await client.from('grade_change_logs').insert({
+            'course_id': appeal.courseId,
+            'modul': appeal.modul,
+            'user_identifier': appeal.userIdentifier,
+            'user_name': appeal.userName,
+            'old_score': oldScore,
+            'new_score': finalScore,
+            'changed_by': decidedBy,
+            'reason': 'Keputusan akhir sanggahan nilai disetujui ($compLabel)',
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('[NilaiSync] grade_change_logs error: $e');
+        }
+      }
+    }
+
+    appeal.status = newStatus;
+    appeal.assistantRecommendation = newRecommendation;
+    notifyListeners();
 
     if (!byDosen) {
-      // Aslab hanya memberikan rekomendasi -> diteruskan ke Dosen untuk keputusan akhir
-      appeal.status = approve ? 'recommended_approve' : 'recommended_reject';
-      appeal.assistantRecommendation = approve
-          ? 'Rekomendasi Asisten ($decidedBy): setujui ($finalScore), rubrik poin sudah terpenuhi.'
-          : 'Rekomendasi Asisten ($decidedBy): tolak${cleanReason.isNotEmpty ? ' • $cleanReason' : ''}.';
-      notifyListeners();
-
       NotificationSyncService.instance.push(
         role: 'dosen',
         icon: 'clipboard',
@@ -608,85 +682,34 @@ class NilaiSyncService extends ChangeNotifier {
         meetingNumber: appeal.modul,
         important: true,
       );
-    } else {
-      // Dosen membuat keputusan akhir yang mengubah nilai resmi & mencatat log perubahan
-      appeal.status = approve ? 'approved' : 'rejected';
-      notifyListeners();
-
-      if (approve) {
-        await PraktikumSyncService.instance.gradeTugasSubmission(
-          courseId: appeal.courseId,
-          meetingNumber: appeal.modul,
-          userIdentifier: appeal.userIdentifier,
-          userName: appeal.userName,
-          score: finalScore,
-          feedback: 'Nilai diperbarui melalui keputusan sanggahan oleh $decidedBy',
-        );
-      }
-
-      NotificationSyncService.instance.push(
-        role: 'praktikan',
-        icon: approve ? 'circle_check' : 'info',
-        title:
-            approve ? 'Sanggahan Nilai Disetujui' : 'Sanggahan Nilai Ditolak',
-        body: approve
-            ? 'Nilai $compLabel diperbarui menjadi $finalScore oleh $decidedBy.'
-            : 'Sanggahan $compLabel ditolak oleh $decidedBy.${cleanReason.isNotEmpty ? ' Alasan: $cleanReason' : ''}',
-        targetKey: 'detailNilai',
-        courseId: appeal.courseId,
-        meetingNumber: appeal.modul,
-        important: true,
-      );
-
-      NotificationSyncService.instance.push(
-        role: 'aslab',
-        icon: 'circle_check',
-        title: 'Keputusan Akhir Sanggahan oleh Dosen',
-        body:
-            '${appeal.userName} ($compLabel): ${approve ? 'Disetujui ($finalScore)' : 'Ditolak'} oleh $decidedBy.',
-        targetKey: 'evaluasi',
-        courseId: appeal.courseId,
-        meetingNumber: appeal.modul,
-        important: true,
-      );
+      return;
     }
 
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      final nowIso = DateTime.now().toIso8601String();
-      try {
-        await client
-            .from('grade_appeals')
-            .update({
-              'status': appeal.status,
-              'proposed_score': finalScore,
-              'assistant_recommendation': appeal.assistantRecommendation,
-              if (cleanReason.isNotEmpty) 'rejection_reason': cleanReason,
-              if (byDosen) 'decided_by': decidedBy,
-              'updated_at': nowIso,
-            })
-            .eq('course_id', appeal.courseId)
-            .eq('modul', appeal.modul)
-            .eq('user_identifier', appeal.userIdentifier);
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      targetUser: appeal.userIdentifier,
+      icon: approve ? 'circle_check' : 'info',
+      title: approve ? 'Sanggahan Nilai Disetujui' : 'Sanggahan Nilai Ditolak',
+      body: approve
+          ? 'Nilai $compLabel diperbarui menjadi $finalScore oleh $decidedByClean.'
+          : 'Sanggahan $compLabel ditolak oleh $decidedByClean.${cleanReason.isNotEmpty ? ' Alasan: $cleanReason' : ''}',
+      targetKey: 'detailNilai',
+      courseId: appeal.courseId,
+      meetingNumber: appeal.modul,
+      important: true,
+    );
 
-        if (byDosen && approve) {
-          await client.from('grade_change_logs').insert({
-            'course_id': appeal.courseId,
-            'modul': appeal.modul,
-            'user_identifier': appeal.userIdentifier,
-            'user_name': appeal.userName,
-            'old_score': oldScore,
-            'new_score': finalScore,
-            'changed_by': decidedBy,
-            'reason': 'Keputusan akhir sanggahan nilai disetujui ($compLabel)',
-            'created_at': nowIso,
-          });
-        }
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[NilaiSync] decideAppeal error: $e');
-      }
-    }
+    NotificationSyncService.instance.push(
+      role: 'aslab',
+      icon: 'circle_check',
+      title: 'Keputusan Akhir Sanggahan oleh Dosen',
+      body:
+          '${appeal.userName} ($compLabel): ${approve ? 'Disetujui ($finalScore)' : 'Ditolak'} oleh $decidedByClean.',
+      targetKey: 'evaluasi',
+      courseId: appeal.courseId,
+      meetingNumber: appeal.modul,
+      important: true,
+    );
   }
 
   /// Ajukan ulang rekap nilai dari Aslab ke Dosen setelah revisi selesai.
@@ -718,13 +741,16 @@ class NilaiSyncService extends ChangeNotifier {
             'course_id': courseId,
             'status': 'pending',
             'validated_by': submittedBy,
-            'updated_at': now.toIso8601String(),
+            'updated_at': now.toUtc().toIso8601String(),
           },
           onConflict: 'course_id',
         );
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[NilaiSync] resubmitValidation error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Rekap gagal diajukan ulang. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -769,6 +795,10 @@ class NilaiSyncService extends ChangeNotifier {
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[NilaiSync] markFollowUpDone error: $e');
+        target.status = 'pending';
+        notifyListeners();
+        throw StateError(
+            'Status tindak lanjut gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -963,9 +993,7 @@ class NilaiSyncService extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Perhitungan Nilai Live lintas Praktikan ↔ Aslab ↔ Dosen
-  // ---------------------------------------------------------------------------
 
   static String letterForScore(int score) {
     if (score >= 88) return 'A';
@@ -979,92 +1007,54 @@ class NilaiSyncService extends ChangeNotifier {
   }
 
   /// Gabungkan daftar nilai dasar Dosen dengan nilai tugas live dari
-  /// [PraktikumSyncService] dan kehadiran live dari [PresensiSyncService].
   List<DosenGrade> liveDosenGrades(
     List<DosenGrade> baseGrades, {
     String courseId = 'pemob',
   }) {
     final praktikumSync = PraktikumSyncService.instance;
     final presensiSync = PresensiSyncService.instance;
-    final course = praktikumSync.courseById(courseId);
 
-    final gradedByNim = <String, TugasSubmissionRecord>{};
-    for (final s in praktikumSync.allSubmissions) {
-      if (s.courseId == courseId && s.status == 'graded' && s.score != null) {
-        gradedByNim[s.userIdentifier] = s;
+    final names = <String, String>{};
+    final scores = <String, List<int>>{};
+    for (final sub in praktikumSync.allSubmissions) {
+      if (sub.courseId != courseId) continue;
+      names[sub.userIdentifier] = sub.userName;
+      if (sub.status == 'graded' && sub.score != null) {
+        scores.putIfAbsent(sub.userIdentifier, () => []).add(sub.score!);
+      }
+    }
+    final hadir = <String, int>{};
+    final total = <String, int>{};
+    for (final r in presensiSync.recordsForCourse(courseId)) {
+      names.putIfAbsent(r.userIdentifier, () => r.userName);
+      total[r.userIdentifier] = (total[r.userIdentifier] ?? 0) + 1;
+      if (r.status == PrakAttend.hadir) {
+        hadir[r.userIdentifier] = (hadir[r.userIdentifier] ?? 0) + 1;
       }
     }
 
     final result = <DosenGrade>[];
-    final seenNims = <String>{};
-
-    // Tambahkan nilai aktual praktikan utama yang login bila belum ada di base
-    final mainNim = ProfilData.praktikan.idValue;
-    final mainName = ProfilData.praktikan.name;
-    final mainAvg = double.tryParse(
-            praktikumSync.effectiveAverageForCourse(course, mainNim).replaceAll(',', '.')) ??
-        88.0;
-    final mainSummary = presensiSync.summaryForCourse(course, mainNim);
-    final mainDenom = mainSummary.doneMeetings > 0 ? mainSummary.doneMeetings : 4;
-    final mainAttendPct =
-        ((mainSummary.hadir * 100) / mainDenom).round().clamp(0, 100);
-    final mainFinal = ((mainAvg * 0.75) + (mainAttendPct * 0.25)).round();
-    if (!baseGrades.any((g) => g.nim == mainNim)) {
-      seenNims.add(mainNim);
+    for (final nim in names.keys) {
+      final sc = scores[nim];
+      final tugas =
+          (sc == null || sc.isEmpty) ? null : sc.reduce((x, y) => x + y) / sc.length;
+      final t = total[nim] ?? 0;
+      final pres = t == 0 ? null : ((hadir[nim] ?? 0) * 100 / t).round();
+      final akhir = tugas == null
+          ? null
+          : ((tugas * 0.75) + ((pres ?? 0) * 0.25)).round();
       result.add(
         DosenGrade(
-          mainName,
-          mainNim,
-          '${mainAvg.round()}',
-          '$mainAttendPct%',
-          '$mainFinal',
-          letterForScore(mainFinal),
+          names[nim]!,
+          nim,
+          tugas == null ? '-' : '${tugas.round()}',
+          pres == null ? '-' : '$pres%',
+          akhir == null ? '-' : '$akhir',
+          akhir == null ? '-' : letterForScore(akhir),
         ),
       );
     }
-
-    for (final g in baseGrades) {
-      seenNims.add(g.nim);
-      final liveSub = gradedByNim[g.nim];
-      if (liveSub != null && liveSub.score != null) {
-        final presPct =
-            int.tryParse(g.presensi.replaceAll('%', '').trim()) ?? 92;
-        final tugasScore = liveSub.score!;
-        final akhir = ((tugasScore * 0.75) + (presPct * 0.25)).round();
-        result.add(
-          DosenGrade(
-            g.name,
-            g.nim,
-            '$tugasScore',
-            '$presPct%',
-            '$akhir',
-            letterForScore(akhir),
-          ),
-        );
-      } else {
-        result.add(g);
-      }
-    }
-
-    // Tambahkan praktikan lain yang baru dinilai Aslab bila belum di list
-    for (final entry in gradedByNim.entries) {
-      if (seenNims.contains(entry.key)) continue;
-      final s = entry.value;
-      final tugasScore = s.score ?? 85;
-      final akhir = ((tugasScore * 0.75) + (92 * 0.25)).round();
-      result.insert(
-        0,
-        DosenGrade(
-          s.userName,
-          s.userIdentifier,
-          '$tugasScore',
-          '92%',
-          '$akhir',
-          letterForScore(akhir),
-        ),
-      );
-    }
-
+    result.sort((x, y) => x.name.compareTo(y.name));
     return result;
   }
 
@@ -1075,18 +1065,27 @@ class NilaiSyncService extends ChangeNotifier {
       return (avgScore: '0,0', passCount: 0, totalCount: 0, avgAttendPct: 0);
     }
     var sumScore = 0.0;
+    var scored = 0;
     var sumAttend = 0;
+    var attended = 0;
     var pass = 0;
     for (final g in grades) {
-      final s = int.tryParse(g.akhir) ?? 0;
-      sumScore += s;
-      if (g.lulus) pass++;
-      sumAttend += int.tryParse(g.presensi.replaceAll('%', '').trim()) ?? 90;
+      final sc = int.tryParse(g.akhir);
+      if (sc != null) {
+        sumScore += sc;
+        scored++;
+        if (sc >= 60) pass++;
+      }
+      final at = int.tryParse(g.presensi.replaceAll('%', '').trim());
+      if (at != null) {
+        sumAttend += at;
+        attended++;
+      }
     }
-    final avg = (sumScore / grades.length)
-        .toStringAsFixed(1)
-        .replaceAll('.', ',');
-    final avgAtt = (sumAttend / grades.length).round();
+    final avg = scored == 0
+        ? '-'
+        : (sumScore / scored).toStringAsFixed(1).replaceAll('.', ',');
+    final avgAtt = attended == 0 ? 0 : (sumAttend / attended).round();
     return (
       avgScore: avg,
       passCount: pass,
@@ -1095,15 +1094,34 @@ class NilaiSyncService extends ChangeNotifier {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Aksi Backend: Validasi Dosen, Minta Revisi, Sanggah Nilai, Hubungi Asisten
-  // ---------------------------------------------------------------------------
 
   Future<void> validateCourse({
     String courseId = 'pemob',
     required String validatedBy,
   }) async {
     final now = DateTime.now();
+    // Simpan perubahan ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('grade_validations').upsert(
+          {
+            'course_id': courseId,
+            'status': 'validated',
+            'validated_by': validatedBy,
+            'updated_at': now.toUtc().toIso8601String(),
+          },
+          onConflict: 'course_id',
+        );
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] validateCourse error: $e');
+        throw StateError(
+            'Validasi gagal disimpan. Periksa koneksi lalu coba lagi.');
+      }
+    }
+
     _validations[courseId] = GradeValidationRecord(
       courseId: courseId,
       status: 'validated',
@@ -1120,6 +1138,7 @@ class NilaiSyncService extends ChangeNotifier {
       body:
           'Nilai akhir ${course.name} (${course.kelas}) telah disahkan oleh $validatedBy',
       targetKey: 'evaluasi',
+      courseId: courseId,
       important: true,
     );
     NotificationSyncService.instance.push(
@@ -1129,26 +1148,9 @@ class NilaiSyncService extends ChangeNotifier {
       body:
           'Nilai akhir Praktikum ${course.name} telah disinkronkan ke Portal Akademik',
       targetKey: 'detailNilai',
+      courseId: courseId,
       important: true,
     );
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('grade_validations').upsert(
-          {
-            'course_id': courseId,
-            'status': 'validated',
-            'validated_by': validatedBy,
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'course_id',
-        );
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[NilaiSync] validateCourse error: $e');
-      }
-    }
   }
 
   Future<void> requestRevision({
@@ -1159,6 +1161,29 @@ class NilaiSyncService extends ChangeNotifier {
     required String requestedBy,
   }) async {
     final now = DateTime.now();
+    // Simpan perubahan ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('grade_validations').upsert(
+          {
+            'course_id': courseId,
+            'status': 'revision_requested',
+            'revision_part': part,
+            'revision_note': note,
+            'validated_by': requestedBy,
+            'updated_at': now.toUtc().toIso8601String(),
+          },
+          onConflict: 'course_id',
+        );
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] requestRevision error: $e');
+        throw StateError(
+            'Permintaan revisi gagal dikirim. Periksa koneksi lalu coba lagi.');
+      }
+    }
+
     _validations[courseId] = GradeValidationRecord(
       courseId: courseId,
       status: 'revision_requested',
@@ -1176,28 +1201,9 @@ class NilaiSyncService extends ChangeNotifier {
       title: 'Revisi $part Diminta Dosen',
       body: '${course.name} (${assistants.join(', ')}): $note',
       targetKey: 'evaluasi',
+      courseId: courseId,
       important: true,
     );
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('grade_validations').upsert(
-          {
-            'course_id': courseId,
-            'status': 'revision_requested',
-            'revision_part': part,
-            'revision_note': note,
-            'validated_by': requestedBy,
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'course_id',
-        );
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[NilaiSync] requestRevision error: $e');
-      }
-    }
   }
 
   Future<void> submitGradeAppeal({
@@ -1266,7 +1272,7 @@ class NilaiSyncService extends ChangeNotifier {
           'current_score': currentScore,
           'proposed_score': proposedScore,
           'status': 'pending',
-          'created_at': now.toIso8601String(),
+          'created_at': now.toUtc().toIso8601String(),
         });
         _backendAvailable = true;
       } catch (e) {
@@ -1283,6 +1289,26 @@ class NilaiSyncService extends ChangeNotifier {
     required String message,
   }) async {
     final now = DateTime.now();
+    // Simpan ke server lebih dulu agar tidak ada "sukses palsu".
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('assistant_followups').insert({
+          'student_nim': studentNim,
+          'student_name': studentName,
+          'assistant_name': assistantName,
+          'followup_type': followUpType,
+          'message': message,
+          'status': 'pending',
+          'created_at': now.toUtc().toIso8601String(),
+        });
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] sendAssistantFollowUp error: $e');
+        throw StateError(
+            'Tindak lanjut gagal dikirim. Periksa koneksi lalu coba lagi.');
+      }
+    }
     final rec = AssistantFollowUpRecord(
       id: 'local-fu-${now.millisecondsSinceEpoch}',
       studentNim: studentNim,
@@ -1306,6 +1332,7 @@ class NilaiSyncService extends ChangeNotifier {
     );
     NotificationSyncService.instance.push(
       role: 'praktikan',
+      targetUser: studentNim,
       icon: 'chat_bubble',
       title: 'Arahan Dosen: $followUpType',
       body: 'Koordinasi dengan $assistantName: $message',
@@ -1313,23 +1340,6 @@ class NilaiSyncService extends ChangeNotifier {
       important: true,
     );
 
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('assistant_followups').insert({
-          'student_nim': studentNim,
-          'student_name': studentName,
-          'assistant_name': assistantName,
-          'followup_type': followUpType,
-          'message': message,
-          'status': 'pending',
-          'created_at': now.toIso8601String(),
-        });
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[NilaiSync] sendAssistantFollowUp error: $e');
-      }
-    }
     return rec;
   }
 }

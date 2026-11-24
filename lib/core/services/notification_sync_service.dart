@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/auth/auth_controller.dart';
 import 'supabase_service.dart';
 
 /// Satu item notifikasi lintas role yang tersinkron ke Supabase + Realtime.
@@ -18,6 +19,10 @@ class AppNotificationRecord {
   final String? courseName;
   final String? moduleLabel;
   final bool important;
+
+  /// Bila diisi, hanya pengguna dengan nomor induk ini yang melihat notifikasi
+  /// (mis. nilai pribadi). Null = untuk semua pengguna di peran tersebut.
+  final String? targetUser;
   bool isRead;
   final DateTime createdAt;
 
@@ -33,6 +38,7 @@ class AppNotificationRecord {
     this.courseName,
     this.moduleLabel,
     this.important = false,
+    this.targetUser,
     this.isRead = false,
     required this.createdAt,
   });
@@ -82,6 +88,7 @@ class AppNotificationRecord {
       courseName: json['course_name'] as String?,
       moduleLabel: json['module_label'] as String?,
       important: (json['important'] as bool?) ?? false,
+      targetUser: json['target_user'] as String?,
       isRead: (json['is_read'] as bool?) ?? false,
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
@@ -90,8 +97,7 @@ class AppNotificationRecord {
   }
 }
 
-/// Service pusat notifikasi real-time untuk seluruh 4 role
-/// (Praktikan ↔ Aslab ↔ Laboran ↔ Dosen).
+/// Layanan sinkronisasi notifikasi lintas peran.
 class NotificationSyncService extends ChangeNotifier {
   static final NotificationSyncService instance =
       NotificationSyncService._internal();
@@ -105,14 +111,23 @@ class NotificationSyncService extends ChangeNotifier {
   bool _backendAvailable = false;
   bool get isBackendAvailable => _backendAvailable;
 
+  /// Status dibaca per pengguna dari `public.notification_reads`
+  /// (null = tabel belum tersedia → pakai kolom bersama `is_read`).
+  Set<String>? _readIds;
+
+  String get _me => AuthController.instance.userIdentifier;
+
+  bool _visible(AppNotificationRecord n, String role) =>
+      n.role == role && (n.targetUser == null || n.targetUser == _me);
+
   List<AppNotificationRecord> forRole(String role) {
-    final list = _items.where((n) => n.role == role).toList()
+    final list = _items.where((n) => _visible(n, role)).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
 
   int unreadCountForRole(String role) =>
-      _items.where((n) => n.role == role && n.unread).length;
+      _items.where((n) => _visible(n, role) && n.unread).length;
 
   void _seedDefaults() {
     final now = DateTime.now();
@@ -138,7 +153,7 @@ class NotificationSyncService extends ChangeNotifier {
           icon: 'bullhorn_outline',
           title: 'Pemindahan Jadwal Praktikum',
           body:
-              'Machine Learning Kelas C pindah ke Kam, 01 Okt • 13:00 di Lab AI & Data',
+              'Machine Learning Kelas C pindah ke Kam, 01 Okt • 13:00 di Lab Jaringan 3',
           targetKey: 'pengumuman',
           important: true,
           isRead: false,
@@ -222,7 +237,7 @@ class NotificationSyncService extends ChangeNotifier {
           id: 'seed-l-1',
           role: 'laboran',
           icon: 'wrench_outline',
-          title: 'Tiket Kerusakan Baru',
+          title: 'Laporan Kerusakan Baru',
           body:
               'PC-12 Lab Komputer 1 dilaporkan mengalami kendala monitor tidak tampil',
           targetKey: 'tiket',
@@ -321,11 +336,33 @@ class NotificationSyncService extends ChangeNotifier {
           .select()
           .order('created_at', ascending: false)
           .limit(100);
+      // Status dibaca milik pengguna ini (tabel opsional).
+      try {
+        final me = _me;
+        if (me.isNotEmpty) {
+          final readRows = await client
+              .from('notification_reads')
+              .select('notification_id')
+              .eq('user_identifier', me);
+          _readIds = {
+            for (final r in readRows) r['notification_id'].toString(),
+          };
+        }
+      } catch (e) {
+        _readIds = null;
+        debugPrint('[NotificationSync] notification_reads belum tersedia: $e');
+      }
       if (rows.isNotEmpty) {
         _items
           ..clear()
           ..addAll(rows.map((r) =>
               AppNotificationRecord.fromJson(Map<String, dynamic>.from(r))));
+        final reads = _readIds;
+        if (reads != null) {
+          for (final n in _items) {
+            n.isRead = reads.contains(n.id);
+          }
+        }
         _backendAvailable = true;
         notifyListeners();
         debugPrint(
@@ -369,6 +406,7 @@ class NotificationSyncService extends ChangeNotifier {
     String? courseName,
     String? moduleLabel,
     bool important = false,
+    String? targetUser,
   }) async {
     final now = DateTime.now();
     final localId = 'local-$role-${now.microsecondsSinceEpoch}';
@@ -384,6 +422,7 @@ class NotificationSyncService extends ChangeNotifier {
       courseName: courseName,
       moduleLabel: moduleLabel,
       important: important,
+      targetUser: targetUser,
       isRead: false,
       createdAt: now,
     );
@@ -393,24 +432,41 @@ class NotificationSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        final inserted = await client
-            .from('notifications')
-            .insert({
-              'target_role': role,
-              'icon': icon,
-              'title': title,
-              'body': body,
-              'target_key': targetKey,
-              if (courseId != null) 'course_id': courseId,
-              if (meetingNumber != null) 'meeting_number': meetingNumber,
-              if (courseName != null) 'course_name': courseName,
-              if (moduleLabel != null) 'module_label': moduleLabel,
-              'important': important,
-              'is_read': false,
-              'created_at': now.toIso8601String(),
-            })
-            .select()
-            .maybeSingle();
+        final row = <String, dynamic>{
+          'target_role': role,
+          'icon': icon,
+          'title': title,
+          'body': body,
+          'target_key': targetKey,
+          if (courseId != null) 'course_id': courseId,
+          if (meetingNumber != null) 'meeting_number': meetingNumber,
+          if (courseName != null) 'course_name': courseName,
+          if (moduleLabel != null) 'module_label': moduleLabel,
+          if (targetUser != null) 'target_user': targetUser,
+          'important': important,
+          'is_read': false,
+          'created_at': now.toUtc().toIso8601String(),
+        };
+        Map<String, dynamic>? inserted;
+        try {
+          inserted = await client
+              .from('notifications')
+              .insert(row)
+              .select()
+              .maybeSingle();
+        } on PostgrestException catch (e) {
+          // Kolom target_user belum dibuat (SQL belum dijalankan): kirim
+          // tanpa kolom itu agar notifikasi tetap tersimpan.
+          if (targetUser == null || !e.message.contains('target_user')) {
+            rethrow;
+          }
+          row.remove('target_user');
+          inserted = await client
+              .from('notifications')
+              .insert(row)
+              .select()
+              .maybeSingle();
+        }
         if (inserted != null) {
           final idx = _items.indexWhere((x) => x.id == localId);
           if (idx != -1) {
@@ -436,9 +492,18 @@ class NotificationSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null && !id.startsWith('seed-') && !id.startsWith('local-')) {
       try {
-        await client
-            .from('notifications')
-            .update({'is_read': true}).eq('id', id);
+        if (_readIds != null) {
+          // Dibaca oleh pengguna ini saja.
+          await client.from('notification_reads').upsert({
+            'notification_id': id,
+            'user_identifier': _me,
+          }, onConflict: 'notification_id,user_identifier');
+          _readIds!.add(id);
+        } else {
+          await client
+              .from('notifications')
+              .update({'is_read': true}).eq('id', id);
+        }
       } catch (e) {
         debugPrint('[NotificationSync] markRead error: $e');
       }
@@ -446,23 +511,38 @@ class NotificationSyncService extends ChangeNotifier {
   }
 
   Future<void> markAllRead(String role) async {
-    var changed = false;
-    for (final n in _items) {
-      if (n.role == role && !n.isRead) {
-        n.isRead = true;
-        changed = true;
-      }
+    final targets =
+        _items.where((n) => _visible(n, role) && !n.isRead).toList();
+    for (final n in targets) {
+      n.isRead = true;
     }
-    if (changed) notifyListeners();
+    if (targets.isNotEmpty) notifyListeners();
 
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client
-            .from('notifications')
-            .update({'is_read': true})
-            .eq('target_role', role)
-            .eq('is_read', false);
+        if (_readIds != null) {
+          final ids = [
+            for (final n in targets)
+              if (!n.id.startsWith('seed-') && !n.id.startsWith('local-')) n.id,
+          ];
+          if (ids.isNotEmpty) {
+            await client.from('notification_reads').upsert(
+              [
+                for (final id in ids)
+                  {'notification_id': id, 'user_identifier': _me},
+              ],
+              onConflict: 'notification_id,user_identifier',
+            );
+            _readIds!.addAll(ids);
+          }
+        } else {
+          await client
+              .from('notifications')
+              .update({'is_read': true})
+              .eq('target_role', role)
+              .eq('is_read', false);
+        }
       } catch (e) {
         debugPrint('[NotificationSync] markAllRead error: $e');
       }

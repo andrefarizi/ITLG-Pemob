@@ -87,7 +87,7 @@ class PraktikumScheduleRecord {
       dayShort: (json['day_short'] ?? days[dayIdx.clamp(0, 5)]).toString(),
       startTime: (json['start_time'] ?? '08:00').toString(),
       endTime: (json['end_time'] ?? '09:40').toString(),
-      room: (json['room'] ?? 'Lab Komputer 1').toString(),
+      room: (json['room'] ?? 'Lab Jaringan 1').toString(),
       asisten: (json['asisten'] ?? 'Andi Pratama').toString(),
       weekNumber: (json['week_number'] as num?)?.toInt() ?? 4,
       updatedAt: json['updated_at'] != null
@@ -244,7 +244,7 @@ class RoomBookingRecord {
     return RoomBookingRecord(
       id: (json['id'] ?? '').toString(),
       tag: (json['tag'] ?? 'Praktikum Pengganti').toString(),
-      labName: (json['lab_name'] ?? 'Lab Komputer 1').toString(),
+      labName: (json['lab_name'] ?? 'Lab Jaringan 1').toString(),
       title: (json['title'] ?? 'Praktikum Pengganti').toString(),
       dateLabel: (json['date_label'] ?? 'Kam, 01 Okt 2026').toString(),
       timeRange: (json['time_range'] ?? '13:00–14:40').toString(),
@@ -261,8 +261,7 @@ class RoomBookingRecord {
   }
 }
 
-/// Service pusat sinkronisasi Jadwal Praktikum & Pengumuman Perubahan Jadwal
-/// ke Supabase + Realtime serta otomatis ke Kalender perangkat pengguna.
+/// Layanan sinkronisasi jadwal praktikum dan pengumuman.
 class JadwalSyncService extends ChangeNotifier {
   static final JadwalSyncService instance = JadwalSyncService._internal();
   JadwalSyncService._internal() {
@@ -313,7 +312,7 @@ class JadwalSyncService extends ChangeNotifier {
           dayShort: 'Sen',
           startTime: '08:00',
           endTime: '09:40',
-          room: 'Lab Komputer 1',
+          room: 'Lab Jaringan 1',
           asisten: 'Andi Pratama',
           weekNumber: 4,
           updatedAt: now,
@@ -327,7 +326,7 @@ class JadwalSyncService extends ChangeNotifier {
           dayShort: 'Sen',
           startTime: '10:00',
           endTime: '11:40',
-          room: 'Lab Komputer 1',
+          room: 'Lab Jaringan 1',
           asisten: 'Andi Pratama',
           weekNumber: 4,
           updatedAt: now,
@@ -400,7 +399,7 @@ class JadwalSyncService extends ChangeNotifier {
           dayShort: 'Kam',
           startTime: '13:00',
           endTime: '14:40',
-          room: 'Lab AI & Data',
+          room: 'Lab Jaringan 3',
           asisten: 'Rizky Harahap',
           weekNumber: 4,
           updatedAt: now,
@@ -414,7 +413,7 @@ class JadwalSyncService extends ChangeNotifier {
           dayShort: 'Kam',
           startTime: '15:00',
           endTime: '16:40',
-          room: 'Lab AI & Data',
+          room: 'Lab Jaringan 3',
           asisten: 'Rizky Harahap',
           weekNumber: 4,
           updatedAt: now,
@@ -432,11 +431,11 @@ class JadwalSyncService extends ChangeNotifier {
           tagRed: true,
           title: 'Jadwal Sesi C1 & C2 Kom C',
           body:
-              'Praktikum Machine Learning Kom C (Sesi C1 13:00–14:40 & Sesi C2 15:00–16:40) dilaksanakan hari Kamis di Lab AI & Data.',
+              'Praktikum Machine Learning Kom C (Sesi C1 13:00–14:40 & Sesi C2 15:00–16:40) dilaksanakan hari Kamis di Lab Jaringan 3.',
           author: 'Rizky Harahap • Asisten Lab',
           oldSchedule: 'Sel, 29 Sep • 13:00–14:40',
           newSchedule: 'Kam, 01 Okt • C1 13:00 | C2 15:00',
-          room: 'Lab AI & Data',
+          room: 'Lab Jaringan 3',
           createdAt: now.subtract(const Duration(hours: 2)),
         ),
         AnnouncementRecord(
@@ -459,7 +458,7 @@ class JadwalSyncService extends ChangeNotifier {
         RoomBookingRecord(
           id: 'room-req-1',
           tag: 'Praktikum Pengganti',
-          labName: 'Lab Komputer 1',
+          labName: 'Lab Jaringan 1',
           title: 'Desain Interaksi • Kom C (Sesi C2)',
           dateLabel: 'Sel, 29 Sep 2026',
           timeRange: '10:00–11:40',
@@ -530,7 +529,7 @@ class JadwalSyncService extends ChangeNotifier {
                     'room': s.room,
                     'asisten': s.asisten,
                     'week_number': s.weekNumber,
-                    'updated_at': DateTime.now().toIso8601String(),
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
                   },
               ],
               onConflict: 'id',
@@ -621,8 +620,7 @@ class JadwalSyncService extends ChangeNotifier {
     }
   }
 
-  /// Kirim pengumuman dari Aslab; bila kategori == 0 (Perubahan Jadwal),
-  /// sekaligus memperbarui jadwal praktikum di Supabase & Kalender perangkat.
+  /// Kirim pengumuman dari Aslab; bila kategori == 0 (Perubahan Jadwal)
   Future<void> publishAnnouncementAndSchedule({
     required String? courseId,
     String? scheduleId,
@@ -646,6 +644,29 @@ class JadwalSyncService extends ChangeNotifier {
           : _schedules.indexWhere((s) => s.courseId == courseId);
       if (idx != -1) {
         final old = _schedules[idx];
+        // Cek bentrok sebelum mengubah apa pun.
+        final newDay = dayShorts[newDayIndex.clamp(0, 5)].toLowerCase();
+        final room = (newRoom ?? old.room).trim().toLowerCase();
+        final start = (newStartTime ?? old.startTime).trim();
+        for (final s in _schedules) {
+          if (s.id == old.id) continue;
+          if (s.room.trim().toLowerCase() == room &&
+              s.dayShort.trim().toLowerCase() == newDay &&
+              s.startTime.trim() == start) {
+            throw StateError(
+                'Bentrok dengan jadwal rutin ${s.courseName} di ${s.room} (${s.startTime}–${s.endTime})');
+          }
+        }
+        final dateOnly = (newScheduleLabel ?? '').split('•').first.trim().toLowerCase();
+        for (final r in _roomRequests) {
+          if (r.status != RoomStatus.disetujui) continue;
+          if (r.labName.trim().toLowerCase() == room &&
+              r.dateLabel.trim().toLowerCase() == dateOnly &&
+              r.timeRange.split(RegExp(r'[–-]')).first.trim() == start) {
+            throw StateError(
+                'Bentrok dengan peminjaman disetujui: ${r.title} (${r.timeRange})');
+          }
+        }
         oldScheduleLabel = '${old.dayShort} • ${old.startTime}';
         final updated = old.copyWith(
           dayIndex: newDayIndex.clamp(0, 5),
@@ -673,13 +694,17 @@ class JadwalSyncService extends ChangeNotifier {
                 'room': updated.room,
                 'asisten': updated.asisten,
                 'week_number': updated.weekNumber,
-                'updated_at': now.toIso8601String(),
+                'updated_at': now.toUtc().toIso8601String(),
               },
               onConflict: 'id',
             );
             _backendAvailable = true;
           } catch (e) {
             debugPrint('[JadwalSync] update schedule error: $e');
+            _schedules[idx] = old;
+            notifyListeners();
+            throw StateError(
+                'Jadwal gagal diperbarui. Periksa koneksi lalu coba lagi.');
           }
         }
       }
@@ -703,18 +728,6 @@ class JadwalSyncService extends ChangeNotifier {
     _announcements.insert(0, ann);
     notifyListeners();
 
-    NotificationSyncService.instance.push(
-      role: 'praktikan',
-      icon: 'bullhorn_outline',
-      title: '$tag: $title',
-      body: body.isNotEmpty
-          ? body
-          : (newScheduleLabel != null
-              ? 'Jadwal baru: $newScheduleLabel di ${newRoom ?? 'Lab'}'
-              : 'Pengumuman baru dari $author'),
-      targetKey: 'pengumuman',
-      important: categoryIndex != 1,
-    );
     if (categoryIndex == 0 && newRoom != null) {
       final parts = author.trim().split(RegExp(r'\s+'));
       final initials = parts.length >= 2
@@ -757,11 +770,15 @@ class JadwalSyncService extends ChangeNotifier {
             'requester_role': roomReq.requesterRole,
             'reason': roomReq.reason,
             'status': 'menunggu',
-            'created_at': now.toIso8601String(),
-            'updated_at': now.toIso8601String(),
+            'created_at': now.toUtc().toIso8601String(),
+            'updated_at': now.toUtc().toIso8601String(),
           });
         } catch (e) {
-          debugPrint('[JadwalSync] insert room request fallback lokal: $e');
+          debugPrint('[JadwalSync] insert room request error: $e');
+          _roomRequests.remove(roomReq);
+          notifyListeners();
+          throw StateError(
+              'Permintaan ruangan gagal dikirim. Periksa koneksi lalu coba lagi.');
         }
       }
 
@@ -789,13 +806,31 @@ class JadwalSyncService extends ChangeNotifier {
           'old_schedule': ann.oldSchedule,
           'new_schedule': ann.newSchedule,
           'room': ann.room,
-          'created_at': now.toIso8601String(),
+          'created_at': now.toUtc().toIso8601String(),
         });
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[JadwalSync] insert announcement error: $e');
+        _announcements.remove(ann);
+        notifyListeners();
+        throw StateError(
+            'Pengumuman gagal dikirim. Periksa koneksi lalu coba lagi.');
       }
     }
+
+    NotificationSyncService.instance.push(
+      role: 'praktikan',
+      icon: 'bullhorn_outline',
+      title: '$tag: $title',
+      body: body.isNotEmpty
+          ? body
+          : (newScheduleLabel != null
+              ? 'Jadwal baru: $newScheduleLabel di ${newRoom ?? 'Lab'}'
+              : 'Pengumuman baru dari $author'),
+      targetKey: 'pengumuman',
+      courseId: courseId,
+      important: categoryIndex != 1,
+    );
 
     // Jika perubahan jadwal, perbarui juga kalender perangkat bila izin sudah aktif
     if (categoryIndex == 0 &&
@@ -805,12 +840,16 @@ class JadwalSyncService extends ChangeNotifier {
     }
   }
 
-  /// Cek apakah ada bentrok jadwal ruangan (booking disetujui lain atau jadwal praktikum rutin).
+  /// Cek bentrok jadwal peminjaman ruangan.
   String? checkRoomConflict(RoomBookingRecord req) {
     final targetLab = req.labName.trim().toLowerCase();
     final targetDate = req.dateLabel.trim().toLowerCase();
     final targetDayShort = targetDate.split(',').first.trim();
     final targetStart = req.timeRange.split(RegExp(r'[–-]')).first.trim();
+    final createdMs = RegExp(r'(\d{12,})').firstMatch(req.id)?.group(1);
+    final reqCreated = createdMs == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(int.parse(createdMs));
 
     for (final other in _roomRequests) {
       if (other.id == req.id) continue;
@@ -823,6 +862,11 @@ class JadwalSyncService extends ChangeNotifier {
     }
 
     for (final s in _schedules) {
+      // Jadwal yang dipindah oleh permintaan ini sendiri
+      if (reqCreated != null &&
+          s.updatedAt.difference(reqCreated).inSeconds.abs() < 120) {
+        continue;
+      }
       if (s.room.trim().toLowerCase() == targetLab &&
           s.dayShort.trim().toLowerCase() == targetDayShort &&
           s.startTime.trim() == targetStart) {
@@ -833,8 +877,6 @@ class JadwalSyncService extends ChangeNotifier {
   }
 
   /// Setujui / tolak permintaan peminjaman ruangan oleh Laboran dan sinkronkan
-  /// ke Supabase (`public.room_booking_requests`) + notifikasi ke Aslab.
-  /// Mengembalikan pesan galat jika terdapat bentrok ruangan saat menyetujui.
   Future<String?> decideRoomRequest({
     required String requestId,
     required RoomStatus status,
@@ -850,16 +892,52 @@ class JadwalSyncService extends ChangeNotifier {
     if (target == null) return 'Permintaan tidak ditemukan';
 
     if (status == RoomStatus.disetujui) {
+      // Tanggal peminjaman yang sudah lewat tidak bisa disetujui.
+      const bulan = [
+        'jan', 'feb', 'mar', 'apr', 'mei', 'jun',
+        'jul', 'agu', 'sep', 'okt', 'nov', 'des',
+      ];
+      final m = RegExp(r'(\d{1,2}) ([A-Za-z]{3}) (\d{4})')
+          .firstMatch(target.dateLabel);
+      if (m != null) {
+        final mon = bulan.indexOf(m.group(2)!.toLowerCase());
+        if (mon >= 0) {
+          final d = DateTime(
+              int.parse(m.group(3)!), mon + 1, int.parse(m.group(1)!));
+          final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+          if (d.isBefore(DateTime(now.year, now.month, now.day))) {
+            return 'Tanggal peminjaman (${target.dateLabel}) sudah lewat';
+          }
+        }
+      }
       final conflict = checkRoomConflict(target);
       if (conflict != null) {
         return conflict;
       }
     }
 
-    target.status = status;
-    if (rejectionNote != null && rejectionNote.trim().isNotEmpty) {
-      target.rejectionNote = rejectionNote.trim();
+    final note = (rejectionNote != null && rejectionNote.trim().isNotEmpty)
+        ? rejectionNote.trim()
+        : target.rejectionNote;
+
+    // Simpan perubahan ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('room_booking_requests').update({
+          'status': RoomBookingRecord.serializeStatus(status),
+          'rejection_note': note,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', requestId);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[JadwalSync] decideRoomRequest error: $e');
+        return 'Keputusan gagal disimpan. Periksa koneksi lalu coba lagi.';
+      }
     }
+
+    target.status = status;
+    target.rejectionNote = note;
     notifyListeners();
 
     final approved = status == RoomStatus.disetujui;
@@ -878,19 +956,6 @@ class JadwalSyncService extends ChangeNotifier {
       important: true,
     );
 
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('room_booking_requests').update({
-          'status': RoomBookingRecord.serializeStatus(status),
-          'rejection_note': target.rejectionNote,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', requestId);
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[JadwalSync] decideRoomRequest fallback lokal: $e');
-      }
-    }
     return null;
   }
 }
