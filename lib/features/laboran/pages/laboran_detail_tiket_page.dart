@@ -11,7 +11,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Detail Tiket-Laboran".
+/// Halaman Detail Tiket Laboran.
 class LaboranDetailTiketPage extends StatefulWidget {
   final LabTicket ticket;
   final VoidCallback? onLogoTap;
@@ -75,6 +75,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
     final res = await FileDownloadService.instance.downloadFile(
       fileName: photoName,
       source: 'Laporan Kerusakan ${ticket.id} • ${ticket.lokasi}',
+      searchFolders: const ['tiket/aslab', 'tiket/praktikan'],
       contentLines: [
         'LAMPIRAN LAPORAN KERUSAKAN ITLG',
         'Kode Tiket : ${ticket.id.replaceFirst('#TK-', '#LK-')}',
@@ -138,7 +139,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            '$photoName • 1,2 MB',
+            photoName,
             style: labText(11, w: kBold, c: ItlgColors.text),
           ),
         ),
@@ -146,7 +147,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
     );
   }
 
-  /// Figma: "Pratinjau Foto Kerusakan-Laboran" (5817:3148).
+  /// Dialog Pratinjau Foto Kerusakan (Laboran).
   void _showPhotoPreview(String photoName, LabTicket ticket) {
     showGeneralDialog<void>(
       context: context,
@@ -219,13 +220,38 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
     );
   }
 
+  bool _saving = false;
+
   Future<void> _save() async {
+    if (_saving) return;
     FocusScope.of(context).unfocus();
-    await LabDeskSyncService.instance.updateTicketStatus(
-      ticketCode: widget.ticket.id,
-      status: _status,
-      handlingNote: _note.text.trim(),
-    );
+    final note = _note.text.trim();
+    final current =
+        LabDeskSyncService.instance.ticketByCode(widget.ticket.id);
+    if (current != null &&
+        current.status == _status &&
+        note == current.handlingNote.trim()) {
+      labToast(context, 'Belum ada perubahan status atau catatan', error: true);
+      return;
+    }
+    if (_status == 2 && note.length < 5) {
+      labToast(context, 'Tulis catatan penanganan sebelum menandai Selesai');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await LabDeskSyncService.instance.updateTicketStatus(
+        ticketCode: widget.ticket.id,
+        status: _status,
+        handlingNote: note,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
     labToast(context, 'Status tiket ${widget.ticket.id} disimpan');
     Navigator.of(context).maybePop();
@@ -295,7 +321,7 @@ class _LaboranDetailTiketPageState extends State<LaboranDetailTiketPage> {
                   const SizedBox(height: 7),
                   Text(
                       hasPhoto
-                          ? '${t.photo} • 1,2 MB'
+                          ? t.photo
                           : 'Tanpa lampiran foto',
                       style: labText(12, w: kBold)),
                   const SizedBox(height: 7),

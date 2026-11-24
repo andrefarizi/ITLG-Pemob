@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
 
-/// Komponen khusus halaman Autentikasi (Figma section "Authentikasi" &
-/// "05 Umum — Login & Notifikasi").
+/// Komponen UI halaman autentikasi dan lupa kata sandi.
 
 /// Nama route awal alur Lupa Password (dipakai untuk kembali ke halaman Masuk).
 const String kForgotPasswordRoute = '/forgot-password';
 
-/// Tutup seluruh alur Lupa Password dan kembali ke halaman sebelum langkah 1
-/// (biasanya halaman Masuk).
+/// Kembali ke halaman login dari alur lupa kata sandi.
 void popToBeforeForgotPassword(BuildContext context) {
   var startFound = false;
   Navigator.of(context).popUntil((route) {
@@ -19,8 +17,7 @@ void popToBeforeForgotPassword(BuildContext context) {
   });
 }
 
-/// Kerangka halaman Lupa Password: tombol Kembali + kolom konten yang bisa
-/// di-scroll (Figma: tombol di y=56, konten mulai y=112, lebar 370).
+/// Kerangka tata letak halaman lupa kata sandi.
 class AuthScaffold extends StatelessWidget {
   final List<Widget> children;
   final bool showBack;
@@ -53,7 +50,7 @@ class AuthScaffold extends StatelessWidget {
   }
 }
 
-/// Kotak ikon dengan inner shadow (53 px di header, 80 px di popup).
+/// Kotak ikon halaman autentikasi.
 class AuthIconBadge extends StatelessWidget {
   final IconData icon;
   final double size;
@@ -63,13 +60,15 @@ class AuthIconBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final large = size >= 70;
-    return InnerShadowBox(
-      width: size,
-      height: size,
-      radius: size * 0.2476, // 13.125 / 53 dan 19.875 / 80 di Figma
-      shadows: large ? ItlgShadows.innerLarge : ItlgShadows.inner,
-      child: Center(
-        child: Icon(icon, size: size * 0.64, color: ItlgColors.primary),
+    return Center(
+      child: InnerShadowBox(
+        width: size,
+        height: size,
+        radius: size * 0.2476,
+        shadows: large ? ItlgShadows.innerLarge : ItlgShadows.inner,
+        child: Center(
+          child: Icon(icon, size: size * 0.64, color: ItlgColors.primary),
+        ),
       ),
     );
   }
@@ -118,7 +117,7 @@ class ResetStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Progres garis merah (Figma): langkah 1 = 70/265, 2 = 207/265, 3 = penuh
+    // Progres garis merah: langkah 1 = 70/265, 2 = 207/265, 3 = penuh
     const fractions = [70 / 265, 207 / 265, 1.0];
     final index = step < 1 ? 0 : (step > 3 ? 2 : step - 1);
     final progress = fractions[index];
@@ -129,7 +128,7 @@ class ResetStepper extends StatelessWidget {
         builder: (context, c) {
           final w = c.maxWidth;
           const dot = 31.0;
-          // pusat lingkaran: kiri, tengah, kanan (kolom label lebar 39)
+          // Pusat lingkaran: kiri, tengah, kanan (kolom label lebar 39)
           final centers = [19.5, w / 2, w - 19.5];
           final trackLeft = centers[0] + 12;
           final trackRight = centers[2] - 12;
@@ -215,7 +214,7 @@ class _StepDot extends StatelessWidget {
                 ...ItlgShadows.outline,
                 BoxShadow(
                     offset: Offset(0, 4),
-                    blurRadius: 4,
+                    blurRadius: 2.6,
                     color: Color(0x40A71111)),
               ]
             : ItlgShadows.outline,
@@ -240,8 +239,8 @@ class AuthNotice extends StatelessWidget {
   const AuthNotice({
     super.key,
     this.title = 'Ketentuan Akun Resmi:',
-    this.message = 'Kode OTP 6-digit hanya dikirimkan ke email kampus dengan '
-        'domain @usu.ac.id atau @students.usu.ac.id',
+    this.message = 'Kode OTP 6-digit hanya dikirim ke email '
+        '@students.usu.ac.id',
   });
 
   @override
@@ -273,7 +272,7 @@ class AuthNotice extends StatelessWidget {
   }
 }
 
-/// Popup hasil (Figma: "Pop up Berhasil Kirim OTP" & "Pop up Berhasil Ubah Sandi").
+/// Dialog Berhasil Kirim OTP.
 Future<void> showAuthResultDialog(
   BuildContext context, {
   required IconData icon,
@@ -341,10 +340,7 @@ Future<void> showAuthResultDialog(
   );
 }
 
-/// Kartu "Pusat Bantuan Lab" di halaman Masuk (Figma: Frame 14, 370 x 146).
-///
-/// Posisi mengikuti Figma: judul di (19, 14), teks mulai x = 59 / y = 49,
-/// baris jam di y = 113, jarak bawah 18 (tinggi kartu 146).
+/// Kartu "Pusat Bantuan Lab" di halaman Masuk.
 class HelpCenterCard extends StatelessWidget {
   const HelpCenterCard({super.key});
 

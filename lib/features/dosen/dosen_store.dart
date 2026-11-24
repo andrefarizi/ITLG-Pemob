@@ -1,5 +1,4 @@
-/// Data contoh untuk tampilan Dosen Pengampu (belum terhubung ke backend).
-/// Isinya sama dengan teks pada desain Figma "04 Dosen Pengampu".
+/// Penyimpanan data lokal peran Dosen.
 
 enum MeetingStatus { upcoming, hadir, terlambat, izin, alpa }
 
@@ -9,7 +8,7 @@ class DosenMeeting {
   final String date;
   final MeetingStatus status;
 
-  /// Chip "Alpa" yang disertai catatan memakai Bold + bayangan di Figma.
+  /// Chip "Alpa" yang disertai catatan memakai Bold + bayangan.
   final bool emphasis;
   final String? noteIcon;
   final String? note;
@@ -71,7 +70,8 @@ class DosenStudent {
   });
 
   bool get lowAttendance => attendance < 75;
-  bool get lowScore => score < 70;
+  /// `score` -1 = belum ada nilai tugas yang dinilai.
+  bool get lowScore => score >= 0 && score < 70;
 }
 
 class DosenGrade {
@@ -85,7 +85,7 @@ class DosenGrade {
   const DosenGrade(
       this.name, this.nim, this.tugas, this.presensi, this.akhir, this.huruf);
 
-  bool get lulus => int.parse(akhir) >= 60;
+  bool get lulus => (int.tryParse(akhir) ?? 0) >= 60;
 }
 
 class DosenDownload {

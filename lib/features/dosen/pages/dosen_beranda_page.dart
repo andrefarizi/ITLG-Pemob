@@ -9,7 +9,7 @@ import '../../shared/profil_data.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_shell.dart';
 
-/// Figma: "Page Beranda-Dosen".
+/// Halaman Beranda Dosen.
 class DosenBerandaPage extends StatelessWidget {
   final ValueChanged<int> onOpenTab;
   final VoidCallback onOpenNotifikasi;
@@ -32,57 +32,33 @@ class DosenBerandaPage extends StatelessWidget {
       listenable: Listenable.merge([praktikumSync, nilaiSync, presensiSync]),
       builder: (context, _) {
         final courses = praktikumSync.courses;
-        final nim = ProfilData.praktikan.idValue;
-        final avgSum = courses.fold<double>(
-          0,
-          (sum, c) =>
-              sum +
-              (double.tryParse(praktikumSync
-                      .effectiveAverageForCourse(c, nim)
-                      .replaceAll(',', '.')) ??
-                  85.0),
-        );
-        final avgAllText = courses.isEmpty
-            ? '84,2'
-            : (avgSum / courses.length).toStringAsFixed(1).replaceAll('.', ',');
+        // Statistik SELURUH kelas dari data nyata
+        final attendPcts = [
+          for (final c in courses) presensiSync.attendancePercentForCourse(c.id),
+        ].whereType<int>().toList();
+        final attendAllPct = attendPcts.isEmpty
+            ? null
+            : (attendPcts.reduce((a, b) => a + b) / attendPcts.length).round();
+        final recordTotal = courses.fold<int>(
+            0, (sum, c) => sum + presensiSync.recordCountForCourse(c.id));
+        final attendTrend = recordTotal == 0
+            ? 'Belum ada catatan presensi'
+            : 'Dari $recordTotal catatan presensi';
 
-        final attendSum = courses.fold<double>(0, (sum, c) {
-          final s = presensiSync.summaryForCourse(c, nim);
-          final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
-          return sum + ((s.hadir * 100) / denom);
-        });
-        final attendAllPct =
-            courses.isEmpty ? 91 : (attendSum / courses.length).round();
-        final avgAllNum = courses.isEmpty ? 84.2 : (avgSum / courses.length);
-
-        // Hitung tren kehadiran & rata-rata nilai secara dinamis dari data BE
-        final attendDelta = attendAllPct - 85;
-        final attendTrend = attendDelta > 0
-            ? '+$attendDelta% dari minggu lalu'
-            : (attendDelta < 0
-                ? '$attendDelta% dari minggu lalu'
-                : 'Stabil dari minggu lalu');
-
-        final m3Scores = <double>[];
-        for (final c in courses) {
-          for (final g in praktikumSync.effectiveGradesForCourse(c, nim)) {
-            if (g.modul == 3 && g.score != null) {
-              final v = double.tryParse(g.score!.replaceAll(',', '.'));
-              if (v != null) m3Scores.add(v);
-            }
-          }
-        }
-        final m3Avg = m3Scores.isEmpty
-            ? 84.0
-            : m3Scores.reduce((a, b) => a + b) / m3Scores.length;
-        final scoreDelta = avgAllNum - m3Avg;
-        final scoreDeltaStr =
-            scoreDelta.abs().toStringAsFixed(1).replaceAll('.', ',');
-        final scoreTrend = scoreDelta > 0.05
-            ? '+$scoreDeltaStr dari modul 3'
-            : (scoreDelta < -0.05
-                ? '-$scoreDeltaStr dari modul 3'
-                : 'Stabil dari modul 3');
+        final avgs = [
+          for (final c in courses) praktikumSync.classAverageScoreForCourse(c.id),
+        ].whereType<double>().toList();
+        final avgAllNum = avgs.isEmpty
+            ? null
+            : avgs.reduce((a, b) => a + b) / avgs.length;
+        final avgAllText = avgAllNum == null
+            ? '-'
+            : avgAllNum.toStringAsFixed(1).replaceAll('.', ',');
+        final gradedTotal = courses.fold<int>(
+            0, (sum, c) => sum + praktikumSync.gradedCountForCourse(c.id));
+        final scoreTrend = gradedTotal == 0
+            ? 'Belum ada tugas dinilai'
+            : 'Dari $gradedTotal tugas dinilai';
 
         // Susun titik data grafik batang live untuk tiap grup praktikum
         String shortLabel(String courseId, String fallbackName) {
@@ -102,22 +78,15 @@ class DosenBerandaPage extends StatelessWidget {
 
         final chartPoints = <_ChartPoint>[
           for (final c in courses)
-            () {
-              final s = presensiSync.summaryForCourse(c, nim);
-              final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
-              final attPct = ((s.hadir * 100) / denom).clamp(0.0, 100.0);
-              final avgScore = (double.tryParse(praktikumSync
-                          .effectiveAverageForCourse(c, nim)
-                          .replaceAll(',', '.')) ??
-                      85.0)
-                  .clamp(0.0, 100.0);
-              return _ChartPoint(
-                shortName: shortLabel(c.id, c.name),
-                fullName: c.name,
-                kehadiranPct: attPct,
-                nilaiAvg: avgScore,
-              );
-            }(),
+            _ChartPoint(
+              shortName: shortLabel(c.id, c.name),
+              fullName: c.name,
+              kehadiranPct:
+                  (presensiSync.attendancePercentForCourse(c.id) ?? 0).toDouble(),
+              nilaiAvg: (praktikumSync.classAverageScoreForCourse(c.id) ?? 0)
+                  .clamp(0.0, 100.0)
+                  .toDouble(),
+            ),
         ];
 
         final activeWeek = presensiSync.activeSession.meetingNumber;
@@ -131,7 +100,7 @@ class DosenBerandaPage extends StatelessWidget {
                 _MetricCard(
                   icon: 'people_group',
                   label: 'Tingkat Kehadiran',
-                  value: '$attendAllPct%',
+                  value: attendAllPct == null ? '-' : '$attendAllPct%',
                   valueColor: ItlgColors.primary,
                   trend: attendTrend,
                   onTap: toPeringatan,
@@ -148,7 +117,7 @@ class DosenBerandaPage extends StatelessWidget {
             ),
             _PerformaCard(
               points: chartPoints,
-              weekLabel: 'Minggu ke-$activeWeek',
+              weekLabel: 'Pertemuan $activeWeek',
             ),
             LabColumn(
               gap: 12,
@@ -165,13 +134,13 @@ class DosenBerandaPage extends StatelessWidget {
                 for (final c in courses)
                   Builder(
                     builder: (_) {
-                      final s = presensiSync.summaryForCourse(c, nim);
-                      final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
-                      final pct = ((s.hadir * 100) / denom).round();
-                      final avg = praktikumSync
-                          .effectiveAverageForCourse(c, nim)
-                          .split(',')
-                          .first;
+                      final pctVal =
+                          presensiSync.attendancePercentForCourse(c.id);
+                      final avgVal =
+                          praktikumSync.classAverageScoreForCourse(c.id);
+                      final pct = pctVal == null ? '-' : '$pctVal';
+                      final avg =
+                          avgVal == null ? '-' : avgVal.round().toString();
                       final ratingCount =
                           praktikumSync.ratingCountForCourse(c.id);
                       final ratingLabel =
@@ -181,7 +150,7 @@ class DosenBerandaPage extends StatelessWidget {
                         assistant: ratingCount > 0
                             ? '${c.asisten} • ★ $ratingLabel'
                             : c.asisten,
-                        attendance: '$pct%',
+                        attendance: pct == '-' ? '-' : '$pct%',
                         score: avg,
                         onTap: () {
                           nilaiSync.selectCourse(c.id);
@@ -227,7 +196,7 @@ class DosenBerandaPage extends StatelessWidget {
   }
 }
 
-/// Dua kartu sejajar (jarak 14) dengan tinggi yang sama.
+/// Dua kartu sejajar dengan tinggi yang sama.
 class _EqualRow extends StatelessWidget {
   final List<Widget> children;
   const _EqualRow({required this.children});
@@ -319,7 +288,7 @@ class _Greeting extends StatelessWidget {
   }
 }
 
-/// Kartu metrik 148 px: ikon, label, angka Bold 27, tren hijau.
+/// Kartu metrik: ikon, label, angka, tren hijau.
 class _MetricCard extends StatelessWidget {
   final String icon;
   final String label;
@@ -391,7 +360,7 @@ class _PerformaCard extends StatelessWidget {
     required this.weekLabel,
   });
 
-  // Area grafik batang maksimum 110 px sesuai desain Figma.
+  // Area grafik batang maksimum.
   static const double _maxBarHeight = 110.0;
 
   @override
@@ -495,9 +464,7 @@ class _BarGroup extends StatelessWidget {
   }
 }
 
-/// Batang 14 px yang tumbuh dari bawah saat halaman dibuka: jeda 100 ms lalu
-/// 600 ms ease-out, sama dengan frame "Page Beranda-Dosen (Animasi Grafik)"
-/// di prototipe Figma.
+/// Batang yang tumbuh dari bawah saat halaman dibuka: jeda 100 ms lalu
 class _Bar extends StatelessWidget {
   final double height;
   final Color color;

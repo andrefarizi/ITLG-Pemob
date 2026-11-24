@@ -5,7 +5,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Notifikasi-Laboran".
+/// Halaman Notifikasi Laboran.
 class LaboranNotifikasiPage extends StatefulWidget {
   final LaboranStore store;
   final ValueChanged<LabNotifTarget> onOpen;

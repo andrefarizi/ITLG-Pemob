@@ -15,9 +15,7 @@ import 'pages/laboran_profil_page.dart';
 import 'pages/laboran_tiket_page.dart';
 import 'widgets/laboran_ui.dart';
 
-/// Kerangka peran Laboran: header ITLG + navbar 5 tab (Beranda, Tiket,
-/// Ruangan, Inventaris, Profil). Perpindahan tab memakai fade 200 ms seperti
-/// prototipe Figma.
+/// Kerangka navigasi utama peran Laboran.
 class LaboranShell extends StatefulWidget {
   const LaboranShell({super.key});
 
@@ -53,11 +51,12 @@ class _LaboranShellState extends State<LaboranShell> {
     _openTab(tab);
   }
 
-  void _openDenahMeja() {
+  void _openDenahMeja([String? lab]) {
     labPush(
       context,
       LaboranDenahMejaPage(
         store: _store,
+        initialLab: lab,
         onLogoTap: () => _openTabFromSubPage(LaboranShell.tabBeranda),
         onOpenTiketTab: () => _openTabFromSubPage(LaboranShell.tabTiket),
       ),
@@ -137,6 +136,7 @@ class _LaboranShellState extends State<LaboranShell> {
           onOpenPresensi: _openPresensi,
           onOpenNotifikasi: _openNotifikasi,
           onOpenDenahMeja: _openDenahMeja,
+          onOpenDenahLab: _openDenahMeja,
         );
     }
   }

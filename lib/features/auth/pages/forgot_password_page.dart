@@ -3,6 +3,7 @@ import 'forgot_password_page_1.dart';
 
 export 'forgot_password_page_1.dart';
 
+// Ekspor halaman lupa kata sandi
 class ForgotPasswordPage extends StatelessWidget {
   const ForgotPasswordPage({super.key});
 

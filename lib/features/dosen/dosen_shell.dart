@@ -14,9 +14,7 @@ import 'pages/dosen_peringatan_page.dart';
 import 'pages/dosen_profil_page.dart';
 import 'pages/dosen_validasi_page.dart';
 
-/// Kerangka peran Dosen Pengampu: header ITLG + navbar 5 tab (Beranda,
-/// Validasi, Laporan, Peringatan, Profil). Komponen tampilannya sama dengan
-/// peran Laboran (lib/features/laboran/widgets/laboran_ui.dart).
+/// Kerangka navigasi utama peran Dosen.
 class DosenShell extends StatefulWidget {
   const DosenShell({super.key});
 
@@ -89,7 +87,9 @@ class _DosenShellState extends State<DosenShell> {
               _openTabFromSubPage(DosenShell.tabLaporan);
               break;
             case DosenNotifTarget.detailPeringatan:
-              _openDetail(_store.students.first);
+              // Daftar Peringatan berisi praktikan berisiko dari data nyata
+              // (bukan praktikan contoh pertama).
+              _openTabFromSubPage(DosenShell.tabPeringatan);
               break;
           }
         },

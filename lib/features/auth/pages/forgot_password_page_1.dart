@@ -6,7 +6,7 @@ import '../services/auth_service.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_2.dart';
 
-/// Lupa Password – langkah 1: Akun (Figma "Lupa Password").
+/// Lupa Password – langkah 1: Akun.
 class ForgotPasswordPage1 extends StatefulWidget {
   const ForgotPasswordPage1({super.key});
 
@@ -21,8 +21,7 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
   String? _emailError;
   bool _loading = false;
 
-  static final RegExp _usuEmail =
-      RegExp(r'^[\w.+-]+@(students\.)?usu\.ac\.id$', caseSensitive: false);
+  static final RegExp _usuEmail = AuthService.studentsUsuEmail;
 
   @override
   void dispose() {
@@ -41,7 +40,7 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
           ? 'Email USU wajib diisi'
           : (_usuEmail.hasMatch(email)
               ? null
-              : 'Gunakan email @usu.ac.id atau @students.usu.ac.id');
+              : 'Gunakan email @students.usu.ac.id');
     });
     if (_nimError != null || _emailError != null) return;
 

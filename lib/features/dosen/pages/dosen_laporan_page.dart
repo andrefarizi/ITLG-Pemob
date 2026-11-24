@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../praktikan/praktikan_store.dart';
+
 import '../../../core/services/file_download_service.dart';
 import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
@@ -12,7 +14,7 @@ import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 import 'dosen_riwayat_page.dart';
 
-/// Pop-up setelah mengunduh laporan (Figma: "Pop up Laporan Diunduh").
+/// Dialog Laporan Diunduh.
 void dosenShowDownloaded(
   BuildContext context, {
   String? location,
@@ -21,25 +23,33 @@ void dosenShowDownloaded(
       context,
       icon: 'download',
       title: 'Laporan Diunduh',
-      message: location != null && location.isNotEmpty
-          ? 'Berkas laporan tersimpan di $location.'
-          : 'Berkas laporan tersimpan di folder Unduhan perangkat anda.',
+      message: 'Berkas laporan tersimpan di folder Unduhan perangkat anda.',
       button: 'Selesai',
     );
 
 /// Unduh berkas laporan nyata (XLSX atau PDF) ke folder `Download/ITLG Mobile/`
-/// berdasarkan data live BE.
 Future<DeviceDownloadResult> dosenDownloadReportFile({
   required String fileName,
   required String periode,
   required Set<int> sections,
   required DosenStore store,
+  String? courseName,
 }) {
   final prak = PraktikumSyncService.instance;
   final presensi = PresensiSyncService.instance;
   final nilai = NilaiSyncService.instance;
   final shift = ShiftSyncService.instance;
-  final nim = ProfilData.praktikan.idValue;
+  // Hanya praktikum yang dipilih (bila ada), dengan data SELURUH kelas.
+  // Unduh ulang dari riwayat hanya membawa nama berkas: simpulkan praktikum
+  // dari nama berkas ("Laporan_Pemrograman_Mobile_...") agar isinya sama.
+  final inferred = courseName ??
+      prak.courses
+          .where((c) => fileName.contains(c.name.replaceAll(' ', '_')))
+          .map((c) => c.name)
+          .firstOrNull;
+  final courses = inferred == null
+      ? prak.courses
+      : prak.courses.where((c) => c.name == inferred).toList();
 
   final lines = <String>[
     'LAPORAN PRAKTIKUM ITLG - FASILKOM-TI USU',
@@ -53,24 +63,53 @@ Future<DeviceDownloadResult> dosenDownloadReportFile({
     ['Praktikum', 'Asisten', 'Kehadiran (%)', 'Rata-rata Nilai', 'Status Validasi', 'Rating Asisten'],
   ];
 
-  for (final c in prak.courses) {
-    final s = presensi.summaryForCourse(c, nim);
-    final denom = s.doneMeetings > 0 ? s.doneMeetings : 4;
-    final attPct = ((s.hadir * 100) / denom).round();
-    final avg = prak.effectiveAverageForCourse(c, nim);
+  for (final c in courses) {
+    final recs = presensi.recordsForCourse(c.id);
+    final hadir = recs.where((r) => r.status == PrakAttend.hadir).length;
+    final izin = recs.where((r) => r.status == PrakAttend.izin).length;
+    final alpa = recs.where((r) => r.status == PrakAttend.alpa).length;
+    final attPct = recs.isEmpty ? null : ((hadir * 100) / recs.length).round();
+    final avgNum = prak.classAverageScoreForCourse(c.id);
+    final avg =
+        avgNum == null ? '-' : avgNum.toStringAsFixed(1).replaceAll('.', ',');
     final val = nilai.validationFor(c.id);
     final valStatus = val.isValidated
         ? 'Tervalidasi'
-        : (val.status == 'revision' ? 'Perlu Revisi' : 'Menunggu');
+        : (val.isRevisionRequested ? 'Revisi Diminta' : 'Menunggu');
     final rating = prak.averageRatingLabelForCourse(c.id);
+    final attLabel = attPct == null ? '-' : '$attPct%';
 
-    rows.add([c.name, c.asisten, '$attPct%', avg, valStatus, '$rating / 5']);
+    rows.add([
+      c.name,
+      c.asisten,
+      attLabel,
+      avg,
+      valStatus,
+      rating == '-' ? '-' : '$rating / 5',
+    ]);
     lines.add('${c.name} (${c.kelas}) | Asisten: ${c.asisten}');
     if (sections.contains(0)) {
-      lines.add('  - Kehadiran: $attPct% (${s.hadir} Hadir, ${s.izin} Izin, ${s.alpa} Alpa)');
+      lines.add(
+          '  - Kehadiran: $attLabel ($hadir Hadir, $izin Izin, $alpa Alpa dari ${recs.length} catatan)');
     }
     if (sections.contains(1)) {
       lines.add('  - Rata-rata Nilai: $avg | Validasi Dosen: $valStatus');
+    }
+  }
+
+  // Pelaporan Nilai Akhir: rincian per praktikan dari data nyata.
+  if (sections.contains(1)) {
+    for (final c in courses) {
+      final grades = nilai.liveDosenGrades(const [], courseId: c.id);
+      if (grades.isEmpty) continue;
+      lines.add('------------------------------------------------------------');
+      lines.add('NILAI AKHIR ${c.name.toUpperCase()}:');
+      rows.add([]);
+      rows.add(['${c.name} • Praktikan', 'NIM', 'Tugas', 'Presensi', 'Akhir', 'Huruf']);
+      for (final g in grades) {
+        lines.add('  - ${g.name} (${g.nim}): tugas ${g.tugas}, presensi ${g.presensi}, akhir ${g.akhir} (${g.huruf})');
+        rows.add([g.name, g.nim, g.tugas, g.presensi, g.akhir, g.huruf]);
+      }
     }
   }
 
@@ -102,8 +141,7 @@ Future<DeviceDownloadResult> dosenDownloadReportFile({
   );
 }
 
-/// Figma: "Generate Laporan-Dosen" (halaman tab, tombol Kembali
-/// disembunyikan di Figma).
+/// Halaman Generate Laporan Dosen.
 class DosenLaporanPage extends StatefulWidget {
   final DosenStore store;
   final VoidCallback onHome;
@@ -164,6 +202,8 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
       periode: periode,
       sections: store.isiLaporan,
       store: store,
+      courseName:
+          store.praktikumOptions[store.praktikumIndex].split(' • ').first,
     );
     if (!mounted) return;
     if (!res.success) {
@@ -371,7 +411,7 @@ class DosenDownloadItem extends StatelessWidget {
   }
 }
 
-/// Label + kolom pilihan 48 px (inner shadow) dengan panah bawah.
+/// Label + kolom pilihan dengan panah bawah.
 class _Select extends StatelessWidget {
   final String label;
   final String value;
@@ -414,7 +454,7 @@ class _Select extends StatelessWidget {
   }
 }
 
-/// Kartu format berkas 90 px. Terpilih: merah dengan cahaya.
+/// Kartu format berkas. Terpilih: merah dengan cahaya.
 class _FormatCard extends StatelessWidget {
   final String icon;
   final String title;

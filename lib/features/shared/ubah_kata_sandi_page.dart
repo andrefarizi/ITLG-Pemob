@@ -6,8 +6,7 @@ import '../auth/pages/forgot_password_page_1.dart';
 import '../auth/widgets/auth_design.dart';
 import '../laboran/widgets/laboran_ui.dart';
 
-/// Figma: "Ubah Kata Sandi (Dari Profil)" (5822:3139) +
-/// "Pop up Kata Sandi Diperbarui (Dari Profil)" (5822:3125).
+/// Halaman Ubah Kata Sandi.
 class UbahKataSandiPage extends StatefulWidget {
   final VoidCallback? onLogoTap;
   const UbahKataSandiPage({super.key, this.onLogoTap});
@@ -91,7 +90,7 @@ class _UbahKataSandiPageState extends State<UbahKataSandiPage> {
 
     await labShowResultDialog(
       context,
-      icon: 'circle_check',
+      icon: 'key',
       title: 'Kata Sandi Diperbarui',
       message:
           'Gunakan kata sandi baru saat masuk berikutnya. Kamu tetap masuk di perangkat ini.',

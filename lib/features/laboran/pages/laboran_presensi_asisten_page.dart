@@ -8,7 +8,7 @@ import '../laboran_store.dart';
 import '../../shared/lab_actions.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Presensi Asisten-Laboran".
+/// Halaman Presensi Asisten Laboran.
 class LaboranPresensiAsistenPage extends StatefulWidget {
   final LaboranStore store;
   final VoidCallback? onLogoTap;
@@ -35,12 +35,24 @@ class _LaboranPresensiAsistenPageState
   }
 
   Future<void> _generate() async {
-    final code = await _sync.generateAccessCode(
-      generatedBy: AuthController.instance.userName,
-    );
+    final String code;
+    try {
+      code = await _sync.generateAccessCode(
+        generatedBy: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
     widget.store.accessCode = code;
     if (!mounted) return;
-    labToast(context, 'Kode akses baru: $code (tersinkron ke BE)');
+    await labShowResult(
+      context,
+      icon: 'key',
+      title: 'Kode Akses Diperbarui',
+      message:
+          'Kode baru berlaku sampai 17:00 WIB. Bagikan ke asisten yang bertugas hari ini.',
+    );
   }
 
   Future<void> _updateAssistantStatus(ShiftRecord shift) async {
@@ -56,7 +68,12 @@ class _LaboranPresensiAsistenPageState
     );
     if (picked == null || !mounted) return;
     final status = picked == 0 ? 'hadir' : (picked == 1 ? 'terlambat' : 'belum');
-    await _sync.updateShiftAttendance(shiftId: shift.id, status: status);
+    try {
+      await _sync.updateShiftAttendance(shiftId: shift.id, status: status);
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
     labToast(context, 'Presensi ${shift.asistenName} diperbarui');
   }
@@ -79,8 +96,19 @@ class _LaboranPresensiAsistenPageState
       builder: (context, _) {
         final code = _sync.accessCode;
         final assistants = _sync.dutyAssistants;
-        final attended = _sync.attendedShiftCount;
-        final total = _sync.totalShifts;
+        final today = _sync.todayShifts;
+        final attended = _sync.todayAttendedCount;
+        final total = today.length;
+        const hari = [
+          'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu',
+        ];
+        const bulan = [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli',
+          'Agustus', 'September', 'Oktober', 'November', 'Desember',
+        ];
+        final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+        final todayLabel =
+            '${hari[now.weekday - 1]}, ${now.day} ${bulan[now.month - 1]} ${now.year}';
         final avgDiscipline = _sync.averageDisciplinePct;
 
         return LabSubPage(
@@ -88,8 +116,8 @@ class _LaboranPresensiAsistenPageState
           children: [
             LabCard(
               children: [
-                const LabOverline(
-                  overline: 'Senin, 28 September 2026',
+                LabOverline(
+                  overline: todayLabel,
                   title: 'Presensi Asisten',
                 ),
                 LabInsetBox(
@@ -154,7 +182,10 @@ class _LaboranPresensiAsistenPageState
                 LabColumn(
                   gap: 8,
                   children: [
-                    for (final s in assistants)
+                    if (today.isEmpty)
+                      Text('Tidak ada shift asisten hari ini.',
+                          style: labText(12, c: ItlgColors.textSubtle)),
+                    for (final s in today)
                       LabListItem(
                         leading: LabAvatar(s.asistenInitials),
                         title: s.asistenName,
@@ -169,11 +200,11 @@ class _LaboranPresensiAsistenPageState
             LabCard(
               children: [
                 Row(
-                  children: const [
-                    LabSectionTitle(
+                  children: [
+                    const LabSectionTitle(
                         icon: 'chart_bar', text: 'Rekap Kedisiplinan'),
-                    Spacer(),
-                    LabPill(icon: 'calendar', text: 'September'),
+                    const Spacer(),
+                    LabPill(icon: 'calendar', text: bulan[now.month - 1]),
                   ],
                 ),
                 for (final s in assistants)

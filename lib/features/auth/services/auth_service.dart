@@ -37,8 +37,7 @@ class AuthService {
   /// Menyimpan kata sandi yang baru diubah via Lupa Password selama runtime aplikasi.
   final Map<String, String> _customPasswords = {};
 
-  /// Peta email baru -> email lama di auth.users (fallback kompatibilitas bila
-  /// skrip update_user_emails.sql belum dijalankan di Supabase SQL Editor).
+  /// Peta email baru -> email lama di auth.users.
   static const Map<String, String> _legacyAuthEmails = {
     'andreal@students.usu.ac.id': 'andre@students.usu.ac.id',
     'abbilrizki@students.usu.ac.id': 'abbil@itlg.usu.ac.id',
@@ -55,7 +54,6 @@ class AuthService {
   };
 
   /// Data dummy lokal untuk 4 peran pengguna (Praktikan, Aslab, Laboran, Dosen).
-  /// Dipakai saat Supabase belum dikonfigurasi atau offline.
   final List<_DummyUser> _dummyUsers = const [
     _DummyUser(
       identifiers: [
@@ -139,13 +137,27 @@ class AuthService {
   }
 
   /// Proses masuk (login) dengan dukungan Supabase + PostgreSQL
-  /// dan fallback transparan ke data dummy.
+  /// Aturan akun resmi ITLG: email kampus berdomain @students.usu.ac.id.
+  static final RegExp studentsUsuEmail = RegExp(
+    r'^[\w.+-]+@students\.usu\.ac\.id$',
+    caseSensitive: false,
+  );
+
+  static bool isStudentsUsuEmail(String email) =>
+      studentsUsuEmail.hasMatch(email.trim());
+
   Future<AuthResult> login({
     required String identifier,
     required String password,
     required UserRole selectedRole,
   }) async {
     final client = SupabaseService.instance.client;
+
+    // Bila login memakai email, wajib email @students.usu.ac.id.
+    if (identifier.contains('@') && !isStudentsUsuEmail(identifier)) {
+      return const AuthResult.failure(
+          'Gunakan email @students.usu.ac.id atau Nomor Induk.');
+    }
 
     if (client != null) {
       try {
@@ -172,6 +184,12 @@ class AuthService {
           profile = profile.copyWith(email: canonicalEmail);
         }
 
+        // Akun wajib memakai email resmi @students.usu.ac.id.
+        if (!isStudentsUsuEmail(profile.email)) {
+          return const AuthResult.failure(
+              'Akun ini belum memakai email @students.usu.ac.id. Hubungi admin ITLG.');
+        }
+
         // 2. Validasi kesesuaian peran yang dipilih di UI
         if (profile.role != selectedRole) {
           return AuthResult.failure(
@@ -186,7 +204,7 @@ class AuthService {
             _customPasswords[profile.email.toLowerCase()] ??
             (legacyEmail != null ? _customPasswords[legacyEmail] : null);
 
-        // Jika kata sandi baru disetel via alur Lupa Password:
+        // Jika kata sandi baru disetel via alur Lupa Password
         if (customPassword != null) {
           if (password != customPassword) {
             return const AuthResult.failure('Kata sandi salah. Silakan periksa kembali.');
@@ -287,7 +305,7 @@ class AuthService {
           'full_name': fullName,
           'email': email,
           'phone': phone,
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', userId);
         debugPrint('[AuthService] Berhasil update profil di Supabase');
       } catch (e) {
@@ -307,7 +325,7 @@ class AuthService {
       try {
         await client.from('profiles').update({
           'avatar_url': avatarUrl,
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', userId);
         debugPrint('[AuthService] Berhasil update avatar_url di Supabase');
       } catch (e) {
@@ -403,7 +421,6 @@ class AuthService {
   }
 
   /// Cari email berdasarkan NIM atau email yang dimasukkan user.
-  /// Return email jika ditemukan, null jika tidak ada.
   Future<String?> findEmailByNimOrEmail(String input) async {
     final normalized = input.trim().toLowerCase();
     final client = SupabaseService.instance.client;
@@ -440,9 +457,6 @@ class AuthService {
   }
 
   /// Update password di Supabase Auth untuk user dengan [email].
-  /// Butuh Supabase Admin/Service key — dilakukan via RPC jika tersedia.
-  /// Untuk saat ini: update password di Supabase Auth melalui updateUser
-  /// (user harus sudah login; untuk reset password digunakan via OTP + updateUser).
   Future<bool> updatePasswordByEmail(String email, String newPassword) async {
     final lowerEmail = email.toLowerCase().trim();
     _customPasswords[lowerEmail] = newPassword;
@@ -460,7 +474,6 @@ class AuthService {
 
     final client = SupabaseService.instance.client;
     if (client != null) {
-      // 1. Panggil RPC PostgreSQL jika fungsi reset_password_by_email ada di Supabase
       try {
         await client.rpc('reset_password_by_email', params: {
           'user_email': lowerEmail,

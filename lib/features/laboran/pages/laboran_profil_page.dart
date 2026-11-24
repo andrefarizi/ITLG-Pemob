@@ -9,7 +9,7 @@ import '../../shared/ubah_profil_page.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Profil-Laboran".
+/// Halaman Profil Laboran.
 class LaboranProfilPage extends StatefulWidget {
   final LaboranStore store;
   final VoidCallback onLogout;
@@ -197,7 +197,7 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
                 _SettingItem(
                   icon: 'lock_on',
                   title: 'Ubah Kata Sandi',
-                  subtitle: 'Terakhir diubah 12 Sep 2026',
+                  subtitle: 'Ganti kata sandi akun anda',
                   trailing: const LabIcon('chevron_right',
                       size: 16, color: ItlgColors.primary),
                   onTap: _openChangePassword,
@@ -310,7 +310,7 @@ class _SettingItem extends StatelessWidget {
   }
 }
 
-/// Toggle 40 x 22 dengan knop putih 18 px.
+/// Toggle dengan knop putih.
 class _Toggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;

@@ -12,8 +12,7 @@ import '../widgets/dosen_ui.dart';
 import 'dosen_minta_revisi_page.dart';
 import 'dosen_rekap_nilai_page.dart';
 
-/// Figma: "Validasi Nilai Akhir-Dosen". Status "Tervalidasi" disimpan di
-/// BE melalui [NilaiSyncService] dan langsung terkunci di Aslab & Praktikan.
+/// Halaman Validasi Nilai Akhir Dosen.
 class DosenValidasiPage extends StatefulWidget {
   final DosenStore store;
 
@@ -54,11 +53,33 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
   }
 
   Future<void> _validate(String courseId, String kelasLabel) async {
-    widget.store.validated = true;
-    await NilaiSyncService.instance.validateCourse(
-      courseId: courseId,
-      validatedBy: AuthController.instance.userName,
+    final nilai = NilaiSyncService.instance;
+    if (nilai.pendingDosenAppealCount > 0) {
+      labToast(context,
+          'Putuskan dulu sanggahan nilai yang menunggu sebelum validasi',
+          error: true);
+      return;
+    }
+    // Validasi mengunci nilai & tidak bisa dibatalkan dari aplikasi.
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'circle_check',
+      title: 'Validasi Nilai Akhir?',
+      message: 'Nilai $kelasLabel akan dikunci dan tidak dapat diubah asisten '
+          'setelah divalidasi.',
+      confirmLabel: 'Validasi',
     );
+    if (!ok || !mounted) return;
+    try {
+      await nilai.validateCourse(
+        courseId: courseId,
+        validatedBy: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
+    widget.store.validated = true;
     if (!mounted) return;
     dosenShowResult(
       context,
@@ -70,7 +91,7 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
     );
   }
 
-  /// Figma: "Sheet Rincian Nilai per Modul-Dosen" (5818:3260).
+  /// Bottom sheet Rincian Nilai per Modul (Dosen).
   void _showGradeDetail(
     DosenGrade g,
     String courseId,
@@ -304,7 +325,7 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                 ),
               ],
             ),
-            // Figma: Kartu Pintasan "Sanggahan Nilai" (5479:1349)
+            // Kartu Pintasan "Sanggahan Nilai"
             LabListItem(
               leading: const LabIconTile('triangle_alert'),
               title: 'Sanggahan Nilai',
@@ -352,7 +373,9 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                 ),
                 LabOutlineButton(
                   icon: 'chevron_down',
-                  label: 'Lihat $othersCount Praktikan Lainnya',
+                  label: othersCount > 0
+                      ? 'Lihat $othersCount Praktikan Lainnya'
+                      : 'Lihat Rekap Lengkap',
                   onTap: () => labPush(
                     context,
                     DosenRekapNilaiPage(

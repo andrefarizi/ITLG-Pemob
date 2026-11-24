@@ -3,7 +3,6 @@ import '../auth/auth_controller.dart';
 import '../../core/utils/constants.dart';
 
 /// Data profil yang bisa diubah dari halaman "Ubah Profil".
-/// Terhubung langsung dengan [AuthController.currentProfile] dan Supabase.
 class ProfilData extends ChangeNotifier {
   String _name;
   String _email;
@@ -35,7 +34,7 @@ class ProfilData extends ChangeNotifier {
   String get phone => _phone;
   String? get photoSource => _photoSource;
 
-  /// Inisial 2 huruf sesuai Figma (AF, AR, RB, DC).
+  /// Inisial 2 huruf.
   String get initials {
     final cleaned = _name
         .replaceAll(RegExp(r'\b(Dr|Prof|Eng|Ir|H|Hj)\.\s*', caseSensitive: false), '')

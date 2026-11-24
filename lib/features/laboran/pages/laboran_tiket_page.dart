@@ -5,7 +5,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Tiket Perbaikan-Laboran".
+/// Halaman Tiket Perbaikan Laboran.
 class LaboranTiketPage extends StatefulWidget {
   final LaboranStore store;
   final ValueChanged<LabTicket> onOpenTicket;

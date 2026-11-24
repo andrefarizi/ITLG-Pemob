@@ -8,7 +8,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 
-/// Figma: "Peringatan Dini-Dosen".
+/// Halaman Peringatan Dini Dosen.
 class DosenPeringatanPage extends StatefulWidget {
   final DosenStore store;
   final ValueChanged<DosenStudent> onOpenDetail;
@@ -217,7 +217,6 @@ class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
 }
 
 /// Kartu praktikan berisiko: nama, status, dua batang progress, dan (opsional)
-/// tombol Lihat Detail / Hubungi Asisten. Dipakai juga di Detail Peringatan.
 class DosenStudentCard extends StatelessWidget {
   final DosenStudent student;
   final AssistantFollowUpRecord? latestFollowUp;
@@ -263,8 +262,8 @@ class DosenStudentCard extends StatelessWidget {
         ),
         LabProgress(
           label: 'Rata-rata Nilai (min. 70)',
-          value: '${s.score}',
-          fraction: s.score / 100,
+          value: s.score < 0 ? '-' : '${s.score}',
+          fraction: s.score < 0 ? 0 : s.score / 100,
           color: s.lowScore ? ItlgColors.primary : LabColors.green,
         ),
         if (fu != null)

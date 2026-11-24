@@ -6,7 +6,7 @@ import '../laboran/widgets/laboran_ui.dart';
 import '../praktikan/widgets/praktikan_ui.dart';
 import 'profil_data.dart';
 
-/// Figma: "Ubah Profil (Praktikan)" (5822:3228) + "Sheet Ganti Foto Profil" (5822:3396).
+/// Halaman Ubah Profil.
 class UbahProfilPage extends StatefulWidget {
   final ProfilData data;
   final String roleLabel;

@@ -10,7 +10,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 
-/// Figma: "Rekap Nilai Akhir-Dosen" (dari "Lihat 19 Praktikan Lainnya").
+/// Halaman Rekap Nilai Akhir Dosen.
 class DosenRekapNilaiPage extends StatefulWidget {
   final DosenStore store;
   final String courseId;

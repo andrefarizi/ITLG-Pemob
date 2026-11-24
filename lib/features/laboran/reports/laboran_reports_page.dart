@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Laboran Reports Page
 class LaboranReportsPage extends StatelessWidget {
   const LaboranReportsPage({super.key});
 

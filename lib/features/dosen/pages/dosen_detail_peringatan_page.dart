@@ -9,7 +9,7 @@ import '../widgets/dosen_ui.dart';
 import 'dosen_hubungi_page.dart';
 import 'dosen_peringatan_page.dart';
 
-/// Figma: "Detail Peringatan-Dosen" (Yoga), "(Lia)", dan "(Bagas)".
+/// Halaman Detail Peringatan Dosen.
 class DosenDetailPeringatanPage extends StatefulWidget {
   final DosenStudent student;
   final VoidCallback? onLogoTap;
@@ -80,7 +80,17 @@ class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
             ),
             LabCard(
               children: [
-                DosenClassTitle(kelas: s.kelas),
+                // `kelas` berisi nama praktikum (lihat liveAtRiskStudents).
+                Builder(builder: (_) {
+                  final courses = PraktikumSyncService.instance.courses;
+                  final match = courses.where((c) => c.name == s.kelas);
+                  return match.isEmpty
+                      ? DosenClassTitle(kelas: s.kelas)
+                      : DosenClassTitle(
+                          code: match.first.kelas,
+                          courseName: match.first.name,
+                        );
+                }),
                 LabStatRow(
                   stats: [
                     LabStat(icon: 'check', label: 'Hadir', value: '${s.hadir}'),
@@ -88,10 +98,10 @@ class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
                     LabStat(icon: 'cross', label: 'Alpa', value: '${s.alpa}'),
                   ],
                 ),
-                const LabProgress(
-                  label: 'Pertemuan terlaksana',
-                  value: '4 / 12',
-                  fraction: 113 / 338,
+                LabProgress(
+                  label: 'Pertemuan tercatat',
+                  value: '${s.meetings.length} / 12',
+                  fraction: (s.meetings.length / 12).clamp(0.0, 1.0),
                 ),
               ],
             ),
@@ -176,7 +186,6 @@ class _MeetingCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: ItlgColors.primary,
                 borderRadius: BorderRadius.circular(9),
-                boxShadow: LabShadows.neu,
               ),
               child: Text('${m.number}',
                   style: labText(16, w: kBold, c: Colors.white)),
@@ -199,7 +208,8 @@ class _MeetingCard extends StatelessWidget {
         ),
         LabMeta(icon: 'calendar', text: m.date),
         if (m.note != null)
-          LabMeta(icon: m.noteIcon!, text: m.note!, color: _noteColor),
+          LabMeta(
+              icon: m.noteIcon ?? 'info', text: m.note!, color: _noteColor),
       ],
     );
   }

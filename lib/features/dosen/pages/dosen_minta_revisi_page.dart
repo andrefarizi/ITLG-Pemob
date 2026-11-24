@@ -6,7 +6,7 @@ import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../widgets/dosen_ui.dart';
 
-/// Figma: "Minta Revisi-Dosen" (dari tombol "Minta Revisi ke Asisten").
+/// Halaman Minta Revisi Dosen.
 class DosenMintaRevisiPage extends StatefulWidget {
   final String courseId;
   final VoidCallback? onLogoTap;
@@ -23,13 +23,11 @@ class DosenMintaRevisiPage extends StatefulWidget {
 class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
   static const List<String> _bagian = ['Nilai Tugas', 'Presensi', 'Nilai Akhir'];
 
-  final TextEditingController _note = TextEditingController(
-    text: 'Mohon periksa kembali nilai tugas Modul 3 dan 4. Ada selisih antara '
-        'nilai tugas dan rekap presensi.',
-  );
+  final TextEditingController _note = TextEditingController();
   bool _primaryAsst = true;
   bool _partnerAsst = true;
   int _part = 0;
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -40,21 +38,36 @@ class _DosenMintaRevisiPageState extends State<DosenMintaRevisiPage> {
   Future<void> _send(String primaryName, String partnerName) async {
     FocusScope.of(context).unfocus();
     final noteText = _note.text.trim();
-    if (noteText.isEmpty) {
-      labToast(context, 'Catatan revisi tidak boleh kosong');
+    if (noteText.length < 10) {
+      labToast(context, 'Tulis catatan revisi minimal 10 karakter', error: true);
       return;
     }
     final targets = <String>[
       if (_primaryAsst) primaryName,
       if (_partnerAsst) partnerName,
     ];
-    await NilaiSyncService.instance.requestRevision(
-      courseId: widget.courseId,
-      part: _bagian[_part],
-      note: noteText,
-      assistants: targets.isEmpty ? ['Asisten Lab'] : targets,
-      requestedBy: AuthController.instance.userName,
-    );
+    if (targets.isEmpty) {
+      labToast(context, 'Pilih minimal satu asisten penerima revisi',
+          error: true);
+      return;
+    }
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await NilaiSyncService.instance.requestRevision(
+        courseId: widget.courseId,
+        part: _bagian[_part],
+        note: noteText,
+        assistants: targets,
+        requestedBy: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
     dosenShowResult(
       context,

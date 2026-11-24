@@ -12,12 +12,15 @@ import '../../shared/profil_data.dart';
 import '../laboran_shell.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Page Beranda-Laboran".
+/// Halaman Beranda Laboran.
 class LaboranBerandaPage extends StatelessWidget {
   final ValueChanged<int> onOpenTab;
   final VoidCallback onOpenPresensi;
   final VoidCallback onOpenNotifikasi;
   final VoidCallback? onOpenDenahMeja;
+
+  /// Buka Denah Meja untuk lab tertentu.
+  final ValueChanged<String>? onOpenDenahLab;
 
   const LaboranBerandaPage({
     super.key,
@@ -25,6 +28,7 @@ class LaboranBerandaPage extends StatelessWidget {
     required this.onOpenPresensi,
     required this.onOpenNotifikasi,
     this.onOpenDenahMeja,
+    this.onOpenDenahLab,
   });
 
   @override
@@ -54,52 +58,90 @@ class LaboranBerandaPage extends StatelessWidget {
                 final praktikum = PraktikumSyncService.instance;
                 final deskSync = LabDeskSyncService.instance;
                 final session = presensi.activeSession;
-                final pemob = praktikum.courseById('pemob');
-                final extraHadir = presensi
-                    .recordsForMeeting(session.courseId, session.meetingNumber)
-                    .where((r) => r.status == PrakAttend.hadir)
-                    .length;
-                final totalHadir = (18 + extraHadir).clamp(0, 24);
-                final lab4Broken = deskSync
-                    .inventoryDesks('Lab Jaringan 4')
-                    .where((d) => !d.isReady)
-                    .length;
+                final jadwal = JadwalSyncService.instance;
+                String wib(DateTime t) {
+                  final w = t.toUtc().add(const Duration(hours: 7));
+                  return '${w.hour.toString().padLeft(2, '0')}:${w.minute.toString().padLeft(2, '0')}';
+                }
+
+                // Jadwal rutin berikutnya di lab ini
+                String nextSchedule(String lab) {
+                  const hari = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+                  final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+                  final today = now.weekday - 1;
+                  final nowHm =
+                      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+                  final inLab = jadwal.schedules
+                      .where((x) =>
+                          x.room.trim().toLowerCase() == lab.toLowerCase())
+                      .toList();
+                  if (inLab.isEmpty) return 'Tidak ada jadwal rutin di lab ini';
+                  int rank(dynamic x) {
+                    var d = (x.dayIndex as int) - today;
+                    if (d < 0 || (d == 0 && (x.startTime as String).compareTo(nowHm) <= 0)) {
+                      d += 7;
+                    }
+                    return d * 10000 +
+                        int.parse((x.startTime as String).replaceAll(':', ''));
+                  }
+                  inLab.sort((x, y) => rank(x).compareTo(rank(y)));
+                  final n = inLab.first;
+                  return 'Berikutnya ${hari[n.dayIndex.clamp(0, 6)]} ${n.startTime} • ${n.courseName}';
+                }
+
+                final labs = <String>[
+                  'Lab Jaringan 1',
+                  'Lab Jaringan 2',
+                  'Lab Jaringan 3',
+                  'Lab Jaringan 4',
+                ];
+                if (session.isActive && !labs.contains(session.labName)) {
+                  labs.insert(0, session.labName);
+                }
+                final recs = presensi.recordsForMeeting(
+                    session.courseId, session.meetingNumber);
+                final hadir =
+                    recs.where((r) => r.status == PrakAttend.hadir).length;
                 return LabColumn(
                   gap: 12,
                   children: [
-                    _LabCard(
-                      name: 'Lab Jaringan 1',
-                      course: 'Praktikum ${pemob.name}',
-                      initials: 'AR',
-                      assistant: 'Abbil Rizki',
-                      verifiedAt: '07:52',
-                      attendance: '$totalHadir / 24',
-                      fraction: (totalHadir / 24).clamp(0.0, 1.0),
-                      active: session.isActive,
-                      onTap: onOpenDenahMeja ?? onOpenPresensi,
-                    ),
-                    _SimpleLabCard(
-                      name: 'Lab Jaringan 2',
-                      subtitle: 'Siap digunakan • tidak ada sesi aktif',
-                      chip: const LabChip.info('Siap'),
-                      meta: 'Berikutnya 10:00 • Pemob Kom C Sesi C2',
-                      onTap: onOpenDenahMeja ?? onOpenPresensi,
-                    ),
-                    _SimpleLabCard(
-                      name: 'Lab Jaringan 3',
-                      subtitle: 'Tidak ada sesi berjalan',
-                      chip: const LabChip.idle('Kosong'),
-                      meta: 'Berikutnya 13:00 • Jaringan Komputer',
-                      onTap: onOpenDenahMeja ?? onOpenPresensi,
-                    ),
-                    _SimpleLabCard(
-                      name: 'Lab Jaringan 4',
-                      subtitle: 'Tidak ada sesi hari ini',
-                      chip: const LabChip.warn('Perawatan'),
-                      meta:
-                          '${lab4Broken > 0 ? lab4Broken : 1} PC perlu perawatan • aktif lagi Selasa',
-                      onTap: () => onOpenTab(LaboranShell.tabInventaris),
-                    ),
+                    for (final lab in labs)
+                      if (session.isActive && session.labName == lab)
+                        _LabCard(
+                          name: lab,
+                          course:
+                              'Praktikum ${praktikum.courseById(session.courseId).name}',
+                          initials: _initials(session.startedBy),
+                          assistant: session.startedBy,
+                          verifiedAt: wib(session.startedAt),
+                          attendance: '$hadir hadir',
+                          fraction:
+                              recs.isEmpty ? 0 : (hadir / recs.length).clamp(0.0, 1.0),
+                          active: true,
+                          onTap: onOpenDenahLab != null
+                              ? () => onOpenDenahLab!(lab)
+                              : (onOpenDenahMeja ?? onOpenPresensi),
+                        )
+                      else
+                        () {
+                          final broken = deskSync
+                              .inventoryDesks(lab)
+                              .where((d) => !d.isReady)
+                              .length;
+                          return _SimpleLabCard(
+                            name: lab,
+                            subtitle: broken > 0
+                                ? '$broken PC perlu perawatan • tidak ada sesi aktif'
+                                : 'Siap digunakan • tidak ada sesi aktif',
+                            chip: broken > 0
+                                ? const LabChip.warn('Perawatan')
+                                : const LabChip.info('Siap'),
+                            meta: nextSchedule(lab),
+                            onTap: onOpenDenahLab != null
+                                ? () => onOpenDenahLab!(lab)
+                                : (onOpenDenahMeja ?? onOpenPresensi),
+                          );
+                        }(),
                   ],
                 );
               },
@@ -124,7 +166,9 @@ class LaboranBerandaPage extends StatelessWidget {
                         icon: 'key',
                         title: 'Presensi Asisten',
                         subtitle:
-                            '${shift.attendedShiftCount} dari ${shift.totalShifts} sudah hadir',
+                            shift.todayShifts.isEmpty
+                                ? 'Tidak ada shift hari ini'
+                                : '${shift.todayAttendedCount} dari ${shift.todayShifts.length} sudah hadir',
                         onTap: onOpenPresensi,
                       );
                     },
@@ -273,13 +317,12 @@ class _MonitoringCard extends StatelessWidget {
       listenable: Listenable.merge([presensi, shift]),
       builder: (_, __) {
         final session = presensi.activeSession;
-        final extraHadir = presensi
-            .recordsForMeeting(session.courseId, session.meetingNumber)
-            .where((r) => r.status == PrakAttend.hadir)
-            .length;
-        final totalHadir = (18 + extraHadir).clamp(0, 24);
-        final pct = ((totalHadir * 100) / 24).round();
-        final now = DateTime.now();
+        final recs =
+            presensi.recordsForMeeting(session.courseId, session.meetingNumber);
+        final hadir = recs.where((r) => r.status == PrakAttend.hadir).length;
+        final pct = recs.isEmpty ? 0 : ((hadir * 100) / recs.length).round();
+        // Jam WIB (UTC+7), tidak bergantung zona waktu perangkat.
+        final now = DateTime.now().toUtc().add(const Duration(hours: 7));
         final clock =
             '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} WIB';
         return LabCard(
@@ -305,12 +348,12 @@ class _MonitoringCard extends StatelessWidget {
                 LabStat(
                   icon: 'shield_check_outline',
                   label: 'On-Duty',
-                  value: '${shift.totalShifts} Aslab',
+                  value: '${shift.attendedShiftCount} Aslab',
                 ),
                 LabStat(
                   icon: 'people_group',
                   label: 'Hadir',
-                  value: '$pct%',
+                  value: session.isActive ? '$pct%' : '-',
                 ),
               ],
             ),
@@ -515,4 +558,12 @@ class _MenuRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+  return name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'AS';
 }

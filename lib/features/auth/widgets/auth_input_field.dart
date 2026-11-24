@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen kolom input autentikasi
 class AuthInputField extends StatelessWidget {
   final TextEditingController? controller;
   final String label;

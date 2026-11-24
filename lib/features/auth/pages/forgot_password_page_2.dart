@@ -8,7 +8,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_3.dart';
 
-/// Lupa Password – langkah 2: OTP (Figma "Lupa Password 2").
+/// Lupa Password – langkah 2: OTP.
 class ForgotPasswordPage2 extends StatefulWidget {
   final String targetIdentifier;
   final String targetEmail;

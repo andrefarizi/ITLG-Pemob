@@ -1,12 +1,11 @@
-/// Data contoh untuk tampilan Laboran (belum terhubung ke backend). Isinya
-/// sama dengan teks pada desain Figma "03 Laboran".
+/// Penyimpanan data lokal peran Laboran.
 
 class LabTicket {
   final String id;
   final String icon;
   final String title;
 
-  /// Judul di halaman detail (bisa memuat ganti baris seperti di Figma).
+  /// Judul di halaman detail.
   final String detailTitle;
   final String place;
   final String summary;
@@ -116,7 +115,7 @@ class LaboranStore {
 
   /// Nama lab di Data Inventaris (urutan = urutan tab).
   static const List<String> inventoryLabs = [
-    'Lab Komputer 1',
+    'Lab Jaringan 1',
     'Lab Jaringan 2',
     'Lab Jaringan 3',
     'Lab Jaringan 4',
@@ -148,7 +147,7 @@ class LaboranStore {
       initials: 'AP',
       time: 'Hari ini, 08:15',
       reportedAt: 'Dilaporkan hari ini 08:15 WIB',
-      lokasi: 'Lab Komputer 1',
+      lokasi: 'Lab Jaringan 1',
       kategori: 'PC • Meja 12',
       photo: 'foto_pc12.jpg',
     ),
@@ -191,7 +190,7 @@ class LaboranStore {
   final List<RoomRequest> requests = [
     RoomRequest(
       tag: 'Praktikum Pengganti',
-      lab: 'Lab Komputer 1',
+      lab: 'Lab Jaringan 1',
       title: 'Praktikum Basis Data • Kelas B',
       date: 'Kam, 01 Okt 2026',
       time: '13:00–14:40',

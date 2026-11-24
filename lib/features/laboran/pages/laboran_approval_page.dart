@@ -6,7 +6,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
-/// Figma: "Approval Ruangan-Laboran".
+/// Halaman Approval Ruangan Laboran.
 class LaboranApprovalPage extends StatefulWidget {
   final LaboranStore store;
   const LaboranApprovalPage({super.key, required this.store});
@@ -46,15 +46,19 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
       labToast(context, conflictError);
       return;
     }
-    labToast(
+    await labShowResult(
       context,
-      status == RoomStatus.disetujui
-          ? 'Peminjaman ${request.labName} disetujui & disinkronkan ke BE'
-          : 'Peminjaman ${request.labName} ditolak',
+      icon: status == RoomStatus.disetujui ? 'circle_check' : 'person_cross',
+      title: status == RoomStatus.disetujui
+          ? 'Peminjaman Disetujui'
+          : 'Peminjaman Ditolak',
+      message: status == RoomStatus.disetujui
+          ? 'Peminjam akan menerima notifikasi dan ruangan tercatat di jadwal lab.'
+          : 'Peminjam akan menerima notifikasi bahwa pengajuannya ditolak.',
     );
   }
 
-  /// Figma: "Sheet Alasan Penolakan-Laboran" (5817:3163).
+  /// Bottom sheet Alasan Penolakan (Laboran).
   Future<void> _openRejectSheet(RoomBookingRecord request) async {
     const reasons = [
       ('clipboard', 'Dipakai Ujian'),
@@ -161,7 +165,10 @@ class _LaboranApprovalPageState extends State<LaboranApprovalPage> {
       ),
     );
     final note = noteCtrl.text.trim();
-    noteCtrl.dispose();
+    // Lepas controller setelah animasi tutup sheet selesai; melepasnya
+    Future<void>.delayed(const Duration(milliseconds: 600), () {
+      noteCtrl.dispose();
+    });
     if (confirmed == true && mounted) {
       await _decide(
         request,

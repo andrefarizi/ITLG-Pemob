@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../praktikan/praktikan_store.dart';
 import '../laboran_store.dart';
@@ -16,17 +19,21 @@ enum LabDeskStatus {
   rusak,
 }
 
-/// Figma: "Denah Meja-Laboran" (node 5712:3087).
+/// Halaman Denah Meja Laboran.
 class LaboranDenahMejaPage extends StatefulWidget {
   final LaboranStore store;
   final VoidCallback onLogoTap;
   final VoidCallback? onOpenTiketTab;
+
+  /// Lab yang langsung dibuka (mis. dari kartu lab di Beranda).
+  final String? initialLab;
 
   const LaboranDenahMejaPage({
     super.key,
     required this.store,
     required this.onLogoTap,
     this.onOpenTiketTab,
+    this.initialLab,
   });
 
   @override
@@ -53,6 +60,8 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
   @override
   void initState() {
     super.initState();
+    final idx = _labNames.indexOf(widget.initialLab ?? '');
+    if (idx != -1) _labIdx = idx;
     _sync.addListener(_onSyncChanged);
     _sync.refreshFromBackend();
   }
@@ -125,7 +134,34 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
         selectedRec?.status == PrakDesk.broken;
     final pcLabel = _selectedDesk.toString().padLeft(2, '0');
 
-    // Tiket untuk tombol utama: tiket meja terpilih, atau tiket terbaru di lab ini / semua lab
+    // Info lab dari data nyata: sesi aktif di lab ini, atau jadwal rutin
+    // berikutnya (bukan "Kom C • Sesi C1 / Senin 08:00" untuk semua lab).
+    final session = PresensiSyncService.instance.activeSession;
+    final liveHere = session.isActive && session.labName == activeLab;
+    const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    final sched = JadwalSyncService.instance.schedules
+        .where((x) => x.room.trim().toLowerCase() == activeLab.toLowerCase())
+        .toList()
+      ..sort((a, b) => a.dayIndex != b.dayIndex
+          ? a.dayIndex.compareTo(b.dayIndex)
+          : a.startTime.compareTo(b.startTime));
+    final String headerTop;
+    final String headerTime;
+    if (liveHere) {
+      headerTop =
+          'Sesi berlangsung • ${PraktikumSyncService.instance.courseById(session.courseId).name}';
+      headerTime = 'Pertemuan ${session.meetingNumber}';
+    } else if (sched.isNotEmpty) {
+      final f = sched.first;
+      headerTop = f.courseName;
+      headerTime =
+          '${hari[f.dayIndex.clamp(0, 5)]} • ${f.startTime}–${f.endTime} WIB';
+    } else {
+      headerTop = 'Tidak ada jadwal rutin';
+      headerTime = 'Tidak ada sesi aktif';
+    }
+
+    // Tiket untuk tombol utama: tiket meja terpilih, atau tiket terbaru di lab ini /
     final labTickets =
         _sync.allTickets.where((t) => t.labName == activeLab).toList();
     final primaryTicketRecord = selectedTicket ??
@@ -150,7 +186,9 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Kom C • Sesi C1',
+                  headerTop,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: labText(14, c: const Color(0xFF640707)),
                 ),
                 const SizedBox(height: 6),
@@ -169,7 +207,7 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
                     const LabIcon('clock', size: 12, color: Color(0xFF6B7280)),
                     const SizedBox(width: 6),
                     Text(
-                      'Senin • 08:00–09:40 WIB',
+                      headerTime,
                       style:
                           labText(11, w: kMedium, c: const Color(0xFF6B7280)),
                     ),
@@ -234,7 +272,7 @@ class _LaboranDenahMejaPageState extends State<LaboranDenahMejaPage> {
               ],
             ),
 
-            // Denah Grid Meja dengan Inner Shadow
+            // Grid visual denah meja laboratorium
             InnerShadowBox(
               radius: 12,
               color: Colors.white,

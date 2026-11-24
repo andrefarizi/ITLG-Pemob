@@ -6,8 +6,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 import 'dosen_laporan_page.dart';
 
-/// Figma: "Riwayat Unduhan-Dosen" (dari "Lihat Semua" di Generate Laporan).
-/// Tersinkron penuh ke Supabase (`public.report_downloads`).
+/// Halaman Riwayat Unduhan Dosen.
 class DosenRiwayatPage extends StatefulWidget {
   final DosenStore store;
   final VoidCallback? onLogoTap;
@@ -68,7 +67,7 @@ class _DosenRiwayatPageState extends State<DosenRiwayatPage> {
               index: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
-            // Figma: Bagian "Baru Diunduh Hari Ini" (5602:2845)
+            // Bagian "Baru Diunduh Hari Ini"
             if (shown.isNotEmpty)
               LabColumn(
                 gap: 10,

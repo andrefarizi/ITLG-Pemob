@@ -1,5 +1,6 @@
 import '../../../core/utils/constants.dart';
 
+// Model data profil pengguna
 class UserProfile {
   final String id;
   final String identifier; // NIM atau NIP

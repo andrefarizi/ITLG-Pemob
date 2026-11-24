@@ -14,7 +14,7 @@ class _Lab {
   const _Lab(this.tab, this.name, this.place);
 }
 
-/// Figma: "Data Inventaris-Laboran".
+/// Halaman Data Inventaris Laboran.
 class LaboranInventarisPage extends StatefulWidget {
   final LaboranStore store;
   final VoidCallback? onLogoTap;
@@ -27,7 +27,7 @@ class LaboranInventarisPage extends StatefulWidget {
 
 class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
   static const List<_Lab> _labs = [
-    _Lab('Jaringan 1', 'Lab Komputer 1', 'Gedung C • Lantai 2'),
+    _Lab('Jaringan 1', 'Lab Jaringan 1', 'Gedung C • Lantai 2'),
     _Lab('Jaringan 2', 'Lab Jaringan 2', 'Gedung C • Lantai 2'),
     _Lab('Jaringan 3', 'Lab Jaringan 3', 'Gedung D • Lantai 2'),
     _Lab('Jaringan 4', 'Lab Jaringan 4', 'Gedung D • Lantai 3'),
@@ -102,12 +102,25 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
       return;
     }
     if (i == 3) {
-      await _sync.deleteDeskDevice(
-        labName: d.labName,
-        deskNumber: d.deskNumber,
+      final ok = await labShowConfirmDialog(
+        context,
+        icon: 'delete_filled',
+        title: 'Hapus ${d.displayName}?',
+        message: 'Perangkat dihapus dari inventaris dan denah meja lab.',
+        confirmLabel: 'Hapus',
       );
+      if (!ok || !mounted) return;
+      try {
+        await _sync.deleteDeskDevice(
+          labName: d.labName,
+          deskNumber: d.deskNumber,
+        );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
       if (!mounted) return;
-      labToast(context, '${d.displayName} dihapus dari inventaris BE');
+      labToast(context, '${d.displayName} dihapus dari inventaris');
       return;
     }
     final ready = i == 0;
@@ -135,26 +148,44 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
     );
     if (choice == null || !mounted) return;
     if (choice == 1) {
-      await _sync.deleteSoftware(
+      final ok = await labShowConfirmDialog(
+        context,
+        icon: 'delete_filled',
+        title: 'Hapus ${sw.name}?',
+        message: 'Software dihapus dari inventaris ${sw.labName}.',
+        confirmLabel: 'Hapus',
+      );
+      if (!ok || !mounted) return;
+      try {
+        await _sync.deleteSoftware(
+          labName: sw.labName,
+          softwareName: sw.name,
+        );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
+      if (!mounted) return;
+      labToast(context, '${sw.name} dihapus dari inventaris');
+      return;
+    }
+    try {
+      await _sync.toggleSoftwareInstalled(
         labName: sw.labName,
         softwareName: sw.name,
       );
-      if (!mounted) return;
-      labToast(context, '${sw.name} dihapus dari inventaris BE');
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
       return;
     }
-    await _sync.toggleSoftwareInstalled(
-      labName: sw.labName,
-      softwareName: sw.name,
-    );
     if (!mounted) return;
     labToast(
       context,
-      '${sw.name}: ${sw.installed ? 'Terpasang' : 'Perlu instalasi'} (tersinkron ke BE)',
+      '${sw.name}: ${sw.installed ? 'Terpasang' : 'Perlu instalasi'}',
     );
   }
 
-  /// Figma: "Sheet Tambah Software-Laboran" (5817:3069).
+  /// Bottom sheet Tambah Software (Laboran).
   Future<void> _openAddSoftwareSheet(_Lab lab) async {
     final nameCtrl = TextEditingController();
     final verCtrl = TextEditingController();
@@ -262,11 +293,16 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                   final full = verCtrl.text.trim().isNotEmpty
                       ? '$nm ${verCtrl.text.trim()}'
                       : nm;
-                  await _sync.addSoftware(
-                    labName: lab.name,
-                    softwareName: full,
-                    installed: installed,
-                  );
+                  try {
+                    await _sync.addSoftware(
+                      labName: lab.name,
+                      softwareName: full,
+                      installed: installed,
+                    );
+                  } on StateError catch (e) {
+                    if (ctx.mounted) labToast(ctx, e.message);
+                    return;
+                  }
                   if (!ctx.mounted) return;
                   Navigator.of(ctx).pop(true);
                 },
@@ -276,8 +312,11 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
         },
       ),
     );
-    nameCtrl.dispose();
-    verCtrl.dispose();
+    // Lepas controller setelah animasi tutup sheet selesai; melepasnya
+    Future<void>.delayed(const Duration(milliseconds: 600), () {
+      nameCtrl.dispose();
+      verCtrl.dispose();
+    });
     if (added == true && mounted) {
       labToast(context, 'Software baru ditambahkan ke Lab ${lab.tab}');
     }
@@ -379,7 +418,6 @@ class _LaboranInventarisPageState extends State<LaboranInventarisPage> {
                 decoration: BoxDecoration(
                   color: LabColors.tile,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: LabShadows.neu,
                 ),
                 child: LabIcon('settings_horizontal',
                     size: 15,

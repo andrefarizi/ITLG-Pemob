@@ -1,4 +1,7 @@
+import '../../core/services/presensi_sync_service.dart';
+
 import 'package:flutter/material.dart';
+
 import '../../core/utils/constants.dart';
 import '../shared/profil_data.dart';
 import 'models/user_profile.dart';
@@ -118,7 +121,8 @@ class AuthController extends ChangeNotifier {
     _isLoggedIn = false;
     _currentProfile = null;
     ProfilData.resetAll();
+    // Jangan bawa sesi presensi milik akun sebelumnya ke akun berikutnya.
+    PresensiSyncService.instance.onLogout();
     notifyListeners();
   }
 }
-

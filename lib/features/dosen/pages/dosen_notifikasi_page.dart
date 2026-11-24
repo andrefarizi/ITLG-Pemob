@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/nilai_sync_service.dart';
+
 import '../../../core/services/notification_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 
-/// Figma: "Notifikasi-Dosen".
+/// Halaman Notifikasi Dosen.
 class DosenNotifikasiPage extends StatefulWidget {
   final DosenStore store;
   final ValueChanged<DosenNotifTarget> onOpen;
@@ -59,6 +61,12 @@ class _DosenNotifikasiPageState extends State<DosenNotifikasiPage> {
 
   void _open(AppNotificationRecord n) {
     _sync.markRead(n.id);
+    // Buka praktikum yang dirujuk notifikasi (mis. sanggahan Desain Interaksi),
+    // bukan praktikum yang kebetulan sedang terpilih.
+    final cid = n.courseId;
+    if (cid != null && cid.isNotEmpty) {
+      NilaiSyncService.instance.selectCourse(cid);
+    }
     widget.onOpen(_targetFor(n.targetKey));
   }
 

@@ -7,8 +7,6 @@ import '../laboran_store.dart';
 import '../widgets/laboran_ui.dart';
 
 /// Form "Tambah / Edit Perangkat" dari halaman Data Inventaris.
-/// Tersinkron penuh ke backend Supabase (`public.lab_desks`) melalui
-/// [LabDeskSyncService].
 class LaboranTambahPerangkatPage extends StatefulWidget {
   final LaboranStore store;
   final int initialLab;
@@ -116,27 +114,48 @@ class _LaboranTambahPerangkatPageState
     final labName = LaboranStore.inventoryLabs[_lab];
     final name = 'Meja ${meja.padLeft(2, '0')} • ${pc.toUpperCase()}';
 
+    if (_isEdit &&
+        (deskNumber != widget.editRecord!.deskNumber ||
+            labName != widget.editRecord!.labName)) {
+      labToast(
+        context,
+        'Lab dan nomor meja tidak dapat diubah. Hapus perangkat lalu tambahkan ulang di posisi baru.',
+        error: true,
+      );
+      return;
+    }
     if (_isEdit) {
-      await LabDeskSyncService.instance.updateDeskDevice(
-        labName: widget.editRecord!.labName,
-        deskNumber: widget.editRecord!.deskNumber,
+      try {
+        await LabDeskSyncService.instance.updateDeskDevice(
+          labName: widget.editRecord!.labName,
+          deskNumber: widget.editRecord!.deskNumber,
+          pcCode: pc.toUpperCase(),
+          spec: spec,
+          ready: _st == 0,
+        );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
+      if (!mounted) return;
+      Navigator.of(context).maybePop(true);
+      labToast(context, '$name diperbarui');
+      return;
+    }
+
+    final bool ok;
+    try {
+      ok = await LabDeskSyncService.instance.addDeskDevice(
+        labName: labName,
+        deskNumber: deskNumber,
         pcCode: pc.toUpperCase(),
         spec: spec,
         ready: _st == 0,
       );
-      if (!mounted) return;
-      Navigator.of(context).maybePop(true);
-      labToast(context, '$name diperbarui di BE');
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
       return;
     }
-
-    final ok = await LabDeskSyncService.instance.addDeskDevice(
-      labName: labName,
-      deskNumber: deskNumber,
-      pcCode: pc.toUpperCase(),
-      spec: spec,
-      ready: _st == 0,
-    );
     if (!mounted) return;
     if (!ok) {
       labToast(context, '$name sudah terdaftar');

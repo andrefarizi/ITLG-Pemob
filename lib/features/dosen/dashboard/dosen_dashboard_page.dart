@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Dosen Dashboard Page
 class DosenDashboardPage extends StatelessWidget {
   final VoidCallback? onNavigateToReports;
 

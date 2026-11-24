@@ -8,15 +8,7 @@ import '../auth_controller.dart';
 import '../widgets/auth_design.dart';
 import 'forgot_password_page_1.dart';
 
-/// Halaman Masuk untuk semua peran. UI saja: belum terhubung ke backend.
-///
-/// Mengikuti empat status peran di Figma:
-/// - "06 Prototype — Status Peran Login" > Masuk-Mahasiswa, Masuk-Asisten,
-///   Masuk-Laboran
-/// - "05 Umum — Login & Notifikasi" > Masuk-Semua Peran (Dosen)
-///
-/// Yang berubah antar status hanya chip peran yang aktif serta label dan contoh
-/// nomor induk (NIM untuk Mahasiswa/Asisten, NIP untuk Laboran/Dosen).
+/// Halaman login untuk seluruh peran pengguna.
 class LoginPage extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
 
@@ -312,8 +304,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-/// Chip peran (Figma "Option": tinggi 39, padding 9, radius 12, Bold 12).
-/// Perpindahan status memakai 300 ms ease-out seperti Smart Animate di Figma.
+/// Chip peran.
 class _RoleChip extends StatelessWidget {
   final String label;
   final bool selected;

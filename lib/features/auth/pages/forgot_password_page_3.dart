@@ -4,8 +4,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../services/auth_service.dart';
 import '../widgets/auth_design.dart';
 
-/// Lupa Password – langkah 3: Sandi Baru (Figma "Lupa Password 3"),
-/// diakhiri popup "Kata Sandi Diubah".
+/// Lupa Password – langkah 3: Sandi Baru
 class ForgotPasswordPage3 extends StatefulWidget {
   final String targetEmail;
 

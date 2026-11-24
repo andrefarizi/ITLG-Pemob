@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Laboran Dashboard Page
 class LaboranDashboardPage extends StatelessWidget {
   final VoidCallback? onNavigateToAttendance;
   final VoidCallback? onNavigateToReports;

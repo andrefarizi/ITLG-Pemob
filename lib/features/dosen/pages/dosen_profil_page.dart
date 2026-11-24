@@ -9,7 +9,7 @@ import '../../shared/ubah_profil_page.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 
-/// Figma: "Profil-Dosen".
+/// Halaman Profil Dosen.
 class DosenProfilPage extends StatefulWidget {
   final DosenStore store;
   final VoidCallback onLogout;
@@ -164,7 +164,7 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                     _DataRow(
                         icon: 'calendar',
                         label: 'Mata Kuliah',
-                        value: courses.take(2).map((c) => c.name).join(' & ')),
+                        value: courses.map((c) => c.name).join(', ')),
                   ],
                 );
               },
@@ -200,7 +200,7 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                 _SettingItem(
                   icon: 'lock_on',
                   title: 'Ubah Kata Sandi',
-                  subtitle: 'Terakhir diubah 12 Sep 2026',
+                  subtitle: 'Ganti kata sandi akun anda',
                   trailing: const LabIcon('chevron_right',
                       size: 16, color: ItlgColors.primary),
                   onTap: _openChangePassword,
@@ -311,7 +311,7 @@ class _SettingItem extends StatelessWidget {
   }
 }
 
-/// Toggle 40 x 22 dengan knop putih 18 px.
+/// Toggle dengan knop putih.
 class _Toggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;

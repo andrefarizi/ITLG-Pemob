@@ -7,7 +7,7 @@ import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 import 'dosen_peringatan_page.dart';
 
-/// Figma: "Hubungi Asisten-Dosen (Yoga / Lia / Bagas)".
+/// Halaman Hubungi Asisten Dosen.
 class DosenHubungiPage extends StatefulWidget {
   final DosenStudent student;
   final VoidCallback? onLogoTap;
@@ -60,19 +60,28 @@ class _DosenHubungiPageState extends State<DosenHubungiPage> {
   Future<void> _send() async {
     if (_sending) return;
     final text = _message.text.trim();
-    if (text.isEmpty) {
-      labToast(context, 'Pesan untuk asisten tidak boleh kosong');
+    if (text.length < 10) {
+      labToast(context, 'Tulis pesan untuk asisten minimal 10 karakter',
+          error: true);
       return;
     }
     setState(() => _sending = true);
     FocusScope.of(context).unfocus();
-    await _sync.sendAssistantFollowUp(
-      studentNim: widget.student.nim,
-      studentName: widget.student.name,
-      assistantName: _selectedAssistant,
-      followUpType: _followUps[_followUp],
-      message: text,
-    );
+    try {
+      await _sync.sendAssistantFollowUp(
+        studentNim: widget.student.nim,
+        studentName: widget.student.name,
+        assistantName: _selectedAssistant,
+        followUpType: _followUps[_followUp],
+        message: text,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
     setState(() => _sending = false);
     dosenShowResult(
@@ -154,7 +163,7 @@ class _DosenHubungiPageState extends State<DosenHubungiPage> {
               large: true,
               onTap: _send,
             ),
-            // Figma: Kartu "Riwayat Arahan" (5601:3086)
+            // Kartu "Riwayat Arahan"
             if (history.isNotEmpty)
               LabCard(
                 gap: 12,

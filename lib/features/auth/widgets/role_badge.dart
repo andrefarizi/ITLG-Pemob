@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/constants.dart';
 
+// Widget lencana peran pengguna
 class RoleBadge extends StatelessWidget {
   final UserRole role;
 
