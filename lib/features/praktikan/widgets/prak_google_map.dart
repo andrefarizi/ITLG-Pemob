@@ -6,17 +6,26 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/services/location_service.dart';
 
 /// Widget Google Maps nyata untuk presensi.
-/// Menampilkan:
-/// - Titik Lab Komputer 1 (Merah) dengan radius 50m
-/// - Titik Lokasi Perangkat Anda yang didapat langsung dari sensor GPS
 class PrakGoogleMap extends StatefulWidget {
   final bool inside;
   final LatLng? userPos;
+
+  /// Nama lab sesi aktif untuk judul penanda (teks saja).
+  final String labName;
+
+  /// Titik & radius lab sesi (bawaan: titik cadangan Lab Jaringan 1).
+  final double labLat;
+  final double labLng;
+  final double radius;
 
   const PrakGoogleMap({
     super.key,
     required this.inside,
     this.userPos,
+    this.labName = 'Lab Jaringan 1',
+    this.labLat = kLabLat,
+    this.labLng = kLabLng,
+    this.radius = kLabRadius,
   });
 
   @override
@@ -24,7 +33,7 @@ class PrakGoogleMap extends StatefulWidget {
 }
 
 class _PrakGoogleMapState extends State<PrakGoogleMap> {
-  static const LatLng _labCoords = LatLng(kLabLat, kLabLng);
+  LatLng get _labCoords => LatLng(widget.labLat, widget.labLng);
 
   GoogleMapController? _mapController;
 
@@ -56,8 +65,7 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
         ),
       );
     } else {
-      // Sesuaikan kamera otomatis dengan LatLngBounds agar titik lokasi user
-      // dan titik Lab Komputer 1 selalu terlihat jelas berapa pun jaraknya.
+      // Sesuaikan tampilan kamera peta agar mencakup titik pengguna dan lab
       final swLat = math.min(_labCoords.latitude, user.latitude);
       final swLng = math.min(_labCoords.longitude, user.longitude);
       final neLat = math.max(_labCoords.latitude, user.latitude);
@@ -89,7 +97,7 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
       Circle(
         circleId: const CircleId('lab_radius'),
         center: _labCoords,
-        radius: kLabRadius,
+        radius: widget.radius,
         fillColor: const Color(0x338B1A1A),
         strokeColor: const Color(0xFF8B1A1A),
         strokeWidth: 2,
@@ -97,12 +105,12 @@ class _PrakGoogleMapState extends State<PrakGoogleMap> {
     };
 
     final markers = <Marker>{
-      // Marker Lab Komputer 1
+      // Penanda titik presensi lab
       Marker(
         markerId: const MarkerId('lab_marker'),
         position: _labCoords,
-        infoWindow: const InfoWindow(
-          title: 'Titik Presensi: Lab Komputer 1',
+        infoWindow: InfoWindow(
+          title: 'Titik Presensi: ${widget.labName}',
           snippet: 'Gedung C Lantai 2, Fasilkom-TI USU',
         ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),

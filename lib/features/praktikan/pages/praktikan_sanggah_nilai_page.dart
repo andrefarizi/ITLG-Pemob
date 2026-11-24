@@ -9,7 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Sanggah Nilai-Praktikan".
+/// Halaman Sanggah Nilai Praktikan.
 class PraktikanSanggahNilaiPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -72,13 +72,15 @@ class _PraktikanSanggahNilaiPageState extends State<PraktikanSanggahNilaiPage> {
       folder: 'sanggah/${widget.course.id}/m${widget.grade.modul}',
     );
     if (picked == null || !mounted) return;
+    if (!picked.uploadedToCloud) {
+      labToast(
+        context,
+        '${picked.name} gagal diunggah ke server. Periksa koneksi lalu coba lagi.',
+      );
+      return;
+    }
     setState(() => _buktiName = picked.name);
-    labToast(
-      context,
-      picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
-          : '${picked.name} dipilih dari perangkat',
-    );
+    labToast(context, '${picked.name} berhasil diunggah');
   }
 
   Future<void> _kirim() async {
@@ -94,6 +96,14 @@ class _PraktikanSanggahNilaiPageState extends State<PraktikanSanggahNilaiPage> {
       labToast(context, 'Pilih minimal satu komponen yang disanggah');
       return;
     }
+    if (_alasan.text.trim().length < 10) {
+      labToast(context, 'Tulis alasan sanggahan minimal 10 karakter');
+      return;
+    }
+    if (_buktiName == null || _buktiName!.trim().isEmpty) {
+      labToast(context, 'Lampirkan bukti pendukung sanggahan');
+      return;
+    }
     setState(() => _sending = true);
     final auth = AuthController.instance;
     final selectedComps = [
@@ -105,10 +115,11 @@ class _PraktikanSanggahNilaiPageState extends State<PraktikanSanggahNilaiPage> {
       modul: widget.grade.modul,
       userIdentifier: auth.userIdentifier,
       userName: auth.userName,
-      components: selectedComps.isEmpty ? ['Nilai Modul'] : selectedComps,
-      reason: _alasan.text.trim().isEmpty
-          ? 'Mohon peninjauan ulang nilai komponen terpilih.'
-          : _alasan.text.trim(),
+      components: selectedComps,
+      reason: _alasan.text.trim(),
+      // Ambil nilai awal dari modul yang dipilih
+      currentScore: int.tryParse(widget.grade.score ?? '') ?? 0,
+      proposedScore: int.tryParse(widget.grade.score ?? '') ?? 0,
       attachmentName: _buktiName,
     );
     if (!mounted) return;

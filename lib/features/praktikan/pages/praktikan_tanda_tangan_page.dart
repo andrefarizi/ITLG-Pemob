@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/services/praktikum_sync_service.dart';
@@ -8,7 +11,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Tanda Tangan Presensi-Praktikan".
+/// Halaman Tanda Tangan Presensi Praktikan.
 class PraktikanTandaTanganPage extends StatefulWidget {
   final PraktikanNav nav;
   final String method;
@@ -36,8 +39,26 @@ class PraktikanTandaTanganPage extends StatefulWidget {
 
 class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
   final List<List<Offset>> _strokes = [];
-  bool _agree = true;
+  // Pernyataan wajib dicentang sendiri oleh praktikan.
+  bool _agree = false;
   bool _submitting = false;
+
+  /// Lebar kanvas tanda tangan (diisi saat layout) untuk membuat gambar.
+  double _padWidth = 300;
+  static const double _padHeight = 170;
+
+  /// Goresan → PNG transparan (2x agar tajam di layar Aslab).
+  Future<Uint8List?> _signaturePng() async {
+    const scale = 2.0;
+    final size = Size(_padWidth, _padHeight);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder)..scale(scale);
+    _SignaturePainter(_strokes).paint(canvas, size);
+    final image = await recorder.endRecording().toImage(
+        (size.width * scale).round(), (size.height * scale).round());
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return data?.buffer.asUint8List();
+  }
 
   bool get _signed => _strokes.any((s) => s.length > 1);
 
@@ -58,17 +79,37 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
     setState(() => _submitting = true);
     final auth = AuthController.instance;
     final session = PresensiSyncService.instance.activeSession;
-    await PresensiSyncService.instance.submitPresence(
-      courseId: widget.courseId ?? session.courseId,
-      meetingNumber: widget.meetingNumber ?? session.meetingNumber,
-      userIdentifier: auth.userIdentifier,
-      userName: auth.userName,
-      method: widget.method,
-      lat: widget.lat ?? session.lat,
-      lng: widget.lng ?? session.lng,
-      distanceMeters: widget.distanceMeters ?? 12.0,
-      hasSignature: true,
-    );
+    final courseId = widget.courseId ?? session.courseId;
+    final meetingNumber = widget.meetingNumber ?? session.meetingNumber;
+    try {
+      // Simpan goresan asli dulu; tanpa itu presensi tidak dikirim.
+      final png = await _signaturePng();
+      if (png == null) {
+        throw StateError('Tanda tangan gagal diproses. Coba tanda tangan ulang.');
+      }
+      await PresensiSyncService.instance.uploadSignature(
+        courseId: courseId,
+        meetingNumber: meetingNumber,
+        userIdentifier: auth.userIdentifier,
+        png: png,
+      );
+      await PresensiSyncService.instance.submitPresence(
+        courseId: courseId,
+        meetingNumber: meetingNumber,
+        userIdentifier: auth.userIdentifier,
+        userName: auth.userName,
+        method: widget.method,
+        lat: widget.lat ?? session.lat,
+        lng: widget.lng ?? session.lng,
+        distanceMeters: widget.distanceMeters,
+        hasSignature: true,
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
     setState(() => _submitting = false);
     final nav = widget.nav;
@@ -110,7 +151,8 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
                 ),
                 LabMeta(
                   icon: 'location',
-                  text: '${session.labName}, Gedung C Lantai 2',
+                  text: PresensiSyncService.instance
+                      .labPlaceLabel(session.labName),
                 ),
                 const LabMeta(
                   icon: 'map_marker_radius_outline',
@@ -181,13 +223,17 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
     );
   }
 
-  /// Area 338 x 170 (putih cekung): tanda tangan, garis, dan petunjuk.
+  /// Area (putih cekung): tanda tangan, garis, dan petunjuk.
   Widget _signaturePad() {
     return InnerShadowBox(
       radius: 12,
-      height: 170,
+      height: _padHeight,
       color: Colors.white,
-      child: GestureDetector(
+      child: LayoutBuilder(builder: (context, box) {
+        if (box.maxWidth.isFinite && box.maxWidth > 0) {
+          _padWidth = box.maxWidth;
+        }
+        return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (d) => setState(() {
           _strokes.add([d.localPosition]);
@@ -217,7 +263,8 @@ class _PraktikanTandaTanganPageState extends State<PraktikanTandaTanganPage> {
             ),
           ],
         ),
-      ),
+      );
+      }),
     );
   }
 }

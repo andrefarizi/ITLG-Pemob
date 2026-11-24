@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -8,10 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Detail Praktikum-Praktikan (Kuis & Rating)".
-///
-/// Kartu judul, tab (Semua Pertemuan / Materi / Tugas), daftar pertemuan
-/// dalam satu kartu (ketuk → Detail Pertemuan), lalu kartu Rating Asisten.
+/// Halaman Detail Praktikum Praktikan.
 class PraktikanDetailPraktikumPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -161,7 +159,7 @@ class _PraktikanDetailPraktikumPageState
     );
   }
 
-  /// "Modul 4 • Figma Management" → "Modul 4 : Figma Management".
+  /// "Modul 4 • Management" → "Modul 4: Management".
   static String _title(PrakMeeting m) => m.module.replaceFirst(' • ', ' : ');
 
   /// "Sen, 28 Sep 2026 • 13:00–14:40 WIB" → "Sen, 28 Sep 2026".
@@ -184,7 +182,9 @@ class _PraktikanDetailPraktikumPageState
         return _MeetingRow(
           number: m.number,
           title: materiLabel,
-          subtitle: 'PDF • diunggah asisten',
+          subtitle: m.materiFile.isNotEmpty
+              ? m.materiFile
+              : (m.number == 4 ? c.materiFile : 'Belum ada berkas materi'),
           trailing: Text('Lihat',
               style: labText(13, w: kSemiBold, c: ItlgColors.primary)),
           onTap: () => nav.detailMateri(context, course: c, meeting: m),
@@ -208,19 +208,26 @@ class _PraktikanDetailPraktikumPageState
           onTap: () => nav.editTugas(context, course: c, meeting: m),
         );
       default:
+        final session = PresensiSyncService.instance.activeSession;
+        final live = session.isActive &&
+            session.courseId == c.id &&
+            session.meetingNumber == m.number;
         return _MeetingRow(
           number: m.number,
           title: _title(m),
           subtitle: _date(m),
-          trailing: pending > 0
-              ? PrakSoftChip.warn('$pending belum selesai')
-              : const PrakSoftChip.done('Selesai'),
+          trailing: live
+              ? const PrakSoftChip('Berlangsung',
+                  bg: LabColors.tagBlueBg, fg: LabColors.blueDark)
+              : (pending > 0
+                  ? PrakSoftChip.warn('$pending belum selesai')
+                  : const PrakSoftChip.done('Selesai')),
           onTap: () => nav.detailPertemuan(context, c, m),
         );
     }
   }
 
-  // Kartu judul (370 x 268).
+  // Kartu judul.
   Widget _header(PrakCourse c, int doneCount) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 23, 13, 28),
@@ -291,8 +298,7 @@ class _PraktikanDetailPraktikumPageState
   }
 }
 
-/// Kartu abu-abu berisi baris-baris bergaris pemisah (Figma: "Kartu Daftar
-/// Pertemuan", padding 4/16).
+/// Kartu daftar pertemuan praktikum.
 class _ListCard extends StatelessWidget {
   final List<Widget> children;
   const _ListCard({required this.children});
@@ -324,8 +330,7 @@ class _ListCard extends StatelessWidget {
   }
 }
 
-/// Baris pertemuan: kotak nomor merah 36 px, judul Bold 14, keterangan
-/// Regular 12, chip, chevron.
+/// Widget baris item pertemuan praktikum.
 class _MeetingRow extends StatelessWidget {
   final int number;
   final String title;
@@ -382,7 +387,7 @@ class _MeetingRow extends StatelessWidget {
   }
 }
 
-/// Kotak cekung 64 px: label kecil + nilai Bold 14.
+/// Kotak cekung: label kecil + nilai.
 class _InfoBox extends StatelessWidget {
   final String icon;
   final double iconSize;
@@ -431,7 +436,7 @@ class _InfoBox extends StatelessWidget {
   }
 }
 
-/// Tab lebar tetap (144 / 86 / 86) seperti di Figma.
+/// Tab lebar tetap (144 / 86 / 86).
 class _FixedTab extends StatelessWidget {
   final String label;
   final double width;

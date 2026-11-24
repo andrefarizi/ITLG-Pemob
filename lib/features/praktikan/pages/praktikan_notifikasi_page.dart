@@ -6,7 +6,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 
-/// Figma: "Notifikasi-Praktikan".
+/// Halaman Notifikasi Praktikan.
 class PraktikanNotifikasiPage extends StatefulWidget {
   final PraktikanNav nav;
 
@@ -60,7 +60,12 @@ class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
 
   void _open(AppNotificationRecord n) {
     _sync.markRead(n.id);
-    widget.nav.openNotif(context, _targetFor(n.targetKey));
+    widget.nav.openNotif(
+      context,
+      _targetFor(n.targetKey),
+      courseId: n.courseId,
+      meetingNumber: n.meetingNumber,
+    );
   }
 
   Widget _group(String label, List<AppNotificationRecord> items) {
@@ -68,7 +73,7 @@ class _PraktikanNotifikasiPageState extends State<PraktikanNotifikasiPage> {
       gap: 10,
       children: [
         Text(label, style: labText(12, w: kBold, c: ItlgColors.textSubtle)),
-        // Figma: notifikasi per kelompok di dalam satu "Kartu Daftar".
+        // Notifikasi per kelompok di dalam satu "Kartu Daftar".
         if (items.isNotEmpty)
           LabListCard(
             children: [

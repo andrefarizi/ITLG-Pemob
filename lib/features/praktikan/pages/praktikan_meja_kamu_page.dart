@@ -10,8 +10,7 @@ import '../praktikan_store.dart';
 import '../widgets/desk_map.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Meja Kamu-Praktikan" (5712:2948) +
-/// "Pop up Konfirmasi Akhiri Pemakaian Meja" (5812:2631).
+/// Halaman Meja Kamu Praktikan.
 class PraktikanMejaKamuPage extends StatelessWidget {
   final PraktikanNav nav;
   const PraktikanMejaKamuPage({super.key, required this.nav});
@@ -23,7 +22,7 @@ class PraktikanMejaKamuPage extends StatelessWidget {
   }) async {
     final ok = await labShowConfirmDialog(
       context,
-      icon: 'desktop_device',
+      icon: 'stop',
       title: 'Akhiri Pemakaian Meja?',
       message:
           'Meja $deskNumber akan dikosongkan dan bisa dipilih praktikan lain. Pastikan berkas kamu sudah tersimpan.',

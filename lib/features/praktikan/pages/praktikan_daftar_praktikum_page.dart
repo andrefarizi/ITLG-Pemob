@@ -7,7 +7,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Daftar Praktikum-Praktikan (Navbar)".
+/// Halaman Daftar Praktikum Praktikan.
 class PraktikanDaftarPraktikumPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanDaftarPraktikumPage({super.key, required this.nav});
@@ -119,7 +119,7 @@ class _PraktikanDaftarPraktikumPageState
   }
 }
 
-/// Kartu praktikum 177 x 258 (posisi isi mengikuti Figma).
+/// Kartu praktikum.
 class _CourseCard extends StatelessWidget {
   final PrakCourse course;
   final VoidCallback onTap;
@@ -151,9 +151,12 @@ class _CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Di 402 px posisinya sama dengan Figma (info asisten mulai di y 134,
-    // progress di bawah). Bila judul lebih panjang, kartu ikut memanjang
-    // sehingga tidak ada teks yang bertumpuk.
+    // Hitung jumlah pertemuan dari data praktikum aktif
+    final meetingCount = course.meetings.length.clamp(0, 12);
+    final lastModul = course.meetings.isEmpty
+        ? 0
+        : course.meetings.map((m) => m.number).reduce((a, b) => a > b ? a : b);
+    // Susunan informasi kartu praktikum
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -173,11 +176,11 @@ class _CourseCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  PrakBookTile(),
+                children: [
+                  const PrakBookTile(),
                   Padding(
-                    padding: EdgeInsets.only(top: 5),
-                    child: PrakTag17('Modul 4'),
+                    padding: const EdgeInsets.only(top: 5),
+                    child: PrakTag17('Modul $lastModul'),
                   ),
                 ],
               ),
@@ -220,12 +223,12 @@ class _CourseCard extends StatelessWidget {
                         child: Text('Pertemuan',
                             style: labText(10, c: ItlgColors.textSubtle)),
                       ),
-                      Text('4 / 12',
+                      Text('$meetingCount / 12',
                           style:
                               labText(10, w: kSemiBold, c: PrakColors.ink)),
                     ],
                   ),
-                  const PrakTrack(fraction: 96.6 / 145, color: LabColors.green),
+                  PrakTrack(fraction: meetingCount / 12, color: LabColors.green),
                 ],
               ),
             ),

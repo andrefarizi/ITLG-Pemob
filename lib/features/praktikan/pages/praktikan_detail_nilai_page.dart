@@ -9,7 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Detail Nilai-Praktikan".
+/// Halaman Detail Nilai Praktikan.
 class PraktikanDetailNilaiPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -112,7 +112,7 @@ class _PraktikanDetailNilaiPageState extends State<PraktikanDetailNilaiPage> {
               index: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
-            // Figma: semua nilai di dalam satu "Kartu Daftar".
+            // Semua nilai di dalam satu "Kartu Daftar".
             if (items.isNotEmpty)
               LabListCard(
                 children: [

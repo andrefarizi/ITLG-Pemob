@@ -8,8 +8,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Penilaian Asisten-Praktikan" ([open] = true) dan
-/// "Penilaian Asisten-Praktikan (Belum Dibuka)" ([open] = false).
+/// Halaman Penilaian Asisten Praktikan.
 class PraktikanPenilaianAsistenPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -48,8 +47,13 @@ class _PraktikanPenilaianAsistenPageState
       widget.course.id,
       AuthController.instance.userIdentifier,
     );
+    // Inisialisasi nilai rating asisten
     _ratings = List<int>.from(
-      existing?.ratings ?? _sync.ratingsForCourse(widget.course.id),
+      existing?.ratings ??
+          List<int>.filled(
+            _sync.ratingsForCourse(widget.course.id).length,
+            0,
+          ),
     );
     _saran = TextEditingController(text: existing?.comment ?? '');
     _sync.refreshFromBackend();
@@ -63,6 +67,10 @@ class _PraktikanPenilaianAsistenPageState
 
   Future<void> _kirim() async {
     if (_submitting) return;
+    if (_ratings.any((r) => r < 1)) {
+      labToast(context, 'Beri bintang untuk semua aspek penilaian');
+      return;
+    }
     setState(() => _submitting = true);
 
     final rec = await _sync.submitAsistenRating(
@@ -77,7 +85,7 @@ class _PraktikanPenilaianAsistenPageState
     Navigator.of(context).maybePop();
     labToast(
       context,
-      'Penilaian untuk ${widget.course.asisten} (${rec.averageLabel}/5 ★) tersimpan ke BE',
+      'Penilaian untuk ${widget.course.asisten} (${rec.averageLabel}/5 ★) tersimpan',
     );
   }
 

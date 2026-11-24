@@ -8,13 +8,9 @@ import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../praktikan_nav.dart';
-import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Laporkan Kerusakan Meja-Praktikan".
-///
-/// Dibuka dari halaman Meja Kamu. Meja terkunci sesuai meja yang dibooking,
-/// jadi laporan hanya bisa dibuat untuk alat/software di meja tersebut.
+/// Halaman Laporkan Kerusakan Meja Praktikan.
 class PraktikanLaporkanKerusakanPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanLaporkanKerusakanPage({super.key, required this.nav});
@@ -40,7 +36,30 @@ class _PraktikanLaporkanKerusakanPageState
   String? _photoName;
   bool _submitting = false;
 
-  String get _lab => _presensi.activeSession.labName;
+  static const List<String> _labs = [
+    'Lab Jaringan 1',
+    'Lab Jaringan 2',
+    'Lab Jaringan 3',
+    'Lab Jaringan 4',
+  ];
+  final TextEditingController _mejaCtrl = TextEditingController();
+  int _labIdx = 0;
+
+  /// Meja yang sedang dipesan pada sesi aktif (terkunci). Null bila dibuka
+  /// dari Profil / tanpa sesi: lab & nomor meja dipilih sendiri.
+  int? get _bookedDesk {
+    final session = _presensi.activeSession;
+    if (!session.isActive) return null;
+    return _sync.bookedDeskForUser(
+      AuthController.instance.userIdentifier,
+      labName: session.labName,
+    );
+  }
+
+  bool get _locked => _bookedDesk != null;
+
+  String get _lab =>
+      _locked ? _presensi.activeSession.labName : _labs[_labIdx];
 
   Future<void> _pickPhoto() async {
     final picked = await FileUploadService.instance.pickAndUpload(
@@ -48,26 +67,18 @@ class _PraktikanLaporkanKerusakanPageState
       imagesOnly: true,
     );
     if (picked == null || !mounted) return;
+    if (!picked.uploadedToCloud) {
+      labToast(context,
+          'Gagal mengunggah ${picked.name}. Periksa koneksi lalu coba lagi.');
+      return;
+    }
     setState(() => _photoName = picked.name);
-    labToast(
-      context,
-      picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
-          : '${picked.name} dipilih dari perangkat',
-    );
+    labToast(context, '${picked.name} berhasil diunggah');
   }
 
-  PraktikanStore get _s => widget.nav.store;
+  int? get _meja => _locked ? _bookedDesk : int.tryParse(_mejaCtrl.text.trim());
 
-  int get _meja =>
-      _sync.bookedDeskForUser(
-        AuthController.instance.userIdentifier,
-        labName: _lab,
-      ) ??
-      _s.bookedDesk ??
-      _s.selectedDesk;
-
-  String get _pcCode => 'PC-${_meja.toString().padLeft(2, '0')}';
+  String get _pcCode => 'PC-${(_meja ?? 0).toString().padLeft(2, '0')}';
 
   String get _mejaLabel => 'Meja $_meja • $_pcCode';
 
@@ -84,6 +95,7 @@ class _PraktikanLaporkanKerusakanPageState
     _sync.removeListener(_onSyncChanged);
     _presensi.removeListener(_onSyncChanged);
     _deskripsi.dispose();
+    _mejaCtrl.dispose();
     super.dispose();
   }
 
@@ -93,6 +105,15 @@ class _PraktikanLaporkanKerusakanPageState
 
   Future<void> _kirim() async {
     if (_submitting) return;
+    final meja = _meja;
+    if (meja == null || meja < 1 || meja > 30) {
+      labToast(context, 'Isi nomor meja 1–30', error: true);
+      return;
+    }
+    if (_deskripsi.text.trim().length < 10) {
+      labToast(context, 'Jelaskan kendala minimal 10 karakter');
+      return;
+    }
     setState(() => _submitting = true);
 
     final k = _kategori[_kat];
@@ -103,19 +124,31 @@ class _PraktikanLaporkanKerusakanPageState
         ? '${k.$2} mengalami kendala pada $_mejaLabel di $_lab.'
         : desc;
 
-    final ticket = await _sync.createTicket(
+    final LabTicketRecord ticket;
+    try {
+      ticket = await _sync.createTicket(
       labName: _lab,
-      deskNumber: _meja,
+      deskNumber: meja,
       pcCode: _pcCode,
       icon: k.$1,
-      category: '${k.$2} • Meja $_meja',
+      category: '${k.$2} • Meja $meja',
       title: title,
       description: detail,
       reporterId: auth.userIdentifier,
       reporterName: auth.userName,
       reporterRole: 'praktikan',
       photoName: _photoName ?? 'tanpa_foto.jpg',
+      photoPath: _photoName == null
+          ? null
+          : FileUploadService.instance.remotePathForName(_photoName!),
     );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -159,39 +192,53 @@ class _PraktikanLaporkanKerusakanPageState
               child: LabSectionTitle(
                   icon: 'triangle_alert', text: 'Detail Kendala'),
             ),
-            PrakField(
-              label: 'Meja yang Kamu Booking',
-              child: LabColumn(
-                gap: 8,
-                children: [
-                  InnerShadowBox(
-                    radius: 12,
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '$_lab • $_mejaLabel',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: labText(12),
-                          ),
+            if (_locked)
+              PrakField(
+                label: 'Meja Kamu',
+                child: InnerShadowBox(
+                  radius: 12,
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$_lab • $_mejaLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: labText(12),
                         ),
-                        const SizedBox(width: 8),
-                        const LabIcon('lock_on',
-                            size: 16, color: ItlgColors.textSubtle),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      const LabIcon('lock_on',
+                          size: 16, color: ItlgColors.textSubtle),
+                    ],
                   ),
-                  Text(
-                    'Terkunci sesuai meja yang kamu booking. Laporan hanya '
-                    'bisa dibuat untuk meja ini.',
-                    style: labText(12, c: LabColors.textGrey),
-                  ),
-                ],
+                ),
+              )
+            else ...[
+              PrakField(
+                label: 'Laboratorium',
+                child: PrakSelect(
+                  value: _labs[_labIdx],
+                  onTap: () async {
+                    final i = await prakShowPicker(context,
+                        title: 'Pilih Laboratorium',
+                        options: _labs,
+                        selected: _labIdx);
+                    if (i != null && mounted) setState(() => _labIdx = i);
+                  },
+                ),
               ),
-            ),
+              PrakField(
+                label: 'Nomor Meja (1–30)',
+                child: PrakInput(
+                  controller: _mejaCtrl,
+                  hint: 'Contoh: 12',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
             PrakField(
               label: 'Jenis Kendala (Alat / Software)',
               child: PrakOptionChips(

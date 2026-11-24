@@ -7,7 +7,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Pengumuman-Praktikan".
+/// Halaman Pengumuman Praktikan.
 class PraktikanPengumumanPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanPengumumanPage({super.key, required this.nav});
@@ -74,7 +74,7 @@ class _PraktikanPengumumanPageState extends State<PraktikanPengumumanPage> {
               index: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
-            // Figma: semua pengumuman di dalam satu "Kartu Daftar".
+            // Semua pengumuman di dalam satu "Kartu Daftar".
             if (items.isNotEmpty)
               LabListCard(
                 children: [

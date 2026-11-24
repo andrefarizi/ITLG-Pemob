@@ -8,7 +8,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Nilai-Praktikan".
+/// Halaman Nilai Praktikan.
 class PraktikanNilaiPage extends StatelessWidget {
   final PraktikanNav nav;
   const PraktikanNilaiPage({super.key, required this.nav});
@@ -129,7 +129,7 @@ class PraktikanNilaiPage extends StatelessWidget {
   }
 }
 
-/// Kartu 178 x 218 per praktikum.
+/// Kartu per praktikum.
 class _GradeCard extends StatelessWidget {
   final PrakCourse course;
   final VoidCallback onTap;

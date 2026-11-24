@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Praktikan Attendance Page
 class PraktikanAttendancePage extends StatelessWidget {
   const PraktikanAttendancePage({super.key});
 

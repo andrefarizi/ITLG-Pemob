@@ -9,7 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Absensi-Praktikan".
+/// Halaman Absensi Praktikan.
 class PraktikanAbsensiPage extends StatelessWidget {
   final PraktikanNav nav;
   const PraktikanAbsensiPage({super.key, required this.nav});
@@ -29,54 +29,51 @@ class PraktikanAbsensiPage extends StatelessWidget {
             session.courseId, session.meetingNumber, userId);
         final alreadyPresent =
             myRec != null && myRec.status == PrakAttend.hadir;
+        // Jadwal ringkas: "Sen, C1 08:00–09:40 | C2 …" → "Sen 08:00".
+        String shortSchedule(String jadwal) {
+          final m = RegExp(r'^(\w+).*?(\d{2}:\d{2})').firstMatch(jadwal);
+          return m == null ? jadwal : '${m.group(1)} ${m.group(2)}';
+        }
+
         return LabTabBody(
           children: [
             const LabTitle(
               title: 'Absensi',
-              subtitle:
-                  'Rekap kehadiran anda di setiap praktikum Semester Ganjil '
-                  '2026/2027',
+              subtitle: 'Rekap kehadiran per praktikum',
             ),
+            // Sesi presensi aktif: satu kartu ringkas.
             LabCard(
+              gap: 12,
               children: [
                 PrakSpaceRow(
-                  left: alreadyPresent
-                      ? const LabChip.live('Sudah Presensi')
-                      : (session.isActive
-                          ? const LabChip.live('Presensi Berlangsung')
-                          : const LabChip.idle('Sesi Ditutup')),
+                  left: !session.isActive
+                      ? const LabChip.idle('Sesi Ditutup')
+                      : (alreadyPresent
+                          ? const LabChip.live('Sudah Presensi')
+                          : const LabChip.live('Presensi Berlangsung')),
                   right: LabPill(
                       icon: 'calendar',
-                      text: 'Minggu ke-${session.meetingNumber}'),
+                      text: 'Pertemuan ${session.meetingNumber}'),
                 ),
-                Text('Praktikum ${activeCourse.name}',
+                Text(activeCourse.name,
                     style: labText(16, w: kBold, c: Colors.black)),
-                Row(
-                  children: [
-                    Flexible(
-                      child: LabMeta(
-                          icon: 'clock', text: activeCourse.jadwalAbsensi),
-                    ),
-                    const SizedBox(width: 24),
-                    Flexible(
-                      child: LabMeta(icon: 'door', text: session.labName),
-                    ),
-                  ],
+                LabMeta(
+                  icon: 'door',
+                  text:
+                      '${session.labName} • ${shortSchedule(activeCourse.jadwalAbsensi)}',
                 ),
                 LabPrimaryButton(
                   icon: 'circle_check',
-                  label: alreadyPresent
-                      ? 'Lihat / Pilih Meja'
-                      : (session.isActive
-                          ? 'Isi Presensi Sekarang'
-                          : 'Sesi Ditutup'),
+                  label: !session.isActive
+                      ? 'Sesi Ditutup'
+                      : (alreadyPresent ? 'Pilih Meja' : 'Isi Presensi'),
                   large: true,
                   onTap: () {
-                    if (alreadyPresent) {
+                    if (!session.isActive) {
+                      labToast(context, 'Sesi presensi sudah ditutup',
+                          error: true);
+                    } else if (alreadyPresent) {
                       nav.pilihMejaFromPresensi();
-                    } else if (!session.isActive) {
-                      labToast(
-                          context, 'Sesi presensi sedang ditutup oleh asisten');
                     } else {
                       nav.presensi(context);
                     }
@@ -87,34 +84,14 @@ class PraktikanAbsensiPage extends StatelessWidget {
             LabColumn(
               gap: 12,
               children: [
-                PrakSpaceRow(
-                  left: const LabHeading(
-                      icon: 'book_open', text: 'Absensi per Praktikum'),
-                  right: PrakSideLink('${courses.length} Praktikum'),
-                ),
-                for (var row = 0; row < courses.length; row += 2) ...[
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var col = 0; col < 2; col++) ...[
-                          if (col > 0) const SizedBox(width: 14),
-                          Expanded(
-                            child: (row + col) < courses.length
-                                ? _AttendanceCard(
-                                    course: courses[row + col],
-                                    summary: presensiSync.summaryForCourse(
-                                        courses[row + col], userId),
-                                    onTap: () => nav.detailAbsensi(
-                                        context, courses[row + col]),
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                        ],
-                      ],
-                    ),
+                const LabHeading(icon: 'book_open', text: 'Per Praktikum'),
+                // Daftar kartu ringkas: nama + rekap singkat + persentase.
+                for (final course in courses)
+                  _AttendanceRow(
+                    course: course,
+                    summary: presensiSync.summaryForCourse(course, userId),
+                    onTap: () => nav.detailAbsensi(context, course),
                   ),
-                ],
               ],
             ),
           ],
@@ -124,12 +101,12 @@ class PraktikanAbsensiPage extends StatelessWidget {
   }
 }
 
-/// Kartu 178 x 270 per praktikum.
-class _AttendanceCard extends StatelessWidget {
+/// Kartu ringkas per praktikum (satu baris).
+class _AttendanceRow extends StatelessWidget {
   final PrakCourse course;
   final ({int hadir, int izin, int alpa, int doneMeetings}) summary;
   final VoidCallback onTap;
-  const _AttendanceCard({
+  const _AttendanceRow({
     required this.course,
     required this.summary,
     required this.onTap,
@@ -138,47 +115,44 @@ class _AttendanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = summary.hadir + summary.izin + summary.alpa;
+    final pct = total == 0 ? null : (summary.hadir * 100 / total).round();
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 270),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: ItlgColors.surfaceDark,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: ItlgShadows.outline,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const LabIconTile('book_open'),
-                LabTag.blue('Hadir ${summary.hadir} / $total'),
-              ],
+            const LabIconTile('book_open'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(course.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(14, w: kBold, c: Colors.black)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Hadir ${summary.hadir} • Izin ${summary.izin} • Alpa ${summary.alpa}',
+                    style: labText(12, c: ItlgColors.textSubtle),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            Text('Praktikum\n${course.name}',
-                style: labText(16, w: kBold, c: Colors.black)),
-            const SizedBox(height: 10),
-            const PrakDivider(),
-            const SizedBox(height: 10),
-            LabColumn(
-              gap: 6,
-              children: [
-                LabMeta(icon: 'person', text: course.asisten),
-                LabMeta(icon: 'clock', text: course.jadwalAbsensi),
-                LabMeta(icon: 'door', text: course.room),
-              ],
-            ),
-            const SizedBox(height: 10),
-            LabProgress(
-              label: 'Pertemuan',
-              value: '${summary.doneMeetings} / 12',
-              fraction: (summary.doneMeetings / 12).clamp(0.0, 1.0),
-            ),
+            const SizedBox(width: 8),
+            pct == null
+                ? LabTag.blue('-')
+                : (pct >= 75 ? LabTag.blue('$pct%') : LabTag.red('$pct%')),
+            const SizedBox(width: 6),
+            const LabIcon('chevron_right',
+                size: 16, color: ItlgColors.primary),
           ],
         ),
       ),

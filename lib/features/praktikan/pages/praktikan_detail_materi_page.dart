@@ -9,7 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Detail Materi-Praktikan".
+/// Halaman Detail Materi Praktikan.
 class PraktikanDetailMateriPage extends StatelessWidget {
   final PraktikanNav nav;
   final PrakCourse? course;
@@ -101,7 +101,7 @@ class PraktikanDetailMateriPage extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: labText(12, w: kBold)),
                   const SizedBox(height: 8),
-                  Text('PDF • 24 halaman • 3,2 MB',
+                  Text('Berkas materi pertemuan ${m.number}',
                       textAlign: TextAlign.center,
                       style:
                           labText(11, w: kMedium, c: ItlgColors.textSubtle)),
@@ -115,18 +115,19 @@ class PraktikanDetailMateriPage extends StatelessWidget {
                 onTap: () => labShowFilePreview(
                   context,
                   name: pdfName,
-                  size: '3,2 MB',
                   source: 'Materi Pertemuan ${m.number}',
+                  searchFolders: ['materi/${c.id}/modul'],
                 ),
               ),
               right: LabPrimaryButton(
                 icon: 'download',
                 label: 'Unduh Materi',
-                // Figma: Unduh Materi → simpan file nyata lalu "Pop up Materi Diunduh".
+                // Unduh Materi → simpan file nyata lalu "Pop up Materi Diunduh".
                 onTap: () async {
                   final res = await FileDownloadService.instance.downloadFile(
                     fileName: pdfName,
                     source: 'Praktikum ${c.name} • Pertemuan ${m.number}',
+                    searchFolders: ['materi/${c.id}/modul'],
                     contentLines: [
                       'ITLG MOBILE - MATERI PRAKTIKUM',
                       'Praktikum : ${c.name} (${c.kelas})',
@@ -149,7 +150,7 @@ class PraktikanDetailMateriPage extends StatelessWidget {
                       icon: 'download',
                       title: 'Materi Diunduh',
                       message:
-                          'Berkas tersimpan di ${res.location} (${res.formattedSize}).',
+                          'Berkas materi tersimpan di folder Unduhan perangkat anda.',
                     );
                   } else {
                     labToast(context, 'Gagal mengunduh $pdfName');

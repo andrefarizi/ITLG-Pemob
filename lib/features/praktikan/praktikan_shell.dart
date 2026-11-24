@@ -12,9 +12,7 @@ import 'pages/praktikan_profil_page.dart';
 import 'praktikan_nav.dart';
 import 'praktikan_store.dart';
 
-/// Kerangka peran Praktikan: header ITLG + navbar 5 tab (Beranda, Praktikum,
-/// Absensi, Nilai, Profil). Komponen tampilannya sama dengan peran Laboran
-/// & Dosen (lib/features/laboran/widgets/laboran_ui.dart).
+/// Kerangka navigasi utama peran Praktikan.
 class PraktikanShell extends StatefulWidget {
   const PraktikanShell({super.key});
 

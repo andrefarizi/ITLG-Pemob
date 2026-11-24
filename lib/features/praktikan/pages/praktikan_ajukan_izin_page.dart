@@ -9,7 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Ajukan Izin-Praktikan".
+/// Halaman Ajukan Izin Praktikan.
 class PraktikanAjukanIzinPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -54,29 +54,57 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
     labToast(
       context,
       picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
+          ? '${picked.name} berhasil diunggah'
           : '${picked.name} dipilih dari perangkat',
     );
   }
 
+  bool _sending = false;
+
   Future<void> _kirim() async {
+    if (_sending) return;
+    final alasan = _alasan.text.trim();
+    if (alasan.length < 10) {
+      labToast(
+        context,
+        _jenis == 2
+            ? 'Jelaskan kendala QR minimal 10 karakter'
+            : 'Tulis alasan izin minimal 10 karakter',
+      );
+      return;
+    }
+    if (_jenis == 0 && _files.isEmpty) {
+      labToast(context, 'Lampirkan surat keterangan sakit terlebih dahulu');
+      return;
+    }
     final auth = AuthController.instance;
     final jenisLabel = const ['Izin Sakit', 'Izin', 'Kendala QR'][_jenis];
     final dateShort = widget.meeting.date.split(' • ').first;
     final activeDesk = _jenis == 2
-        ? LabDeskSyncService.instance.bookedDeskForUser(auth.userIdentifier)
+        ? LabDeskSyncService.instance.bookedDeskForUser(
+            auth.userIdentifier,
+            labName: PresensiSyncService.instance.activeSession.labName,
+          )
         : null;
-    await PresensiSyncService.instance.submitLeaveRequest(
-      courseId: widget.course.id.isNotEmpty ? widget.course.id : 'pemob',
-      meetingNumber: widget.meeting.number,
-      userIdentifier: auth.userIdentifier,
-      userName: auth.userName,
-      leaveType: jenisLabel,
-      pertemuanLabel: '${widget.meeting.number} • $dateShort',
-      note: _alasan.text.trim(),
-      fileName: _files.isNotEmpty ? _files.first.name : null,
-      deskNumber: activeDesk,
-    );
+    setState(() => _sending = true);
+    try {
+      await PresensiSyncService.instance.submitLeaveRequest(
+        courseId: widget.course.id.isNotEmpty ? widget.course.id : 'pemob',
+        meetingNumber: widget.meeting.number,
+        userIdentifier: auth.userIdentifier,
+        userName: auth.userName,
+        leaveType: jenisLabel,
+        pertemuanLabel: '${widget.meeting.number} • $dateShort',
+        note: _alasan.text.trim(),
+        fileName: _files.isNotEmpty ? _files.first.name : null,
+        deskNumber: activeDesk,
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      labToast(context, e.message);
+      return;
+    }
     if (widget.meeting.status == PrakAttend.upcoming) {
       widget.meeting.status = PrakAttend.pending;
     }
@@ -100,10 +128,12 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
                 gap: 10,
                 children: [
                   PrakSpaceRow(
-                    left: Text('Praktikum ${c.name}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: labText(12, w: kBold)),
+                    left: Text(
+                      'Praktikum ${c.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labText(12, w: kBold),
+                    ),
                     right: LabTag.blue('Pertemuan ${m.number}'),
                   ),
                   LabMeta(icon: 'calendar', text: m.date),
@@ -120,8 +150,7 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
           children: [
             const Align(
               alignment: Alignment.centerLeft,
-              child:
-                  LabSectionTitle(icon: 'file', text: 'Detail Pengajuan'),
+              child: LabSectionTitle(icon: 'file', text: 'Detail Pengajuan'),
             ),
             PrakField(
               label: 'Jenis Pengajuan',
@@ -191,7 +220,7 @@ class _PraktikanAjukanIzinPageState extends State<PraktikanAjukanIzinPage> {
           text: _jenis == 2
               ? 'Asisten akan mengecek kehadiranmu langsung di lab, lalu menandai kamu hadir.'
               : 'Pengajuan diperiksa asisten. Status kehadiran pertemuan ini '
-                  'berubah setelah disetujui.',
+                    'berubah setelah disetujui.',
         ),
         LabPrimaryButton(
           icon: 'send',

@@ -4,14 +4,7 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_store.dart';
 
-/// Denah 30 meja (6 baris x 5 meja: 3 kiri + lorong + 2 kanan) di kotak putih
-/// cekung (sesuai desain Figma 5712:2948). Dipakai di Pilih Meja, Meja Kamu
-/// (Praktikan) dan Denah Meja (Laboran).
-///
-/// - Tersedia: putih timbul.
-/// - Terisi: abu-abu cekung.
-/// - Dipilih / meja kamu: merah dengan cahaya.
-/// - Rusak: merah muda.
+/// Widget grid denah 30 meja laboratorium (6 baris x 5 kolom).
 class PrakDeskMap extends StatelessWidget {
   final Map<int, PrakDesk> desks;
   final int? selected;
@@ -170,7 +163,7 @@ class PrakDeskLegend extends StatelessWidget {
   }
 }
 
-/// Kotak 14 px + keterangan Medium 11.
+/// Kotak + keterangan.
 class _Legend extends StatelessWidget {
   /// 0 tersedia, 1 terisi, 2 dipilih, 3 rusak.
   final int kind;

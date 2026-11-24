@@ -10,7 +10,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Kuis Pre-Test-Praktikan".
+/// Halaman Kuis Pre-Test Praktikan.
 class PraktikanKuisPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse? course;
@@ -100,7 +100,7 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
 
     final ok = await labShowConfirmDialog(
       context,
-      icon: 'circle_check',
+      icon: 'triangle_alert',
       title: 'Kumpulkan Kuis Sekarang?',
       message: msg,
       cancelLabel: 'Periksa Kembali',
@@ -111,14 +111,22 @@ class _PraktikanKuisPageState extends State<PraktikanKuisPage> {
 
     final auth = AuthController.instance;
     final elapsed = (_initialSeconds - _secondsLeft).clamp(1, _initialSeconds);
-    await _sync.submitKuisAttempt(
-      courseId: _course.id,
-      meetingNumber: _meetingNumber,
-      userIdentifier: auth.userIdentifier,
-      userName: auth.userName,
-      answers: _answers,
-      durationSeconds: elapsed,
-    );
+    try {
+      await _sync.submitKuisAttempt(
+        courseId: _course.id,
+        meetingNumber: _meetingNumber,
+        userIdentifier: auth.userIdentifier,
+        userName: auth.userName,
+        answers: _answers,
+        durationSeconds: elapsed,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
     widget.nav.hasilKuis(
       context,
@@ -292,7 +300,7 @@ class _AnswerOption extends StatelessWidget {
   }
 }
 
-/// Bulatan nomor soal 28 px.
+/// Bulatan nomor soal.
 class _NumberDot extends StatelessWidget {
   final int number;
   final bool current;

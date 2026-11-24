@@ -5,14 +5,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/services/location_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../widgets/prak_google_map.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Tombol Hadir & Lokasi-Praktikan" dan "(Di Luar Area)".
-/// Mengambil dan memantau lokasi GPS aktual perangkat secara real-time.
+/// Halaman Tombol Hadir & Lokasi Praktikan.
 class PraktikanTombolHadirPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanTombolHadirPage({super.key, required this.nav});
@@ -24,6 +25,12 @@ class PraktikanTombolHadirPage extends StatefulWidget {
 
 class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
   bool _inside = false;
+
+  /// Lokasi dari aplikasi pemalsu GPS (mock location) → presensi ditolak.
+  bool _mocked = false;
+
+  /// Akurasi GPS lebih buruk dari [kMaxGpsAccuracy] → belum bisa presensi.
+  bool _inaccurate = false;
   LatLng? _userPos;
   LatLng? _lastGeocodedPos;
   double? _distance;
@@ -39,6 +46,50 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
   void initState() {
     super.initState();
     _initLocationTracking();
+    PresensiSyncService.instance.loadLabBuildings().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Lab sesi presensi yang sedang berlangsung (hanya untuk teks tampilan;
+  /// pengecekan jarak tetap memakai [LocationService]).
+  String get _labName {
+    final lab = PresensiSyncService.instance.activeSession.labName;
+    return lab.isEmpty ? 'lab' : lab;
+  }
+
+  String get _labPlace =>
+      PresensiSyncService.instance.labPlaceLabel(_labName);
+
+  /// Titik & radius lab dari sesi yang sedang dibuka Aslab.
+  double get _targetLat {
+    final s = PresensiSyncService.instance.activeSession;
+    return (s.lat == 0 && s.lng == 0) ? kLabLat : s.lat;
+  }
+
+  double get _targetLng {
+    final s = PresensiSyncService.instance.activeSession;
+    return (s.lat == 0 && s.lng == 0) ? kLabLng : s.lng;
+  }
+
+  double get _radius {
+    final r = PresensiSyncService.instance.activeSession.radiusMeters;
+    return r > 0 ? r : kLabRadius;
+  }
+
+  /// "Pertemuan 7 • Sel, 24 Nov 2026 • 19:04" dari sesi aktif (WIB).
+  String get _sessionSubtitle {
+    final session = PresensiSyncService.instance.activeSession;
+    final t = session.startedAt.toUtc().add(const Duration(hours: 7));
+    const hari = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    const bulan = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'Pertemuan ${session.meetingNumber} • ${hari[t.weekday - 1]}, '
+        '${two(t.day)} ${bulan[t.month - 1]} ${t.year} • '
+        'dibuka ${two(t.hour)}:${two(t.minute)} WIB';
   }
 
   @override
@@ -75,8 +126,12 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
     bool showToast = false,
   }) async {
     if (!mounted) return;
-    final dist = LocationService.distanceToLab(pos);
-    final isInside = dist <= kLabRadius;
+    final dist =
+        LocationService.distanceToPoint(pos, _targetLat, _targetLng);
+    final mocked = pos.isMocked;
+    final inaccurate = pos.accuracy > kMaxGpsAccuracy;
+    // Sah hanya bila GPS asli, cukup akurat, dan di dalam radius lab sesi.
+    final isInside = !mocked && !inaccurate && dist <= _radius;
     final nextPos = LatLng(pos.latitude, pos.longitude);
     _updateCurrentTime();
 
@@ -95,6 +150,8 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
       _distance = dist;
       _accuracy = pos.accuracy;
       _inside = isInside;
+      _mocked = mocked;
+      _inaccurate = inaccurate;
       _loading = false;
     });
 
@@ -113,9 +170,14 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
     if (showToast) {
       labToast(
         context,
-        isInside
-            ? 'Terverifikasi di Lab Komputer 1 (${dist.toStringAsFixed(0)} m)'
-            : 'Lokasi: $_addressTitle (${dist.toStringAsFixed(0)} m dari lab)',
+        mocked
+            ? 'Lokasi palsu terdeteksi. Matikan aplikasi pemalsu GPS.'
+            : inaccurate
+                ? 'Sinyal GPS kurang akurat (± ${pos.accuracy.toStringAsFixed(0)} m). '
+                    'Pindah ke dekat jendela lalu perbarui lokasi.'
+                : isInside
+                    ? 'Terverifikasi di $_labName (${dist.toStringAsFixed(0)} m)'
+                    : 'Lokasi: $_addressTitle (${dist.toStringAsFixed(0)} m dari lab)',
       );
     }
   }
@@ -134,6 +196,8 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
       setState(() {
         _loading = false;
         _inside = false;
+        _mocked = false;
+        _inaccurate = false;
         _addressTitle = 'GPS Tidak Terdeteksi';
         _addressDetail = 'Aktifkan GPS perangkat dan izinkan akses lokasi';
       });
@@ -182,10 +246,17 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
               'Pastikan anda berada di area laboratorium, lalu tekan Saya Hadir',
         ),
         if (!_loading && !_inside)
-          const PrakNotice.danger(
+          PrakNotice.danger(
             icon: 'triangle_alert',
-            text: 'Anda berada di luar area lab. Dekati Lab Komputer 1 hingga '
-                'jarak kurang dari 50 meter, lalu perbarui lokasi.',
+            text: _mocked
+                ? 'Lokasi palsu terdeteksi (aplikasi pemalsu GPS). Matikan '
+                    'aplikasi tersebut, lalu perbarui lokasi.'
+                : _inaccurate
+                    ? 'Sinyal GPS kurang akurat. Tunggu sebentar atau pindah ke '
+                        'dekat jendela, lalu perbarui lokasi.'
+                    : 'Anda berada di luar area lab. Dekati $_labName hingga '
+                        'jarak kurang dari ${_radius.toStringAsFixed(0)} meter, '
+                        'lalu perbarui lokasi.',
           ),
         LabCard(
           children: [
@@ -196,19 +267,28 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
                   ? const LabChip.idle('Mendeteksi...')
                   : (_inside
                       ? const LabChip.live('Di Dalam Area')
-                      : const LabChip.danger('Di Luar Area')),
+                      : LabChip.danger(_mocked
+                          ? 'Lokasi Palsu'
+                          : (_inaccurate ? 'GPS Kurang Akurat' : 'Di Luar Area'))),
             ),
-            // ── Google Maps Nyata dengan Lokasi GPS Perangkat Aktual ─────
-            PrakGoogleMap(inside: _inside, userPos: _userPos),
+            // Google Maps Nyata dengan Lokasi GPS Perangkat Aktual
+            PrakGoogleMap(
+              inside: _inside,
+              userPos: _userPos,
+              labName: _labName,
+              labLat: _targetLat,
+              labLng: _targetLng,
+              radius: _radius,
+            ),
             LabInsetBox(
               child: LabColumn(
                 gap: 10,
                 children: [
                   if (_inside)
-                    const _Address(
+                    _Address(
                       icon: 'location',
                       label: 'Lokasi Anda Saat Ini',
-                      title: 'Lab Komputer 1, Gedung C Lantai 2',
+                      title: _labPlace,
                       detail:
                           'Fasilkom-TI USU, Jl. Alumni, Padang Bulan, Medan',
                     )
@@ -219,10 +299,10 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
                       title: _addressTitle,
                       detail: _addressDetail,
                     ),
-                    const _Address(
+                    _Address(
                       icon: 'door',
                       label: 'Titik Presensi',
-                      title: 'Lab Komputer 1, Gedung C Lantai 2',
+                      title: _labPlace,
                       detail:
                           'Fasilkom-TI USU, Jl. Alumni, Padang Bulan, Medan',
                     ),
@@ -257,8 +337,10 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
               ],
             ),
             PrakSpaceRow(
-              left: const LabMeta(
-                  icon: 'door', text: 'Lab Komputer 1 • Radius 50 m'),
+              left: LabMeta(
+                  icon: 'door',
+                  text:
+                      '$_labName • Radius ${_radius.toStringAsFixed(0)} m'),
               right: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _checkLocation(showToast: true),
@@ -282,10 +364,10 @@ class _PraktikanTombolHadirPageState extends State<PraktikanTombolHadirPage> {
           ],
         ),
         if (!_loading && _inside) ...[
-          const LabListItem(
-            leading: LabIconTile('book_open'),
-            title: 'Praktikum Pemrograman Mobile',
-            subtitle: 'Pertemuan 5 • Sen, 05 Okt 2026 • 08:00–09:40',
+          LabListItem(
+            leading: const LabIconTile('book_open'),
+            title: 'Praktikum ${PraktikumSyncService.instance.courseById(PresensiSyncService.instance.activeSession.courseId).name}',
+            subtitle: _sessionSubtitle,
             titleSize: 12,
           ),
           LabColumn(

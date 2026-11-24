@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/praktikum_sync_service.dart';
+
 import '../laboran/widgets/laboran_ui.dart';
 import '../shared/ubah_kata_sandi_page.dart';
 import 'pages/praktikan_ajukan_izin_page.dart';
@@ -34,11 +36,7 @@ class PrakTab {
   static const int profil = 4;
 }
 
-/// Semua perpindahan halaman Praktikan, mengikuti prototipe Figma.
-///
-/// Halaman detail masuk dari kanan (300 ms). "Ganti" (replace) dipakai bila
-/// di prototipe halaman berpindah ke saudara satu tingkat, supaya tombol
-/// Kembali tetap kembali ke halaman asalnya.
+/// Semua perpindahan halaman Praktikan.
 class PraktikanNav {
   final PraktikanStore store;
 
@@ -72,7 +70,7 @@ class PraktikanNav {
     );
   }
 
-  // --- Beranda ---------------------------------------------------------------
+  // Beranda
 
   Future<void> notifikasi(BuildContext c) =>
       _open(c, PraktikanNotifikasiPage(nav: this), false);
@@ -80,7 +78,7 @@ class PraktikanNav {
   Future<void> pengumuman(BuildContext c) =>
       _open(c, PraktikanPengumumanPage(nav: this), false);
 
-  // --- Praktikum -------------------------------------------------------------
+  // Praktikum
 
   Future<void> detailPraktikum(BuildContext c, PrakCourse course) =>
       _open(c, PraktikanDetailPraktikumPage(nav: this, course: course), false);
@@ -154,7 +152,7 @@ class PraktikanNav {
         replace,
       );
 
-  // --- Presensi --------------------------------------------------------------
+  // Presensi
 
   Future<void> presensi(BuildContext c) =>
       _open(c, PraktikanPilihMetodePage(nav: this), false);
@@ -188,8 +186,7 @@ class PraktikanNav {
         false,
       );
 
-  /// Dari pop-up "Presensi Tercatat": kembali ke Beranda lalu buka Pilih
-  /// Meja, sehingga Kembali di Pilih Meja menuju Beranda (sesuai Figma).
+  /// Navigasi ke halaman pilih meja setelah presensi berhasil.
   void pilihMejaFromPresensi() {
     home();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -199,13 +196,18 @@ class PraktikanNav {
   }
 
   /// Setelah booking: Pilih Meja diganti Meja Kamu (Kembali → Beranda).
+  /// Pilih/ubah meja dari halaman mana pun (mis. Detail Pertemuan);
+  /// tombol Kembali kembali ke halaman asal.
+  Future<void> pilihMeja(BuildContext c) =>
+      _open(c, PraktikanPilihMejaPage(nav: this), false);
+
   Future<void> mejaKamu(BuildContext c, {bool replace = false}) =>
       _open(c, PraktikanMejaKamuPage(nav: this), replace);
 
   Future<void> laporkanKerusakan(BuildContext c) =>
       _open(c, PraktikanLaporkanKerusakanPage(nav: this), false);
 
-  // --- Absensi ---------------------------------------------------------------
+  // Absensi
 
   Future<void> detailAbsensi(BuildContext c, PrakCourse course) =>
       _open(c, PraktikanDetailAbsensiPage(nav: this, course: course), false);
@@ -222,7 +224,7 @@ class PraktikanNav {
         replace,
       );
 
-  // --- Nilai -----------------------------------------------------------------
+  // Nilai
 
   Future<void> detailNilai(BuildContext c, PrakCourse course) =>
       _open(c, PraktikanDetailNilaiPage(nav: this, course: course), false);
@@ -232,17 +234,28 @@ class PraktikanNav {
           PraktikanSanggahNilaiPage(nav: this, course: course, grade: grade),
           false);
 
-  // --- Profil ----------------------------------------------------------------
+  // Profil
 
   Future<void> ubahKataSandi(BuildContext c) =>
       _open(c, UbahKataSandiPage(onLogoTap: home), false);
 
-  // --- Notifikasi ------------------------------------------------------------
+  // Notifikasi
 
-  void openNotif(BuildContext c, PrakNotifTarget target) {
+  /// Navigasi ke halaman terkait saat item notifikasi diketuk.
+  void openNotif(
+    BuildContext c,
+    PrakNotifTarget target, {
+    String? courseId,
+    int? meetingNumber,
+  }) {
+    final sync = PraktikumSyncService.instance;
+    final course = courseId != null ? sync.courseById(courseId) : null;
+    final meeting = (courseId != null && meetingNumber != null)
+        ? sync.meetingFor(courseId, meetingNumber)
+        : null;
     switch (target) {
       case PrakNotifTarget.editTugas:
-        editTugas(c);
+        editTugas(c, course: course, meeting: meeting);
         break;
       case PrakNotifTarget.presensi:
         presensi(c);
@@ -251,13 +264,13 @@ class PraktikanNav {
         pengumuman(c);
         break;
       case PrakNotifTarget.detailAbsensi:
-        detailAbsensi(c, store.mobile);
+        detailAbsensi(c, course ?? store.mobile);
         break;
       case PrakNotifTarget.kuis:
-        kuis(c);
+        kuis(c, course: course, meeting: meeting);
         break;
       case PrakNotifTarget.detailNilai:
-        detailNilai(c, store.mobile);
+        detailNilai(c, course ?? store.mobile);
         break;
       case PrakNotifTarget.laporkanKerusakan:
         laporkanKerusakan(c);

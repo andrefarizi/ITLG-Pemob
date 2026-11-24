@@ -14,7 +14,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Page Beranda-Praktikan (Navbar)".
+/// Halaman Beranda Praktikan.
 class PraktikanBerandaPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanBerandaPage({super.key, required this.nav});
@@ -24,16 +24,36 @@ class PraktikanBerandaPage extends StatefulWidget {
 }
 
 class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
-  static const List<(String, String, String)> _days = [
-    ('Sen', '28', 'Sep'),
-    ('Sel', '29', 'Sep'),
-    ('Rab', '30', 'Sep'),
-    ('Kam', '01', 'Okt'),
-    ('Jum', '02', 'Okt'),
-    ('Sab', '03', 'Okt'),
-  ];
+  /// Senin–Sabtu minggu berjalan (hari Minggu → minggu berikutnya)
+  static DateTime get _weekMonday {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (today.weekday == DateTime.sunday) {
+      return today.add(const Duration(days: 1));
+    }
+    return today.subtract(Duration(days: today.weekday - 1));
+  }
 
-  int _day = 0;
+  static List<(String, String, String)> get _days {
+    const hari = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const bulan = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    final mon = _weekMonday;
+    return [
+      for (var i = 0; i < 6; i++)
+        () {
+          final d = mon.add(Duration(days: i));
+          return (hari[i], d.day.toString().padLeft(2, '0'), bulan[d.month - 1]);
+        }(),
+    ];
+  }
+
+  int _day = () {
+    final wd = DateTime.now().weekday;
+    return wd == DateTime.sunday ? 0 : wd - 1;
+  }();
 
   PraktikanNav get _nav => widget.nav;
   PraktikanStore get _store => widget.nav.store;
@@ -129,7 +149,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
     );
   }
 
-  // Kartu sapaan (373 x 92).
+  // Kartu sapaan.
   Widget _greeting() {
     return Container(
       constraints: const BoxConstraints(minHeight: 92),
@@ -203,7 +223,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
     );
   }
 
-  // Kartu presensi berlangsung + kartu pintasan Meja Aktif (Figma 5813:3004).
+  // Kartu presensi berlangsung + kartu pintasan Meja Aktif.
   Widget _presensiCard() {
     final presensiSync = PresensiSyncService.instance;
     final praktikumSync = PraktikumSyncService.instance;
@@ -221,7 +241,9 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
         final myDesk = deskSync.bookedDeskForUser(userId, labName: session.labName) ??
             _store.bookedDesk;
         final deskPc = myDesk != null ? 'PC-${myDesk.toString().padLeft(2, '0')}' : null;
-        final localRec = myRec?.recordedAt.toLocal();
+        // Jam WIB (UTC+7) tidak bergantung zona waktu perangkat.
+        final localRec =
+            myRec?.recordedAt.toUtc().add(const Duration(hours: 7));
         final clockLabel = localRec != null
             ? '${localRec.hour.toString().padLeft(2, '0')}:${localRec.minute.toString().padLeft(2, '0')}'
             : '08:05';
@@ -238,11 +260,13 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: alreadyPresent
-                    ? PrakLiveChip24('Sudah Presensi • $clockLabel')
-                    : (session.isActive
-                        ? const PrakLiveChip24('Presensi Berlangsung')
-                        : const LabChip.idle('Sesi Ditutup')),
+                child: !session.isActive
+                    ? LabChip.idle(alreadyPresent
+                        ? 'Sesi Ditutup • Hadir $clockLabel'
+                        : 'Sesi Ditutup')
+                    : (alreadyPresent
+                        ? PrakLiveChip24('Sudah Presensi • $clockLabel')
+                        : const PrakLiveChip24('Presensi Berlangsung')),
               ),
               Text('Praktikum \n${course.name}',
                   style: labText(22, w: kBold, c: Colors.black)),
@@ -251,7 +275,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                 room: session.labName,
                 asisten: session.startedBy,
               ),
-              if (alreadyPresent && myDesk != null)
+              if (session.isActive && alreadyPresent && myDesk != null)
                 LabListItem(
                   leading: const LabIconTile('desktop_device'),
                   title: 'Meja Aktif: Meja ${myDesk.toString().padLeft(2, '0')} • $deskPc',
@@ -266,11 +290,12 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
-                    if (alreadyPresent) {
+                    if (!session.isActive) {
+                      labToast(context,
+                          'Sesi presensi sudah ditutup oleh asisten',
+                          error: true);
+                    } else if (alreadyPresent) {
                       _nav.pilihMejaFromPresensi();
-                    } else if (!session.isActive) {
-                      labToast(
-                          context, 'Sesi presensi sedang ditutup oleh asisten');
                     } else {
                       _nav.presensi(context);
                     }
@@ -278,9 +303,12 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                   child: Container(
                     height: 50,
                     decoration: BoxDecoration(
-                      color: ItlgColors.primary,
+                      color: session.isActive
+                          ? ItlgColors.primary
+                          : const Color(0xFFB5B9BC),
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: ItlgShadows.outline,
+                      boxShadow:
+                          session.isActive ? ItlgShadows.primary : null,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -288,11 +316,11 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                         const LabIcon('m_qr', size: 22, color: Colors.white),
                         const SizedBox(width: 6),
                         Text(
-                            alreadyPresent
-                                ? 'Pilih Meja Praktikum'
-                                : (session.isActive
-                                    ? 'Presensi Sekarang'
-                                    : 'Sesi Ditutup'),
+                            !session.isActive
+                                ? 'Sesi Ditutup'
+                                : (alreadyPresent
+                                    ? 'Pilih Meja Praktikum'
+                                    : 'Presensi Sekarang'),
                             style: labText(16,
                                 w: kBold, c: ItlgColors.surfaceWhite)),
                       ],
@@ -311,7 +339,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
     final latest = anns.isNotEmpty ? anns.first : null;
     final title = latest?.title ?? _store.announcements.first.title;
     final subtitle = latest?.body ??
-        'Praktikum Machine Learning Kom C (C1 & C2) hari Kamis di Lab AI & Data';
+        'Praktikum Machine Learning Kom C (C1 & C2) hari Kamis di Lab Jaringan 3';
     final timeText = latest?.relativeTime ?? _store.announcements.first.time;
     return LabColumn(
       gap: 12,
@@ -401,7 +429,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
                   const LabIcon('m_calendar_small',
                       size: 11.7, color: ItlgColors.textSubtle),
                   const SizedBox(width: 4),
-                  Text('Minggu ke-4',
+                  Text('Minggu ini',
                       style: labText(12, c: ItlgColors.textSubtle)),
                 ],
               ),
@@ -451,7 +479,7 @@ class _PraktikanBerandaPageState extends State<PraktikanBerandaPage> {
   }
 }
 
-/// Tombol hari 52 x 64 (radius 12).
+/// Tombol hari.
 class _DayButton extends StatelessWidget {
   final (String, String, String) day;
   final double width;
@@ -515,8 +543,7 @@ class _TodayItem {
   });
 }
 
-/// Figma: "Kartu Jadwal Hari Ini" — satu kartu abu-abu (padding 4/16) berisi
-/// baris jadwal dengan garis pemisah. Ketuk baris → Detail Praktikum.
+/// Widget Kartu Jadwal Hari Ini.
 class _TodayCard extends StatelessWidget {
   final List<_TodayItem> items;
   const _TodayCard({required this.items});

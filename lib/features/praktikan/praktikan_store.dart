@@ -196,7 +196,10 @@ class PrakQuestion {
 class PrakFile {
   final String name;
   final String meta;
-  const PrakFile(this.name, this.meta);
+
+  /// Path berkas pada penyimpanan Supabase Storage.
+  final String? path;
+  const PrakFile(this.name, this.meta, {this.path});
 }
 
 /// Status meja di denah Pilih Meja.
@@ -227,16 +230,14 @@ class PrakReport {
 }
 
 class PraktikanStore {
-  // ---------------------------------------------------------------------------
   // Praktikum
-  // ---------------------------------------------------------------------------
 
   late final PrakCourse mobile = PrakCourse(
     name: 'Pemrograman Mobile',
     asisten: 'Andi Pratama',
     asistenInitials: 'AP',
     kelas: 'TIF 3001 - Kelas C',
-    room: 'Lab Komputer 1',
+    room: 'Lab Jaringan 1',
     jadwalDaftar: 'Sen, 08:00–09:40',
     jadwalDetail: 'Sen, 08:00-09:40',
     jadwalAbsensi: 'Sen, 08:00–09:40',
@@ -450,9 +451,7 @@ class PraktikanStore {
 
   List<PrakCourse> get courses => PraktikumSyncService.instance.courses;
 
-  // ---------------------------------------------------------------------------
   // Pengumuman & notifikasi
-  // ---------------------------------------------------------------------------
 
   final List<PrakAnnouncement> announcements = const [
     PrakAnnouncement(
@@ -481,7 +480,7 @@ class PraktikanStore {
       tagRed: true,
       category: 2,
       time: 'Kemarin, 09:10',
-      title: 'Lab Komputer 1 ditutup sementara',
+      title: 'Lab Jaringan 1 ditutup sementara',
       body: 'Perbaikan proyektor pada Jumat, 02 Okt 2026 pukul 10:00–12:00.',
       author: 'Budi Santoso • Laboran',
     ),
@@ -504,7 +503,7 @@ class PraktikanStore {
     PrakNotif(
       icon: 'qrcode',
       title: 'Sesi presensi dibuka',
-      body: 'Pemrograman Mobile Kelas C • Lab Komputer 1',
+      body: 'Pemrograman Mobile Kelas C • Lab Jaringan 1',
       time: '1 jam lalu',
       today: true,
       important: true,
@@ -552,9 +551,7 @@ class PraktikanStore {
 
   int get unreadCount => notifs.where((n) => n.unread).length;
 
-  // ---------------------------------------------------------------------------
-  // Kuis (Figma: posisi di Soal 3, soal 1–2 sudah dijawab, B dipilih)
-  // ---------------------------------------------------------------------------
+  // Kuis
 
   final List<PrakQuestion> questions = const [
     PrakQuestion(
@@ -625,23 +622,19 @@ class PraktikanStore {
   int quizIndex = 2;
   int quizSecondsLeft = 4 * 60 + 32;
 
-  // ---------------------------------------------------------------------------
   // Tugas, izin, penilaian, presensi
-  // ---------------------------------------------------------------------------
 
   final List<PrakFile> tugasFiles = [
     const PrakFile('MidFidelity Tugas', 'Diunggah 27 Sep, 20:14'),
     const PrakFile('Laporan Tugas', 'Diunggah 27 Sep, 20:15'),
   ];
 
-  /// Nilai bintang di Penilaian Asisten (Figma: 5, 4, 5, 4).
+  /// Nilai bintang di Penilaian Asisten.
   final List<int> ratings = [5, 4, 5, 4];
 
   int presensiSecondsLeft = 12 * 60 + 40;
 
-  // ---------------------------------------------------------------------------
   // Meja & laporan kerusakan
-  // ---------------------------------------------------------------------------
 
   /// Denah 30 meja: tersedia 3, 8, 14, 17, 25, 27, 30; rusak 23.
   final Map<int, PrakDesk> desks = {
@@ -659,12 +652,10 @@ class PraktikanStore {
     const PrakReport(
         'wifi', 'Koneksi jaringan putus', 'Lab Jaringan 2 • 27 Sep', 1),
     const PrakReport(
-        'projector', 'Proyektor buram', 'Lab Komputer 1 • 24 Sep', 2),
+        'projector', 'Proyektor buram', 'Lab Jaringan 1 • 24 Sep', 2),
   ];
 
-  // ---------------------------------------------------------------------------
   // Profil
-  // ---------------------------------------------------------------------------
 
   bool pushOn = true;
 }

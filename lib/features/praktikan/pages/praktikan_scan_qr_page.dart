@@ -7,10 +7,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../praktikan_nav.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Scan QR Presensi-Praktikan".
-///
-/// Sesuai prototipe: ketuk area kamera atau "Pindai Ulang" untuk lanjut ke
-/// Tanda Tangan. Garis hijau bergerak naik-turun sebagai animasi pindai.
+/// Halaman Scan QR Presensi Praktikan.
 class PraktikanScanQrPage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanScanQrPage({super.key, required this.nav});
@@ -130,7 +127,7 @@ class _PraktikanScanQrPageState extends State<PraktikanScanQrPage>
                         height: 200,
                         child: Stack(
                           children: [
-                            // Garis 6 px di luar vektor 192 px -> gambar 198 px.
+                            // Garis di luar vektor -> gambar.
                             Positioned(
                               left: 1,
                               top: 1,

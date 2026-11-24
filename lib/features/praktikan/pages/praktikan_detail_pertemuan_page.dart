@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -8,10 +10,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Detail Pertemuan-Praktikan".
-///
-/// Judul pertemuan, lalu bagian Materi (→ Detail Materi), Tugas
-/// (→ Edit Tugas) dan Kuis (→ Kuis Pre-Test / Hasil Kuis).
+/// Halaman Detail Pertemuan Praktikan.
 class PraktikanDetailPertemuanPage extends StatelessWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -43,8 +42,10 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = PraktikumSyncService.instance;
+    final presensi = PresensiSyncService.instance;
+    final desks = LabDeskSyncService.instance;
     return ListenableBuilder(
-      listenable: sync,
+      listenable: Listenable.merge([sync, presensi, desks]),
       builder: (context, _) {
         final userId = AuthController.instance.userIdentifier;
         final sub = sync.submissionFor(course.id, meeting.number, userId);
@@ -53,6 +54,16 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
         final taskSubmitted = !_isCurrent || (sub != null && sub.isSubmitted);
         final quizDone = !_isCurrent || attempt != null;
 
+        // Hanya tampilkan konten yang memang diterbitkan Aslab.
+        final hasMateri = meeting.number == 4 ||
+            meeting.materiTitle.isNotEmpty ||
+            meeting.materiFile.isNotEmpty;
+        final hasTugas = meeting.number == 4 || meeting.tugasTitle.isNotEmpty;
+        final hasKuis = meeting.number == 4 || meeting.kuisTitle.isNotEmpty;
+        final soalCount = sync.questionsForCourse(course.id).length;
+        final materiFileLabel = meeting.materiFile.isNotEmpty
+            ? meeting.materiFile
+            : (meeting.number == 4 ? course.materiFile : 'Berkas materi');
         final materiLabel = meeting.materiTitle.isNotEmpty
             ? meeting.materiTitle
             : (meeting.number == 4
@@ -78,8 +89,8 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
                 : 'Pre-Test Modul ${meeting.number}');
 
         final kuisSub = attempt != null
-            ? '10 soal • Nilai ${attempt.score} / 100'
-            : (_isCurrent ? '10 soal • 10 menit' : '10 soal • Nilai 80 / 100');
+            ? '$soalCount soal • Nilai ${attempt.score} / 100'
+            : '$soalCount soal • 10 menit';
 
         return LabSubPage(
           onLogoTap: nav.home,
@@ -99,8 +110,19 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
               ),
             ),
             _Section(
+              title: 'Meja Praktikum',
+              child: _MejaSection(
+                course: course,
+                meeting: meeting,
+                onPilihMeja: () => nav.pilihMeja(context),
+                onPresensi: () => nav.presensi(context),
+              ),
+            ),
+            _Section(
               title: 'Materi',
-              child: _WhiteCard(
+              child: !hasMateri
+                  ? const _EmptyCard('Belum ada materi untuk pertemuan ini.')
+                  : _WhiteCard(
                 onTap: () =>
                     nav.detailMateri(context, course: course, meeting: meeting),
                 children: [
@@ -109,7 +131,7 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
                     iconColor: ItlgColors.secondary,
                     title: materiLabel,
                     lines: [
-                      Text('PDF • diunggah asisten',
+                      Text(materiFileLabel,
                           style: labText(12, c: LabColors.textGrey)),
                     ],
                     trailing: Text('Lihat',
@@ -121,7 +143,9 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
             ),
             _Section(
               title: 'Tugas',
-              child: _WhiteCard(
+              child: !hasTugas
+                  ? const _EmptyCard('Belum ada tugas untuk pertemuan ini.')
+                  : _WhiteCard(
                 children: [
                   _ItemRow(
                     icon: 'h_clipboard',
@@ -147,7 +171,9 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
             ),
             _Section(
               title: 'Kuis',
-              child: _WhiteCard(
+              child: !hasKuis
+                  ? const _EmptyCard('Belum ada kuis untuk pertemuan ini.')
+                  : _WhiteCard(
                 children: [
                   _ItemRow(
                     icon: 'question',
@@ -178,7 +204,7 @@ class PraktikanDetailPertemuanPage extends StatelessWidget {
   }
 }
 
-/// Judul bagian Bold 16 + isinya (jarak 12).
+/// Judul bagian + isinya.
 class _Section extends StatelessWidget {
   final String title;
   final Widget child;
@@ -196,7 +222,95 @@ class _Section extends StatelessWidget {
   }
 }
 
-/// Kartu putih #FDFEFE radius 24, padding 16, jarak 14, Outline Shadow.
+/// Pilih meja langsung dari halaman pertemuan. Meja hanya bisa dipilih saat
+/// sesi pertemuan ini berlangsung dan praktikan sudah presensi.
+class _MejaSection extends StatelessWidget {
+  final PrakCourse course;
+  final PrakMeeting meeting;
+  final VoidCallback onPilihMeja;
+  final VoidCallback onPresensi;
+
+  const _MejaSection({
+    required this.course,
+    required this.meeting,
+    required this.onPilihMeja,
+    required this.onPresensi,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final presensi = PresensiSyncService.instance;
+    final session = presensi.activeSession;
+    final userId = AuthController.instance.userIdentifier;
+    final isThisSession = session.isActive &&
+        session.courseId == course.id &&
+        session.meetingNumber == meeting.number;
+    if (!isThisSession) {
+      return const _EmptyCard(
+          'Pilih meja tersedia saat sesi pertemuan ini berlangsung.');
+    }
+    final rec =
+        presensi.recordFor(course.id, meeting.number, userId);
+    final present = rec != null && rec.status == PrakAttend.hadir;
+    if (!present) {
+      return _WhiteCard(
+        children: [
+          _ItemRow(
+            icon: 'desktop_device',
+            iconColor: ItlgColors.primary,
+            title: 'Belum presensi',
+            lines: [
+              Text('Isi presensi dulu untuk memilih meja.',
+                  style: labText(12, c: LabColors.textGrey)),
+            ],
+          ),
+          _Button.primary('Isi Presensi', onTap: onPresensi),
+        ],
+      );
+    }
+    final desk = LabDeskSyncService.instance
+        .bookedDeskForUser(userId, labName: session.labName);
+    return _WhiteCard(
+      children: [
+        _ItemRow(
+          icon: 'desktop_device',
+          iconColor: ItlgColors.primary,
+          title: desk == null
+              ? 'Belum memilih meja'
+              : 'Meja ${desk.toString().padLeft(2, '0')}',
+          lines: [
+            Text(session.labName,
+                style: labText(12, c: LabColors.textGrey)),
+          ],
+        ),
+        _Button.primary(desk == null ? 'Pilih Meja' : 'Ubah Meja',
+            onTap: onPilihMeja),
+      ],
+    );
+  }
+}
+
+/// Kartu keterangan bila materi/tugas/kuis belum diterbitkan.
+class _EmptyCard extends StatelessWidget {
+  final String text;
+  const _EmptyCard(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ItlgColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: ItlgShadows.outline,
+      ),
+      child: Text(text, style: labText(12, c: LabColors.textGrey)),
+    );
+  }
+}
+
+/// Kartu kontainer putih untuk item pertemuan.
 class _WhiteCard extends StatelessWidget {
   final List<Widget> children;
   final VoidCallback? onTap;
@@ -219,7 +333,7 @@ class _WhiteCard extends StatelessWidget {
   }
 }
 
-/// Kotak ikon 36 px (#F5F5F5) + judul Bold 14 + baris keterangan.
+/// Kotak ikon + judul + baris keterangan.
 class _ItemRow extends StatelessWidget {
   final String icon;
   final Color iconColor;
@@ -259,7 +373,7 @@ class _ItemRow extends StatelessWidget {
   }
 }
 
-/// Tombol 44 px (Bold 14): merah bercahaya atau putih bergaris.
+/// Tombol: merah bercahaya atau putih bergaris.
 class _Button extends StatelessWidget {
   final String label;
   final bool primary;
@@ -280,7 +394,6 @@ class _Button extends StatelessWidget {
         decoration: BoxDecoration(
           color: primary ? ItlgColors.primary : LabColors.bar,
           borderRadius: BorderRadius.circular(12),
-          border: primary ? null : Border.all(color: Colors.white, width: 4),
           boxShadow: primary ? ItlgShadows.primary : ItlgShadows.outline,
         ),
         child: Text(

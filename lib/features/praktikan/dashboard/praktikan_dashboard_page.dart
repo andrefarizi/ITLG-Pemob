@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Praktikan Dashboard Page
 class PraktikanDashboardPage extends StatelessWidget {
   final VoidCallback? onNavigateToAttendance;
   final VoidCallback? onNavigateToReports;

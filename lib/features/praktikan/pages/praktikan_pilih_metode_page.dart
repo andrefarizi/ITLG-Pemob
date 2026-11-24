@@ -11,7 +11,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Pilih Metode Presensi-Praktikan".
+/// Halaman Pilih Metode Presensi Praktikan.
 class PraktikanPilihMetodePage extends StatefulWidget {
   final PraktikanNav nav;
   const PraktikanPilihMetodePage({super.key, required this.nav});
@@ -207,7 +207,6 @@ class _MethodCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: enabled ? ItlgColors.primary : LabColors.divider,
                   borderRadius: BorderRadius.circular(9),
-                  boxShadow: LabShadows.neu,
                 ),
                 child: LabIcon(icon, size: 20, color: Colors.white),
               ),

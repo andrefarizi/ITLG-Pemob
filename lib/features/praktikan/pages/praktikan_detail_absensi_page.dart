@@ -9,7 +9,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Detail Absensi-Praktikan".
+/// Halaman Detail Absensi Praktikan.
 class PraktikanDetailAbsensiPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse course;
@@ -82,15 +82,7 @@ class _PraktikanDetailAbsensiPageState
       children: [
         LabCard(
           children: [
-            LabColumn(
-              gap: 6,
-              children: [
-                Text(c.kelas,
-                    style: labText(16, w: kBold, c: ItlgColors.primaryDark)),
-                Text('Praktikum\n${c.name}',
-                    style: labText(22, w: kBold, c: Colors.black)),
-              ],
-            ),
+            Text(c.name, style: labText(20, w: kBold, c: Colors.black)),
             LabStatRow(
               stats: [
                 LabStat(
@@ -101,7 +93,7 @@ class _PraktikanDetailAbsensiPageState
               ],
             ),
             LabProgress(
-              label: 'Pertemuan terlaksana',
+              label: 'Pertemuan',
               value: '${summary.doneMeetings} / 12',
               fraction: (summary.doneMeetings / 12).clamp(0.0, 1.0),
             ),
@@ -112,7 +104,7 @@ class _PraktikanDetailAbsensiPageState
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
-        // Figma: semua pertemuan di dalam satu "Kartu Daftar".
+        // Semua pertemuan di dalam satu "Kartu Daftar".
         LabListCard(
           children: [
             for (final m in items)
@@ -202,7 +194,7 @@ class _MeetingCard extends StatelessWidget {
       case PrakAttend.upcoming:
         return LabOutlineButton(
           icon: 'h_file',
-          label: 'Ajukan Izin Pertemuan ${meeting.number}',
+          label: 'Ajukan Izin',
           onTap: onIzin,
         );
       case PrakAttend.hadir:
@@ -216,7 +208,7 @@ class _MeetingCard extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text('Izin disetujui asisten',
+                child: Text('Izin disetujui',
                     style: labText(12, w: kBold)),
               ),
               const SizedBox(width: 8),
@@ -254,7 +246,7 @@ class _MeetingCard extends StatelessWidget {
       case PrakAttend.pending:
         return const LabMeta(
           icon: 'clock',
-          text: 'Pengajuan izin sedang diperiksa asisten',
+          text: 'Menunggu persetujuan asisten',
           color: LabColors.warnText,
         );
       case PrakAttend.alpa:
@@ -262,7 +254,7 @@ class _MeetingCard extends StatelessWidget {
           icon: 'cross',
           text: notePair.$2.isNotEmpty
               ? notePair.$2
-              : 'Tidak hadir tanpa keterangan',
+              : 'Tanpa keterangan',
           color: ItlgColors.primary,
         );
     }
@@ -284,7 +276,7 @@ class _MeetingCard extends StatelessWidget {
                 children: [
                   Text('Pertemuan ${meeting.number}',
                       style: labText(14, w: kBold)),
-                  Text(meeting.module,
+                  Text(meeting.date.split(' • ').first,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
@@ -296,7 +288,6 @@ class _MeetingCard extends StatelessWidget {
             _chip(),
           ],
         ),
-        LabMeta(icon: 'calendar', text: meeting.date),
         if (extra != null) extra,
       ],
     );

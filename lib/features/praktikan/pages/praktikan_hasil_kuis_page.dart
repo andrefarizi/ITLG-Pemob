@@ -8,7 +8,7 @@ import '../praktikan_nav.dart';
 import '../praktikan_store.dart';
 import '../widgets/praktikan_ui.dart';
 
-/// Figma: "Hasil Kuis-Praktikan".
+/// Halaman Hasil Kuis Praktikan.
 class PraktikanHasilKuisPage extends StatefulWidget {
   final PraktikanNav nav;
   final PrakCourse? course;
@@ -28,7 +28,7 @@ class PraktikanHasilKuisPage extends StatefulWidget {
 class _PraktikanHasilKuisPageState extends State<PraktikanHasilKuisPage> {
   static const List<String> _letters = ['A', 'B', 'C', 'D'];
 
-  /// Figma: "Sheet Pembahasan Kuis-Praktikan" (5828:3459).
+  /// Bottom sheet Pembahasan Kuis (Praktikan).
   void _showPembahasanSheet({
     required String kuisTitle,
     required List<PrakQuestion> questions,
