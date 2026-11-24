@@ -123,10 +123,18 @@ class _UbahKataSandiPageState extends State<UbahKataSandiPage> {
                 child: TextField(
                   controller: controller,
                   obscureText: obscure,
+                  cursorColor: ItlgColors.primary,
                   style: labText(12, w: kSemiBold),
                   decoration: InputDecoration(
                     isDense: true,
+                    filled: false,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
                     hintText: hint,
                     hintStyle:
                         labText(12, w: kSemiBold, c: ItlgColors.textMuted),
@@ -171,7 +179,11 @@ class _UbahKataSandiPageState extends State<UbahKataSandiPage> {
                 color: ItlgColors.field,
                 shadows: ItlgShadows.innerLarge,
                 child: const Center(
-                  child: LabIcon('lock_on', size: 30, color: ItlgColors.primary),
+                  child: Icon(
+                    Icons.lock_reset_rounded,
+                    size: 35,
+                    color: ItlgColors.primary,
+                  ),
                 ),
               ),
             ),
@@ -243,7 +255,11 @@ class _UbahKataSandiPageState extends State<UbahKataSandiPage> {
                       style: labText(16, w: kBold, c: ItlgColors.surfaceWhite),
                     ),
                     const SizedBox(width: 8),
-                    const LabIcon('login', size: 20, color: Colors.white),
+                    const Icon(
+                      Icons.login_rounded,
+                      size: 21,
+                      color: Colors.white,
+                    ),
                   ],
                 ),
               ),

@@ -2,7 +2,7 @@
 --
 -- Cara pakai (proyek Supabase baru): Dashboard → SQL Editor → tempel seluruh
 -- isi berkas ini → Run. Aman dijalankan ulang (idempoten).
--- Sudah termasuk perbaikan hasil QA 24 Nov 2026 (lihat qa/BUGS.md):
+-- Sudah termasuk perbaikan hasil QA 24 Nov 2026:
 --   * email akun wajib @students.usu.ac.id
 --   * ruangan hanya master Lab Jaringan 1–4 (tanpa Lab Jaringan 1 / AI & Data / Multimedia)
 --   * tidak ada meja demo "terisi" dan tidak ada sesi presensi aktif bawaan

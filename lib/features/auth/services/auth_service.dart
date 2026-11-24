@@ -175,7 +175,7 @@ class AuthService {
             .maybeSingle();
 
         if (response == null) {
-          return const AuthResult.failure('Nomor Induk / Email tidak terdaftar dalam database.');
+          return const AuthResult.failure('Nomor Induk / Email tidak terdaftar.');
         }
 
         var profile = UserProfile.fromJson(response);
@@ -244,7 +244,7 @@ class AuthService {
         return AuthResult.failure(e.message);
       } catch (e) {
         debugPrint('[AuthService] Error saat login Supabase: $e');
-        return AuthResult.failure('Gagal menghubungi server database: $e');
+        return const AuthResult.failure('Gagal terhubung ke server. Periksa koneksi internet Anda.');
       }
     }
 

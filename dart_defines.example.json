@@ -1,0 +1,5 @@
+{
+  "SMTP_USER": "email_pengirim@gmail.com",
+  "SMTP_PASS": "sandi_aplikasi_gmail_16_huruf",
+  "MAPS_API_KEY": "kunci_google_maps"
+}
