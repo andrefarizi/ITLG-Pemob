@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
+// Konstanta umum aplikasi
 enum UserRole {
   praktikan,
   aslab,

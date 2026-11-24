@@ -1,19 +1,18 @@
--- =============================================================================
--- MASTER DATABASE SCHEMA ALL-IN-ONE (POSTGRESQL & SUPABASE) - ITLG MOBILE
--- =============================================================================
--- File ini menggabungkan SELURUH skema database, autentikasi 4 role, fungsi RPC,
--- storage bucket, kebijakan RLS, Supabase Realtime, dan seed data awal.
+-- Skema database utama PostgreSQL & Supabase - ITLG Mobile
 --
--- CARA PENGGUNAAN (CUKUP JALANKAN 1 FILE INI SAJA):
--- 1. Buka Dashboard Supabase: https://supabase.com/dashboard
--- 2. Masuk ke menu "SQL Editor" -> klik "New query".
--- 3. Salin (Copy) dan Tempel (Paste) seluruh isi file `supabase/schema.sql` ini.
--- 4. Klik tombol "Run" (Ctrl + Enter).
--- =============================================================================
+-- Cara pakai (proyek Supabase baru): Dashboard → SQL Editor → tempel seluruh
+-- isi berkas ini → Run. Aman dijalankan ulang (idempoten).
+-- Sudah termasuk perbaikan hasil QA 24 Nov 2026 (lihat qa/BUGS.md):
+--   * email akun wajib @students.usu.ac.id
+--   * ruangan hanya master Lab Jaringan 1–4 (tanpa Lab Jaringan 1 / AI & Data / Multimedia)
+--   * tidak ada meja demo "terisi" dan tidak ada sesi presensi aktif bawaan
+--   * tabel soal kuis (quiz_questions), notifikasi pribadi (target_user),
+--     status dibaca per pengguna (notification_reads)
+--   * RLS: data hanya untuk pengguna yang sudah login; profil hanya bisa
+--     diubah pemiliknya; unggah/hapus berkas hanya pengguna login
+--   * BAGIAN 11 menyelaraskan database lama yang dibuat dari versi sebelumnya
 
--- =============================================================================
 -- BAGIAN 1: EKSTENSI, TIPE ENUM, PROFIL PENGGUNA, AUTH 4 ROLE & RESET PASSWORD
--- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -47,7 +46,8 @@ CREATE POLICY "Public profiles are viewable by everyone"
 
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
-    ON public.profiles FOR UPDATE USING (true) WITH CHECK (true);
+    ON public.profiles FOR UPDATE TO authenticated
+    USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -91,6 +91,10 @@ BEGIN
 END;
 $$;
 
+-- Catatan keamanan: fungsi ini terbuka untuk anon karena dipakai "Lupa Password"
+-- (OTP dibuat & dicek di aplikasi). Setelah Lupa Password dipindah ke pemulihan
+-- bawaan Supabase Auth, cabut aksesnya:
+--   REVOKE EXECUTE ON FUNCTION public.reset_password_by_email(text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.reset_password_by_email(text, text) TO anon, authenticated, service_role;
 
 -- Fungsi RPC Verifikasi Kata Sandi Saat Ini (untuk halaman Ubah Kata Sandi dari Profil)
@@ -116,9 +120,13 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.verify_user_password(text, text) TO anon, authenticated, service_role;
+-- Hanya pengguna login (halaman Ubah Kata Sandi). Fungsi PostgreSQL otomatis
+-- bisa dieksekusi PUBLIC, jadi cabut dari PUBLIC & anon.
+REVOKE EXECUTE ON FUNCTION public.verify_user_password(text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.verify_user_password(text, text) TO authenticated, service_role;
 
 -- Seed 4 Akun Utama (Praktikan, Aslab, Laboran, Dosen) - Password: password123
+-- Akun yang sudah ada TIDAK ditimpa kata sandi & namanya saat skrip dijalankan ulang.
 DO $$
 DECLARE
     uid_praktikan UUID := 'a1111111-1111-1111-1111-111111111111';
@@ -142,14 +150,12 @@ BEGIN
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
-        encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (uid_praktikan, '241402105', 'Andre Al Farizi Sebayang', 'andreal@students.usu.ac.id', 'praktikan', '081234567890')
     ON CONFLICT (id) DO UPDATE SET
         identifier = EXCLUDED.identifier,
-        full_name = EXCLUDED.full_name,
         email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
@@ -169,14 +175,12 @@ BEGIN
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
-        encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (uid_aslab, '211402001', 'Abbil Rizki', 'abbilrizki@students.usu.ac.id', 'aslab', '081298765432')
     ON CONFLICT (id) DO UPDATE SET
         identifier = EXCLUDED.identifier,
-        full_name = EXCLUDED.full_name,
         email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
@@ -196,14 +200,12 @@ BEGIN
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
-        encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (uid_laboran, '198501012010011001', 'Reagan Brian', 'reaganbrian@students.usu.ac.id', 'laboran', '081377889900')
     ON CONFLICT (id) DO UPDATE SET
         identifier = EXCLUDED.identifier,
-        full_name = EXCLUDED.full_name,
         email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
@@ -223,14 +225,12 @@ BEGIN
         NOW(), NOW(), '', '', '', ''
     ) ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
-        encrypted_password = EXCLUDED.encrypted_password,
         confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 
     INSERT INTO public.profiles (id, identifier, full_name, email, role, phone)
     VALUES (uid_dosen, '198705122015041002', 'Dr. Eng. Daniele Christian, M.Kom.', 'danielechristian@students.usu.ac.id', 'dosen', '081122334455')
     ON CONFLICT (id) DO UPDATE SET
         identifier = EXCLUDED.identifier,
-        full_name = EXCLUDED.full_name,
         email = EXCLUDED.email;
 
     INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
@@ -252,9 +252,24 @@ WHERE confirmation_token IS NULL
    OR email_change_token_new IS NULL
    OR email_change IS NULL;
 
--- =============================================================================
+-- Validasi akun: email wajib @students.usu.ac.id (revisi BE).
+-- Dipasang hanya bila semua profil sudah sesuai; bila belum, muncul NOTICE.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_email_students_usu') THEN
+        RETURN;
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.profiles
+               WHERE email !~* '^[A-Za-z0-9._%+-]+@students\.usu\.ac\.id$') THEN
+        RAISE NOTICE 'Constraint email dilewati: masih ada profil yang bukan @students.usu.ac.id.';
+    ELSE
+        ALTER TABLE public.profiles
+            ADD CONSTRAINT profiles_email_students_usu
+            CHECK (email ~* '^[A-Za-z0-9._%+-]+@students\.usu\.ac\.id$');
+    END IF;
+END $$;
+
 -- BAGIAN 2: PRAKTIKUM (4 MATA KULIAH), PERTEMUAN, TUGAS, KUIS & RATING ASISTEN
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.praktikum_courses (
     id TEXT PRIMARY KEY,
@@ -360,7 +375,7 @@ INSERT INTO public.praktikum_courses (
 ) VALUES
 (
     'pemob', 'TIF 3001 - Kom C (C1 & C2)', 'Pemrograman Mobile', 'Semester Ganjil 2026/2027',
-    'Andi Pratama', 'AP', 'Lab Komputer 1',
+    'Andi Pratama', 'AP', 'Lab Jaringan 1',
     'Sen • C1 08:00 | C2 10:00', 'Sen, C1 08:00–09:40 • C2 10:00–11:40', 'Sen, C1 08:00–09:40 | C2 10:00–11:40', 'C1 08:00–09:40 • C2 10:00–11:40 WIB',
     4, 12,
     'State Management',
@@ -393,7 +408,7 @@ INSERT INTO public.praktikum_courses (
 ),
 (
     'ml', 'TIF 3004 - Kom C (C1 & C2)', 'Machine Learning', 'Semester Ganjil 2026/2027',
-    'Rizky Harahap', 'RH', 'Lab AI & Data',
+    'Rizky Harahap', 'RH', 'Lab Jaringan 3',
     'Kam • C1 13:00 | C2 15:00', 'Kam, C1 13:00–14:40 • C2 15:00–16:40', 'Kam, C1 13:00–14:40 | C2 15:00–16:40', 'C1 13:00–14:40 • C2 15:00–16:40 WIB',
     4, 12,
     'Klasifikasi Supervised Learning',
@@ -439,15 +454,29 @@ INSERT INTO public.praktikum_meetings (
 ('ml-m1', 'ml', 1, 'Modul 1 • Pengenalan Python & NumPy', 'Kam, 10 Sep 2026 • 13:00–14:40 WIB', 'Manipulasi array NumPy, DataFrame Pandas, dan visualisasi Matplotlib.', 'Materi Python untuk ML', 'Modul_1_Python_ML.pdf', 'Tugas 1 : Eksplorasi Dataset CSV', 'Sudah dinilai asisten', 'Pre-Test Modul 1', 'hadir', 'qrcode', 'Tercatat 13:00 WIB melalui pindai QR', NULL)
 ON CONFLICT (id) DO NOTHING;
 
--- =============================================================================
+-- Soal kuis buatan Aslab (per praktikum, urutan = position).
+-- Catatan: answer_index masih terbaca praktikan yang login; untuk menyembunyikan
+-- kunci jawaban perlu view/RPC penilaian di server.
+CREATE TABLE IF NOT EXISTS public.quiz_questions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_id TEXT NOT NULL,
+    meeting_number INT NOT NULL DEFAULT 0,
+    position INT NOT NULL,
+    question TEXT NOT NULL,
+    options JSONB NOT NULL,
+    answer_index INT NOT NULL CHECK (answer_index >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (course_id, position)
+);
+
 -- BAGIAN 3: PRESENSI (SESI AKTIF, QR DINAMIS 5 MENIT, REKAMAN GPS & IZIN)
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.attendance_sessions (
     id TEXT PRIMARY KEY,
     course_id TEXT NOT NULL DEFAULT 'pemob',
     meeting_number INT NOT NULL DEFAULT 5,
-    lab_name TEXT NOT NULL DEFAULT 'Lab Komputer 1',
+    lab_name TEXT NOT NULL DEFAULT 'Lab Jaringan 1',
     lat DOUBLE PRECISION NOT NULL DEFAULT 3.5621,
     lng DOUBLE PRECISION NOT NULL DEFAULT 98.6600,
     radius_m DOUBLE PRECISION NOT NULL DEFAULT 50.0,
@@ -512,12 +541,15 @@ ALTER TABLE public.leave_requests ADD COLUMN IF NOT EXISTS decision_history_json
 CREATE INDEX IF NOT EXISTS idx_leave_requests_status ON public.leave_requests(status);
 CREATE INDEX IF NOT EXISTS idx_leave_requests_user ON public.leave_requests(user_identifier);
 
+-- Riwayat sesi contoh (SUDAH DITUTUP). Sesi aktif hanya dibuat Aslab dari aplikasi.
 INSERT INTO public.attendance_sessions (
     id, course_id, meeting_number, lab_name, lat, lng, radius_m,
-    allow_qr, allow_button, require_signature, duration_minutes, status, started_by
+    allow_qr, allow_button, require_signature, duration_minutes, status, started_by,
+    started_at, ended_at
 ) VALUES (
-    'pemob-p5', 'pemob', 5, 'Lab Komputer 1', 3.5621, 98.6600, 50.0,
-    TRUE, TRUE, TRUE, 15, 'active', 'Andi Pratama'
+    'pemob-p5', 'pemob', 5, 'Lab Jaringan 1', 3.5621, 98.6600, 50.0,
+    TRUE, TRUE, TRUE, 15, 'closed', 'Andi Pratama',
+    NOW() - INTERVAL '2 hours', NOW() - INTERVAL '100 minutes'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.attendance_records (
@@ -533,10 +565,12 @@ INSERT INTO public.attendance_records (
     ('pemob', 5, '231402063', 'Maya Hutagalung', 'hadir', 'qr', 'QR • 08:05', TRUE)
 ON CONFLICT (course_id, meeting_number, user_identifier) DO NOTHING;
 
+-- Seed idempoten (lihat catatan seed pengumuman).
 INSERT INTO public.leave_requests (
     course_id, meeting_number, user_identifier, user_name,
     leave_type, pertemuan_label, note, file_name, status
-) VALUES
+)
+SELECT v.* FROM (VALUES
 (
     'pemob', 5, '231402045', 'Rina Novita',
     'Izin Sakit', '5 • Sen, 05 Okt',
@@ -546,14 +580,19 @@ INSERT INTO public.leave_requests (
 (
     'pemob', 4, '231402051', 'Dimas Saputra',
     'Kendala Perangkat', '4 • Sen, 28 Sep',
-    'Kamera ponsel rusak sehingga tidak dapat memindai QR. Saya hadir di Lab Komputer 1.',
+    'Kamera ponsel rusak sehingga tidak dapat memindai QR. Saya hadir di Lab Jaringan 1.',
     NULL, 0
-)
-ON CONFLICT DO NOTHING;
+)) AS v(course_id, meeting_number, user_identifier, user_name,
+    leave_type, pertemuan_label, note, file_name, status)
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.leave_requests l
+    WHERE l.course_id = v.course_id
+      AND l.meeting_number = v.meeting_number
+      AND l.user_identifier = v.user_identifier
+      AND l.note = v.note
+);
 
--- =============================================================================
 -- BAGIAN 4: MASTER LAB (JARINGAN 1-4), MEJA 6x5, TIKET LK- & INVENTARIS SOFTWARE
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.labs (
     id TEXT PRIMARY KEY,
@@ -667,7 +706,8 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.claim_or_move_desk(TEXT, INT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.claim_or_move_desk(TEXT, INT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.claim_or_move_desk(TEXT, INT, TEXT, TEXT, TEXT) TO authenticated, service_role;
 
 CREATE INDEX IF NOT EXISTS idx_lab_desks_lab ON public.lab_desks(lab_name);
 CREATE INDEX IF NOT EXISTS idx_lab_desks_status ON public.lab_desks(lab_name, status);
@@ -731,28 +771,9 @@ ALTER TABLE public.lab_software ADD COLUMN IF NOT EXISTS target_scope TEXT NOT N
 
 CREATE INDEX IF NOT EXISTS idx_lab_software_lab ON public.lab_software(lab_name);
 
-INSERT INTO public.lab_desks (lab_name, desk_number, pc_code, spec, status, booked_by_user_id, booked_by_name, booked_at)
-SELECT
-    'Lab Komputer 1',
-    n,
-    'PC-' || LPAD(n::text, 2, '0'),
-    'Core i5-12400 • 16 GB • SSD 512 GB',
-    CASE
-        WHEN n IN (3, 8, 14, 17, 25, 27, 30) THEN 'available'
-        WHEN n = 23 THEN 'broken'
-        ELSE 'taken'
-    END,
-    CASE WHEN n = 12 THEN '231402045' ELSE NULL END,
-    CASE
-        WHEN n = 12 THEN 'Rina Novita'
-        WHEN n NOT IN (3, 8, 14, 17, 25, 27, 30, 23) THEN 'Praktikan Sesi Aktif'
-        ELSE NULL
-    END,
-    CASE WHEN n NOT IN (3, 8, 14, 17, 25, 27, 30, 23) THEN NOW() ELSE NULL END
-FROM generate_series(1, 30) AS n
-ON CONFLICT (lab_name, desk_number) DO NOTHING;
-
-INSERT INTO public.lab_desks (lab_name, desk_number, pc_code, row_num, col_num, spec, status, booked_by_user_id, booked_by_name, booked_at)
+-- 30 meja per lab (6 baris x 5 kolom). Semua tersedia kecuali 1 meja rusak per lab;
+-- meja baru "terisi" hanya bila praktikan memilihnya saat sesi presensi aktif.
+INSERT INTO public.lab_desks (lab_name, desk_number, pc_code, row_num, col_num, spec, status)
 SELECT
     lab_title,
     n,
@@ -764,34 +785,12 @@ SELECT
         ELSE 'Core i5-12400 • 16 GB • SSD 512 GB'
     END,
     CASE
-        WHEN lab_title = 'Lab Jaringan 1' AND n IN (3, 8, 14, 17, 25, 27, 30) THEN 'available'
-        WHEN lab_title = 'Lab Jaringan 1' AND n = 23 THEN 'broken'
-        WHEN lab_title = 'Lab Jaringan 1' THEN 'taken'
-        WHEN lab_title = 'Lab Jaringan 2' AND n = 12 THEN 'broken'
-        WHEN lab_title = 'Lab Jaringan 2' AND n <= 16 THEN 'taken'
-        WHEN lab_title = 'Lab Jaringan 3' AND n = 7 THEN 'broken'
-        WHEN lab_title = 'Lab Jaringan 3' AND n <= 12 THEN 'taken'
-        WHEN lab_title = 'Lab Jaringan 4' AND n = 19 THEN 'broken'
-        WHEN lab_title = 'Lab Jaringan 4' AND n <= 10 THEN 'taken'
+        WHEN (lab_title = 'Lab Jaringan 1' AND n = 23)
+          OR (lab_title = 'Lab Jaringan 2' AND n = 12)
+          OR (lab_title = 'Lab Jaringan 3' AND n = 7)
+          OR (lab_title = 'Lab Jaringan 4' AND n = 19)
+        THEN 'broken'
         ELSE 'available'
-    END,
-    CASE WHEN lab_title = 'Lab Jaringan 1' AND n = 12 THEN '231402045' ELSE NULL END,
-    CASE
-        WHEN lab_title = 'Lab Jaringan 1' AND n = 12 THEN 'Rina Novita'
-        WHEN (lab_title = 'Lab Jaringan 1' AND n NOT IN (3, 8, 14, 17, 25, 27, 30, 23))
-          OR (lab_title = 'Lab Jaringan 2' AND n <= 16 AND n <> 12)
-          OR (lab_title = 'Lab Jaringan 3' AND n <= 12 AND n <> 7)
-          OR (lab_title = 'Lab Jaringan 4' AND n <= 10 AND n <> 19)
-        THEN 'Praktikan Sesi Aktif'
-        ELSE NULL
-    END,
-    CASE
-        WHEN (lab_title = 'Lab Jaringan 1' AND n NOT IN (3, 8, 14, 17, 25, 27, 30, 23))
-          OR (lab_title = 'Lab Jaringan 2' AND n <= 16 AND n <> 12)
-          OR (lab_title = 'Lab Jaringan 3' AND n <= 12 AND n <> 7)
-          OR (lab_title = 'Lab Jaringan 4' AND n <= 10 AND n <> 19)
-        THEN NOW()
-        ELSE NULL
     END
 FROM (VALUES ('Lab Jaringan 1'), ('Lab Jaringan 2'), ('Lab Jaringan 3'), ('Lab Jaringan 4')) AS labs(lab_title)
 CROSS JOIN generate_series(1, 30) AS n
@@ -803,18 +802,12 @@ SET row_num = ((desk_number - 1) / 5) + 1,
     col_num = ((desk_number - 1) % 5) + 1
 WHERE desk_number BETWEEN 1 AND 30;
 
-INSERT INTO public.lab_desks (lab_name, desk_number, pc_code, spec, status) VALUES
-    ('Lab Multimedia', 1, 'PC-01', 'Core i5-12400 • 16 GB • SSD 512 GB', 'available'),
-    ('Lab Multimedia', 2, 'PC-02', 'Core i5-12400 • 16 GB • SSD 512 GB', 'available'),
-    ('Lab Multimedia', 12, 'PC-12', 'Core i5-12400 • 16 GB • SSD 512 GB', 'broken')
-ON CONFLICT (lab_name, desk_number) DO NOTHING;
-
 INSERT INTO public.lab_tickets (
     ticket_code, lab_name, desk_number, pc_code, icon, category,
     title, description, reporter_name, reporter_role, photo_name, status, handling_note
 ) VALUES
 (
-    '#TK-0921', 'Lab Komputer 1', 12, 'PC-12', 'desktop_device', 'PC • Meja 12',
+    '#TK-0921', 'Lab Jaringan 1', 12, 'PC-12', 'desktop_device', 'PC • Meja 12',
     'PC-12 tidak dapat menyala',
     'Layar tetap hitam setelah tombol power ditekan dan lampu indikator tidak menyala. Kabel daya sudah dicoba di stopkontak lain.',
     'Andi Pratama', 'aslab', 'foto_pc12.jpg', 0,
@@ -827,7 +820,7 @@ INSERT INTO public.lab_tickets (
     'Feri Gunawan', 'aslab', 'foto_proyektor.jpg', 0, ''
 ),
 (
-    '#TK-0918', 'Lab Multimedia', NULL, NULL, 'wifi', 'Jaringan',
+    '#TK-0918', 'Lab Jaringan 3', NULL, NULL, 'wifi', 'Jaringan',
     'Koneksi jaringan putus',
     'Tiga PC di baris belakang tidak mendapat alamat IP.',
     'Sinta Marpaung', 'aslab', 'foto_jaringan.jpg', 0, ''
@@ -835,11 +828,6 @@ INSERT INTO public.lab_tickets (
 ON CONFLICT (ticket_code) DO NOTHING;
 
 INSERT INTO public.lab_software (lab_name, software_name, icon, is_installed) VALUES
-    ('Lab Komputer 1', 'MySQL 8.0', 'database_outline', true),
-    ('Lab Komputer 1', 'PostgreSQL 16', 'database_outline', true),
-    ('Lab Komputer 1', 'Android Studio', 'code_tags', false),
-    ('Lab Komputer 1', 'Visual Studio Code', 'code_tags', true),
-    ('Lab Komputer 1', 'Figma Desktop', 'pencil', true),
     ('Lab Jaringan 1', 'MySQL 8.0', 'database_outline', true),
     ('Lab Jaringan 1', 'PostgreSQL 16', 'database_outline', true),
     ('Lab Jaringan 1', 'Android Studio', 'code_tags', false),
@@ -859,17 +847,10 @@ INSERT INTO public.lab_software (lab_name, software_name, icon, is_installed) VA
     ('Lab Jaringan 4', 'JupyterLab', 'code_tags', true),
     ('Lab Jaringan 4', 'Docker Desktop', 'database_outline', true),
     ('Lab Jaringan 4', 'Visual Studio Code', 'code_tags', true),
-    ('Lab Jaringan 4', 'CUDA Toolkit 12', 'desktop_device', false),
-    ('Lab Multimedia', 'Figma Desktop', 'pencil', true),
-    ('Lab Multimedia', 'Blender 4.2', 'desktop_device', true),
-    ('Lab Multimedia', 'Visual Studio Code', 'code_tags', true),
-    ('Lab Multimedia', 'Unity Hub', 'code_tags', false),
-    ('Lab Multimedia', 'OBS Studio', 'camera', true)
+    ('Lab Jaringan 4', 'CUDA Toolkit 12', 'desktop_device', false)
 ON CONFLICT (lab_name, software_name) DO NOTHING;
 
--- =============================================================================
 -- BAGIAN 5: JADWAL PRAKTIKUM, PENGUMUMAN & APPROVAL PEMINJAMAN RUANGAN
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.praktikum_schedules (
     id TEXT PRIMARY KEY,
@@ -929,8 +910,8 @@ INSERT INTO public.praktikum_schedules (
     id, course_id, course_name, kelas, day_index, day_short, start_time, end_time, room, asisten, week_number
 ) VALUES
     -- 1. Pemrograman Mobile — Kom C (Senin, 1 jam 40 menit per sesi)
-    ('sched-pemob', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kom C (Sesi C1)', 0, 'Sen', '08:00', '09:40', 'Lab Komputer 1', 'Andi Pratama', 4),
-    ('sched-pemob-c2', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kom C (Sesi C2)', 0, 'Sen', '10:00', '11:40', 'Lab Komputer 1', 'Andi Pratama', 4),
+    ('sched-pemob', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kom C (Sesi C1)', 0, 'Sen', '08:00', '09:40', 'Lab Jaringan 1', 'Andi Pratama', 4),
+    ('sched-pemob-c2', 'pemob', 'Pemrograman Mobile', 'TIF 3001 - Kom C (Sesi C2)', 0, 'Sen', '10:00', '11:40', 'Lab Jaringan 1', 'Andi Pratama', 4),
     -- 2. Desain Interaksi — Kom C (Selasa, 1 jam 40 menit per sesi)
     ('sched-desain', 'desain', 'Desain Interaksi', 'TIF 3002 - Kom C (Sesi C1)', 1, 'Sel', '08:00', '09:40', 'Lab Jaringan 2', 'Feri Gunawan', 4),
     ('sched-desain-c2', 'desain', 'Desain Interaksi', 'TIF 3002 - Kom C (Sesi C2)', 1, 'Sel', '10:00', '11:40', 'Lab Jaringan 2', 'Feri Gunawan', 4),
@@ -938,8 +919,8 @@ INSERT INTO public.praktikum_schedules (
     ('sched-adj', 'adj', 'Analisis Desain Jaringan', 'TIF 3003 - Kom C (Sesi C1)', 2, 'Rab', '10:00', '11:40', 'Lab Jaringan 1', 'Sinta Marpaung', 4),
     ('sched-adj-c2', 'adj', 'Analisis Desain Jaringan', 'TIF 3003 - Kom C (Sesi C2)', 2, 'Rab', '13:00', '14:40', 'Lab Jaringan 1', 'Sinta Marpaung', 4),
     -- 4. Machine Learning — Kom C (Kamis, 1 jam 40 menit per sesi)
-    ('sched-ml', 'ml', 'Machine Learning', 'TIF 3004 - Kom C (Sesi C1)', 3, 'Kam', '13:00', '14:40', 'Lab AI & Data', 'Rizky Harahap', 4),
-    ('sched-ml-c2', 'ml', 'Machine Learning', 'TIF 3004 - Kom C (Sesi C2)', 3, 'Kam', '15:00', '16:40', 'Lab AI & Data', 'Rizky Harahap', 4)
+    ('sched-ml', 'ml', 'Machine Learning', 'TIF 3004 - Kom C (Sesi C1)', 3, 'Kam', '13:00', '14:40', 'Lab Jaringan 3', 'Rizky Harahap', 4),
+    ('sched-ml-c2', 'ml', 'Machine Learning', 'TIF 3004 - Kom C (Sesi C2)', 3, 'Kam', '15:00', '16:40', 'Lab Jaringan 3', 'Rizky Harahap', 4)
 ON CONFLICT (id) DO UPDATE SET
     course_name = EXCLUDED.course_name,
     kelas = EXCLUDED.kelas,
@@ -950,9 +931,12 @@ ON CONFLICT (id) DO UPDATE SET
     room = EXCLUDED.room,
     asisten = EXCLUDED.asisten;
 
+-- Seed idempoten: PK UUID acak membuat ON CONFLICT tidak pernah terpicu,
+-- jadi cek baris yang sama (judul + isi) sebelum menyisipkan.
 INSERT INTO public.announcements (
     course_id, category, tag, tag_red, title, body, author, old_schedule, new_schedule, room
-) VALUES
+)
+SELECT v.* FROM (VALUES
 (
     'ml', 1, 'Perubahan Jadwal', TRUE,
     'Pemindahan Jadwal Praktikum',
@@ -960,7 +944,7 @@ INSERT INTO public.announcements (
     'Rizky Harahap • Asisten Lab',
     'Sel, 29 Sep • 13:00',
     'Kam, 01 Okt • 13:00',
-    'Lab AI & Data'
+    'Lab Jaringan 3'
 ),
 (
     'pemob', 2, 'Umum', FALSE,
@@ -968,30 +952,31 @@ INSERT INTO public.announcements (
     'Jangan lupa mengunggah laporan PDF dan tautan repositori Tugas 4 sebelum pukul 10:30 WIB besok.',
     'Andi Pratama • Asisten Lab',
     NULL, NULL, NULL
-)
-ON CONFLICT DO NOTHING;
+)) AS v(course_id, category, tag, tag_red, title, body, author, old_schedule, new_schedule, room)
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.announcements a
+    WHERE a.title = v.title AND a.body = v.body
+);
 
 INSERT INTO public.room_booking_requests (
     id, tag, lab_name, title, date_label, time_range,
     requester_initials, requester_name, requester_role, reason, status
 ) VALUES
 (
-    'room-req-1', 'Praktikum Pengganti', 'Lab Komputer 1',
+    'room-req-1', 'Praktikum Pengganti', 'Lab Jaringan 1',
     'Praktikum Basis Data • Kelas B', 'Kam, 01 Okt 2026', '13:00–14:40',
     'SM', 'Sinta Marpaung', 'Asisten Lab',
     'Pengganti pertemuan 3 yang bertepatan dengan libur nasional.', 'menunggu'
 ),
 (
-    'room-req-2', 'Kelas Pengganti', 'Lab Multimedia',
+    'room-req-2', 'Kelas Pengganti', 'Lab Jaringan 2',
     'Pemrograman Mobile • Kelas A', 'Jum, 02 Okt 2026', '10:00–11:40',
     'AR', 'Abbil Rizki', 'Asisten Lab',
-    'Kelas pengganti karena perbaikan proyektor di Lab Komputer 1.', 'menunggu'
+    'Kelas pengganti karena perbaikan proyektor di Lab Jaringan 1.', 'menunggu'
 )
 ON CONFLICT (id) DO NOTHING;
 
--- =============================================================================
 -- BAGIAN 6: SHIFT JAGA ASISTEN, TUKAR SHIFT & KODE AKSES HARIAN LABORAN
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.lab_shifts (
     id TEXT PRIMARY KEY,
@@ -1048,12 +1033,12 @@ INSERT INTO public.lab_shifts (
     id, day_index, day_label, shift_label, course_name, time_range, room,
     asisten_name, asisten_initials, partner_name, attendance_status, check_in_time, discipline_pct
 ) VALUES
-    ('shift-sen-pagi', 0, 'Sen, 28 Sep', 'Sesi C1', 'Praktikum Pemrograman Mobile (Kom C)', '08:00–09:40 WIB', 'Lab Komputer 1', 'Abbil Rizki', 'AR', 'Andi Pratama', 'hadir', '07:52', 96),
-    ('shift-sen-siang', 0, 'Sen, 28 Sep', 'Sesi C2', 'Praktikum Pemrograman Mobile (Kom C)', '10:00–11:40 WIB', 'Lab Komputer 1', 'Andi Pratama', 'AP', 'Abbil Rizki', 'hadir', '09:55', 94),
+    ('shift-sen-pagi', 0, 'Sen, 28 Sep', 'Sesi C1', 'Praktikum Pemrograman Mobile (Kom C)', '08:00–09:40 WIB', 'Lab Jaringan 1', 'Abbil Rizki', 'AR', 'Andi Pratama', 'hadir', '07:52', 96),
+    ('shift-sen-siang', 0, 'Sen, 28 Sep', 'Sesi C2', 'Praktikum Pemrograman Mobile (Kom C)', '10:00–11:40 WIB', 'Lab Jaringan 1', 'Andi Pratama', 'AP', 'Abbil Rizki', 'hadir', '09:55', 94),
     ('shift-sel-pagi', 1, 'Sel, 29 Sep', 'Sesi C1', 'Praktikum Desain Interaksi (Kom C)', '08:00–09:40 WIB', 'Lab Jaringan 2', 'Feri Gunawan', 'FG', 'Sinta Marpaung', 'terlambat', '08:12', 86),
     ('shift-rab-siang', 2, 'Rab, 30 Sep', 'Sesi C1', 'Praktikum Analisis Desain Jaringan (Kom C)', '10:00–11:40 WIB', 'Lab Jaringan 1', 'Sinta Marpaung', 'SM', 'Abbil Rizki', 'hadir', '09:55', 92),
-    ('shift-kam-pagi', 3, 'Kam, 01 Okt', 'Sesi C1', 'Praktikum Machine Learning (Kom C)', '13:00–14:40 WIB', 'Lab AI & Data', 'Abbil Rizki', 'AR', 'Rizky Harahap', 'belum', NULL, 96),
-    ('shift-jum-pagi', 3, 'Kam, 01 Okt', 'Sesi C2', 'Praktikum Machine Learning (Kom C)', '15:00–16:40 WIB', 'Lab AI & Data', 'Rizky Harahap', 'RH', 'Abbil Rizki', 'belum', NULL, 90)
+    ('shift-kam-pagi', 3, 'Kam, 01 Okt', 'Sesi C1', 'Praktikum Machine Learning (Kom C)', '13:00–14:40 WIB', 'Lab Jaringan 3', 'Abbil Rizki', 'AR', 'Rizky Harahap', 'belum', NULL, 96),
+    ('shift-jum-pagi', 3, 'Kam, 01 Okt', 'Sesi C2', 'Praktikum Machine Learning (Kom C)', '15:00–16:40 WIB', 'Lab Jaringan 3', 'Rizky Harahap', 'RH', 'Abbil Rizki', 'belum', NULL, 90)
 ON CONFLICT (id) DO UPDATE SET
     day_index = EXCLUDED.day_index,
     day_label = EXCLUDED.day_label,
@@ -1101,9 +1086,7 @@ INSERT INTO public.assistant_access_codes (id, code, valid_until, generated_by)
 VALUES ('today', 'ITLG-4821', '17:00 WIB', 'Reagan Brian')
 ON CONFLICT (id) DO NOTHING;
 
--- =============================================================================
 -- BAGIAN 7: VALIDASI NILAI AKHIR DOSEN, SANGGAH NILAI & HUBUNGI ASISTEN
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.grade_validations (
     course_id TEXT PRIMARY KEY,
@@ -1252,9 +1235,7 @@ SELECT * FROM (VALUES
 ) AS seed(title, course_name, file_name, format, size_label, local_path, downloaded_by)
 WHERE NOT EXISTS (SELECT 1 FROM public.report_downloads LIMIT 1);
 
--- =============================================================================
 -- BAGIAN 8: NOTIFIKASI LINTAS ROLE (PRAKTIKAN ↔ ASLAB ↔ LABORAN ↔ DOSEN)
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1277,20 +1258,33 @@ ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS meeting_number INT;
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS course_name TEXT;
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS module_label TEXT;
 
+-- Notifikasi pribadi: bila target_user diisi (NIM/NIP), hanya pengguna itu yang melihatnya.
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS target_user TEXT;
+CREATE INDEX IF NOT EXISTS idx_notifications_target_user
+    ON public.notifications (target_role, target_user);
+
+-- Status dibaca per pengguna (kolom is_read lama dipakai bersama satu peran).
+CREATE TABLE IF NOT EXISTS public.notification_reads (
+    notification_id UUID NOT NULL REFERENCES public.notifications(id) ON DELETE CASCADE,
+    user_identifier TEXT NOT NULL,
+    read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (notification_id, user_identifier)
+);
+
 CREATE INDEX IF NOT EXISTS idx_notifications_role_created
     ON public.notifications(target_role, created_at DESC);
 
 INSERT INTO public.notifications (target_role, icon, title, body, target_key, important, is_read, created_at)
 SELECT * FROM (VALUES
-    ('praktikan', 'qrcode', 'Presensi Berlangsung', 'Praktikum Pemrograman Mobile • Lab Komputer 1 sedang dibuka oleh Andi Pratama', 'presensi', TRUE, FALSE, NOW() - INTERVAL '5 minutes'),
-    ('praktikan', 'bullhorn_outline', 'Pemindahan Jadwal Praktikum', 'Machine Learning Kelas C pindah ke Kam, 01 Okt • 13:00 di Lab AI & Data', 'pengumuman', TRUE, FALSE, NOW() - INTERVAL '2 hours'),
+    ('praktikan', 'qrcode', 'Presensi Berlangsung', 'Praktikum Pemrograman Mobile • Lab Jaringan 1 sedang dibuka oleh Andi Pratama', 'presensi', TRUE, FALSE, NOW() - INTERVAL '5 minutes'),
+    ('praktikan', 'bullhorn_outline', 'Pemindahan Jadwal Praktikum', 'Machine Learning Kelas C pindah ke Kam, 01 Okt • 13:00 di Lab Jaringan 3', 'pengumuman', TRUE, FALSE, NOW() - INTERVAL '2 hours'),
     ('praktikan', 'clipboard', 'Batas Unggah Tugas 4', 'Kumpulkan laporan & tautan repositori Pemrograman Mobile sebelum 10:30 WIB', 'editTugas', FALSE, FALSE, NOW() - INTERVAL '4 hours'),
     ('praktikan', 'trophy', 'Nilai Modul 3 Tersedia', 'Nilai Layout & Navigasi (88) telah diterbitkan oleh asisten', 'detailNilai', FALSE, TRUE, NOW() - INTERVAL '1 day'),
     ('aslab', 'file', 'Pengajuan Izin Menunggu', 'Rina Novita mengajukan Izin Sakit untuk Pertemuan 5 Pemrograman Mobile', 'persetujuanIzin', TRUE, FALSE, NOW() - INTERVAL '10 minutes'),
     ('aslab', 'clipboard', 'Tugas 4 Perlu Dievaluasi', '20 praktikan telah mengumpulkan Tugas 4 Praktikum Pemrograman Mobile', 'evaluasi', TRUE, FALSE, NOW() - INTERVAL '1 hour'),
     ('aslab', 'arrow_right_left', 'Permintaan Tukar Shift', 'Feri Gunawan meminta bertukar shift jaga minggu ini', 'shiftJaga', FALSE, FALSE, NOW() - INTERVAL '3 hours'),
     ('aslab', 'question', 'Hasil Kuis Pre-Test Modul 4', '22 dari 24 praktikan telah menyelesaikan kuis dengan rata-rata 78,5', 'hasilKuis', FALSE, TRUE, NOW() - INTERVAL '1 day'),
-    ('laboran', 'wrench_outline', 'Tiket Kerusakan Baru', 'PC-12 Lab Komputer 1 dilaporkan mengalami kendala monitor tidak tampil', 'tiket', TRUE, FALSE, NOW() - INTERVAL '15 minutes'),
+    ('laboran', 'wrench_outline', 'Tiket Kerusakan Baru', 'PC-12 Lab Jaringan 1 dilaporkan mengalami kendala monitor tidak tampil', 'tiket', TRUE, FALSE, NOW() - INTERVAL '15 minutes'),
     ('laboran', 'calendar', '2 Pengajuan Pemakaian Ruangan', 'Menunggu persetujuan jadwal pemakaian Lab Komputer 2 & Lab Jaringan 1', 'ruangan', TRUE, FALSE, NOW() - INTERVAL '2 hours'),
     ('laboran', 'key', 'Presensi Asisten On-Duty', 'Andi Pratama & Feri Gunawan telah verifikasi kehadiran di laboratorium', 'presensi', FALSE, TRUE, NOW() - INTERVAL '1 day'),
     ('dosen', 'triangle_alert', 'Peringatan Dini: 3 Praktikan', 'Kehadiran atau nilai di bawah batas minimal pada grup praktikum diampu', 'peringatan', TRUE, FALSE, NOW() - INTERVAL '5 minutes'),
@@ -1300,9 +1294,7 @@ SELECT * FROM (VALUES
 ) AS seed(target_role, icon, title, body, target_key, important, is_read, created_at)
 WHERE NOT EXISTS (SELECT 1 FROM public.notifications LIMIT 1);
 
--- =============================================================================
 -- BAGIAN 9: SUPABASE STORAGE BUCKET (`itlg-uploads`) UNTUK UPLOAD BERKAS NYATA
--- =============================================================================
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('itlg-uploads', 'itlg-uploads', TRUE, 20971520)
@@ -1314,23 +1306,31 @@ DROP POLICY IF EXISTS "itlg_uploads_select_all" ON storage.objects;
 CREATE POLICY "itlg_uploads_select_all"
     ON storage.objects FOR SELECT USING (bucket_id = 'itlg-uploads');
 
+-- Baca tetap publik (bucket publik); tulis/ubah/hapus hanya pengguna login.
 DROP POLICY IF EXISTS "itlg_uploads_insert_all" ON storage.objects;
-CREATE POLICY "itlg_uploads_insert_all"
-    ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'itlg-uploads');
-
 DROP POLICY IF EXISTS "itlg_uploads_update_all" ON storage.objects;
-CREATE POLICY "itlg_uploads_update_all"
-    ON storage.objects FOR UPDATE
+DROP POLICY IF EXISTS "itlg_uploads_delete_all" ON storage.objects;
+
+DROP POLICY IF EXISTS "itlg_uploads_insert_auth" ON storage.objects;
+CREATE POLICY "itlg_uploads_insert_auth"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (bucket_id = 'itlg-uploads');
+
+DROP POLICY IF EXISTS "itlg_uploads_update_auth" ON storage.objects;
+CREATE POLICY "itlg_uploads_update_auth"
+    ON storage.objects FOR UPDATE TO authenticated
     USING (bucket_id = 'itlg-uploads')
     WITH CHECK (bucket_id = 'itlg-uploads');
 
-DROP POLICY IF EXISTS "itlg_uploads_delete_all" ON storage.objects;
-CREATE POLICY "itlg_uploads_delete_all"
-    ON storage.objects FOR DELETE USING (bucket_id = 'itlg-uploads');
+DROP POLICY IF EXISTS "itlg_uploads_delete_auth" ON storage.objects;
+CREATE POLICY "itlg_uploads_delete_auth"
+    ON storage.objects FOR DELETE TO authenticated
+    USING (bucket_id = 'itlg-uploads');
 
--- =============================================================================
 -- BAGIAN 10: ROW LEVEL SECURITY (RLS) & SUPABASE REALTIME PUBLICATION
--- =============================================================================
+-- Semua tabel hanya bisa dibaca/ditulis pengguna yang sudah login (authenticated).
+-- Tanpa login (kunci publik di APK saja) hasilnya kosong. profiles diatur di BAGIAN 1
+-- (baca publik untuk mencari email dari NIM/NIP saat login).
 
 DO $$
 DECLARE
@@ -1361,21 +1361,89 @@ BEGIN
         'grade_change_logs',
         'assistant_followups',
         'report_downloads',
-        'notifications'
+        'notifications',
+        'quiz_questions',
+        'notification_reads'
     ] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
+        -- Kebijakan lama "semua orang" (versi sebelumnya) dihapus.
         EXECUTE format('DROP POLICY IF EXISTS "%s_select_all" ON public.%I', tbl, tbl);
-        EXECUTE format('CREATE POLICY "%s_select_all" ON public.%I FOR SELECT USING (true)', tbl, tbl);
         EXECUTE format('DROP POLICY IF EXISTS "%s_insert_all" ON public.%I', tbl, tbl);
-        EXECUTE format('CREATE POLICY "%s_insert_all" ON public.%I FOR INSERT WITH CHECK (true)', tbl, tbl);
         EXECUTE format('DROP POLICY IF EXISTS "%s_update_all" ON public.%I', tbl, tbl);
-        EXECUTE format('CREATE POLICY "%s_update_all" ON public.%I FOR UPDATE USING (true) WITH CHECK (true)', tbl, tbl);
         EXECUTE format('DROP POLICY IF EXISTS "%s_delete_all" ON public.%I', tbl, tbl);
-        EXECUTE format('CREATE POLICY "%s_delete_all" ON public.%I FOR DELETE USING (true)', tbl, tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "%s_rw_auth" ON public.%I', tbl, tbl);
+        EXECUTE format(
+            'CREATE POLICY "%s_rw_auth" ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true)',
+            tbl, tbl);
 
         BEGIN
             EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
-        EXCEPTION WHEN duplicate_object THEN NULL;
+        EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
         END;
     END LOOP;
 END $$;
+
+-- BAGIAN 11: PENYELARASAN DATABASE LAMA (aman dijalankan ulang)
+-- Untuk database yang dibuat dari versi schema sebelumnya. Pada database baru
+-- semua perintah di bawah tidak mengubah apa pun.
+
+-- Nama ruangan lama → master Lab Jaringan 1–4 (riwayat tiket/sesi dibiarkan).
+UPDATE public.praktikum_courses   SET room = 'Lab Jaringan 1' WHERE room = 'Lab Komputer 1';
+UPDATE public.praktikum_courses   SET room = 'Lab Jaringan 3' WHERE room = 'Lab AI & Data';
+UPDATE public.praktikum_schedules SET room = 'Lab Jaringan 1', updated_at = NOW() WHERE room = 'Lab Komputer 1';
+UPDATE public.praktikum_schedules SET room = 'Lab Jaringan 3', updated_at = NOW() WHERE room = 'Lab AI & Data';
+UPDATE public.lab_shifts          SET room = 'Lab Jaringan 1', updated_at = NOW() WHERE room = 'Lab Komputer 1';
+UPDATE public.lab_shifts          SET room = 'Lab Jaringan 3', updated_at = NOW() WHERE room = 'Lab AI & Data';
+
+-- Baris seed ganda (schema lama dijalankan berulang): sisakan yang tertua.
+DELETE FROM public.leave_requests
+WHERE id IN (
+    SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY course_id, meeting_number, user_identifier, leave_type, note
+            ORDER BY created_at, id) AS rn
+        FROM public.leave_requests
+    ) x WHERE rn > 1
+);
+DELETE FROM public.announcements
+WHERE id IN (
+    SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY title, body ORDER BY created_at, id) AS rn
+        FROM public.announcements
+    ) x WHERE rn > 1
+);
+
+-- Sesi contoh lama (seed versi sebelumnya: pemob-p5 di Lab Komputer 1, status aktif)
+-- ditutup. Sesi yang dibuat Aslab dari aplikasi tidak tersentuh.
+UPDATE public.attendance_sessions
+SET status = 'closed', ended_at = NOW()
+WHERE id = 'pemob-p5' AND lab_name = 'Lab Komputer 1' AND status = 'active';
+
+-- Meja "terisi" di lab yang tidak punya sesi presensi aktif dilepas.
+UPDATE public.lab_desks d
+SET status = 'available', booked_by_user_id = NULL, booked_by_name = NULL,
+    booked_at = NULL, updated_at = NOW()
+WHERE d.status = 'taken'
+  AND NOT EXISTS (SELECT 1 FROM public.attendance_sessions s
+                  WHERE s.status = 'active' AND s.lab_name = d.lab_name);
+UPDATE public.desk_bookings b
+SET status = 'released'
+WHERE b.status = 'active'
+  AND NOT EXISTS (SELECT 1 FROM public.attendance_sessions s
+                  WHERE s.status = 'active' AND s.lab_name = b.lab_name);
+
+-- Cek akhir (tab Results): semua kolom "masalah" harus 0.
+SELECT 'ruangan di luar master labs' AS cek, count(*) AS masalah FROM (
+    SELECT room FROM public.praktikum_courses   WHERE room NOT IN (SELECT name FROM public.labs)
+    UNION ALL
+    SELECT room FROM public.praktikum_schedules WHERE room NOT IN (SELECT name FROM public.labs)
+    UNION ALL
+    SELECT room FROM public.lab_shifts          WHERE room NOT IN (SELECT name FROM public.labs)
+) r
+UNION ALL
+SELECT 'meja terisi tanpa sesi aktif', count(*) FROM public.lab_desks d
+WHERE d.status = 'taken' AND NOT EXISTS (
+    SELECT 1 FROM public.attendance_sessions s WHERE s.status = 'active' AND s.lab_name = d.lab_name)
+UNION ALL
+SELECT 'profil bukan @students.usu.ac.id', count(*) FROM public.profiles
+WHERE email !~* '^[A-Za-z0-9._%+-]+@students\.usu\.ac\.id$';

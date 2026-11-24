@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
+// Konfigurasi tema tampilan aplikasi
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(

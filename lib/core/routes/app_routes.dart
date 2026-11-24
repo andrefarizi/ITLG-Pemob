@@ -8,6 +8,7 @@ import '../../features/splash/splash_screen.dart';
 import '../../features/gyro/gyro_page.dart';
 import '../../features/notifications/notifikasi_page.dart';
 
+// Definisi nama rute navigasi aplikasi
 class AppRoutes {
   static const String initial = '/';
   static const String login = '/login';

@@ -1,7 +1,4 @@
 /// Konfigurasi Supabase untuk ITLG Mobile.
-///
-/// Dapatkan URL dan anonKey dari Dashboard Supabase Anda:
-/// Project Settings > API > Project URL & anon (public) key.
 class SupabaseConfig {
   /// URL Project Supabase Anda.
   static const String url = 'https://ctdglzvbmhmgrsykikni.supabase.co';
