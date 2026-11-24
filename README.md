@@ -33,59 +33,6 @@ Aplikasi mobile Flutter untuk manajemen praktikum laboratorium komputer dengan d
 
 ---
 
-## 🚀 Cara Menjalankan (setelah clone)
-
-### 1. Prasyarat
-- Flutter SDK (Dart `^3.13`), Android Studio + emulator/HP Android, JDK 17.
-- Proyek Supabase (gratis di [supabase.com](https://supabase.com)) bila ingin database sendiri.
-
-### 2. Ambil dependensi
-```bash
-flutter pub get
-```
-
-### 3. Siapkan database Supabase
-1. Buka **Supabase Dashboard → SQL Editor**, tempel seluruh isi [`supabase/schema.sql`](supabase/schema.sql), lalu **Run**.
-   Berkas ini membuat semua tabel, fungsi, bucket `itlg-uploads`, RLS, realtime, dan data contoh
-   (4 praktikum, Lab Jaringan 1–4 dengan 30 meja per lab, 4 akun uji). Aman dijalankan ulang.
-2. Pastikan tabel hasil cek di akhir skrip menunjukkan kolom `masalah` = 0.
-3. Isi URL & kunci publik proyek di [`lib/core/config/supabase_config.dart`](lib/core/config/supabase_config.dart)
-   (**Project Settings → API**: Project URL dan `anon`/publishable key). Jangan pakai `service_role` key.
-
-> Akun wajib berdomain **@students.usu.ac.id**. Data hanya bisa dibaca/ditulis setelah login
-> (RLS), kecuali tabel `profiles` yang dibaca untuk mencari email dari NIM/NIP saat login.
-
-### 4. Kunci Google Maps (peta presensi)
-Tambahkan ke `android/local.properties` (berkas ini tidak ter-commit):
-```properties
-MAPS_API_KEY=isi_kunci_google_maps_anda
-```
-
-### 5. Email OTP Lupa Password (SMTP Gmail)
-Tanpa langkah ini, Lupa Password menampilkan "Pengiriman email belum dikonfigurasi" dan OTP tidak terkirim.
-1. Akun Gmail pengirim → **Google Account → Keamanan → Verifikasi 2 Langkah** (aktifkan) →
-   **Sandi aplikasi** → buat sandi untuk "ITLG Mobile" (16 huruf). Sandi Gmail biasa **tidak** bisa dipakai.
-2. Salin `dart_defines.example.json` menjadi `dart_defines.json` (tidak ter-commit), lalu isi
-   `SMTP_USER` (alamat Gmail pengirim) dan `SMTP_PASS` (sandi aplikasi tadi, tanpa spasi).
-
-### 6. Jalankan
-```bash
-flutter run --dart-define-from-file=dart_defines.json
-```
-
-### Akun uji (dari seed `schema.sql`)
-| Peran | NIM / NIP |
-|---|---|
-| Praktikan (Mahasiswa) | 241402105 |
-| Asisten (Aslab) | 211402001 |
-| Laboran | 198501012010011001 |
-| Dosen | 198705122015041002 |
-
-Kata sandi awal ada di komentar seed akun (BAGIAN 1) `supabase/schema.sql`. Segera ganti lewat
-**Profil → Ubah Kata Sandi** bila database dipakai bersama.
-
----
-
 ## 👥 User Requirements per Role
 
 ### 1. 🎓 Praktikan (Mahasiswa)
