@@ -12,9 +12,7 @@ import 'pages/aslab_penilaian_page.dart';
 import 'pages/aslab_praktikum_saya_page.dart';
 import 'pages/aslab_profil_page.dart';
 
-/// Kerangka peran Asisten Lab: header ITLG + navbar 5 tab (Beranda,
-/// Praktikum, Penilaian, Absensi, Profil). Komponen tampilannya sama dengan
-/// peran lain (lib/features/laboran/widgets/laboran_ui.dart).
+/// Kerangka navigasi utama peran Asisten Lab.
 class AslabShell extends StatefulWidget {
   const AslabShell({super.key});
 

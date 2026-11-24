@@ -10,20 +10,23 @@ import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 
-ShiftRecord _resolveMyShift(ShiftSyncService shiftSync) {
+/// Shift milik asisten yang login pada HARI INI (WIB). Null bila tidak ada —
+/// jangan pernah jatuh ke shift asisten lain.
+ShiftRecord? _resolveMyShift(ShiftSyncService shiftSync) {
   final myName = AuthController.instance.userName;
-  final pendingMine = shiftSync.allShifts.where(
-    (s) => s.asistenName == myName && s.attendanceStatus == 'belum',
-  );
-  if (pendingMine.isNotEmpty) return pendingMine.first;
-  return shiftSync.allShifts.firstWhere(
-    (s) => s.asistenName == myName,
-    orElse: () => shiftSync.allShifts.first,
+  final wd = DateTime.now().toUtc().add(const Duration(hours: 7)).weekday;
+  final today = wd == DateTime.sunday ? -1 : wd - 1;
+  final mine = shiftSync.allShifts
+      .where((s) => s.asistenName == myName && s.dayIndex == today)
+      .toList();
+  if (mine.isEmpty) return null;
+  return mine.firstWhere(
+    (s) => s.attendanceStatus.toLowerCase() == 'belum',
+    orElse: () => mine.first,
   );
 }
 
-/// Sheet "Masukkan Kode Akses-Aslab" (Figma 5814:2815) +
-/// "Pop up Check-In Mengajar Berhasil" (Figma 5814:2799).
+/// Bottom sheet input kode akses presensi mengajar.
 Future<bool> showAslabCheckInCodeSheet(BuildContext context) async {
   final controller = TextEditingController();
   final shiftSync = ShiftSyncService.instance;
@@ -33,7 +36,7 @@ Future<bool> showAslabCheckInCodeSheet(BuildContext context) async {
     return false;
   }
 
-  String checkedInRoom = 'Lab Komputer 1';
+  String checkedInRoom = 'Lab Jaringan 1';
   bool submitting = false;
 
   final result = await labShowCustomSheet<bool>(
@@ -69,6 +72,12 @@ Future<bool> showAslabCheckInCodeSheet(BuildContext context) async {
                 await shiftSync.refreshFromBackend();
                 final expected = shiftSync.accessCode.trim().toUpperCase();
                 if (!ctx.mounted) return;
+                if (shiftSync.isAccessCodeExpired) {
+                  setSheetState(() => submitting = false);
+                  labToast(ctx,
+                      'Kode akses sudah kedaluwarsa. Minta Laboran membuat kode baru.');
+                  return;
+                }
                 if (input != expected) {
                   setSheetState(() => submitting = false);
                   labToast(
@@ -79,11 +88,21 @@ Future<bool> showAslabCheckInCodeSheet(BuildContext context) async {
                 }
 
                 final myShift = _resolveMyShift(shiftSync);
+                if (myShift == null) {
+                  labToast(context, 'Tidak ada jadwal mengajar kamu hari ini',
+                      error: true);
+                  return;
+                }
                 checkedInRoom = myShift.room;
-                await shiftSync.updateShiftAttendance(
-                  shiftId: myShift.id,
-                  status: 'hadir',
-                );
+                try {
+                  await shiftSync.updateShiftAttendance(
+                    shiftId: myShift.id,
+                    status: 'hadir',
+                  );
+                } on StateError catch (e) {
+                  if (context.mounted) labToast(context, e.message);
+                  return;
+                }
                 NotificationSyncService.instance.push(
                   role: 'laboran',
                   icon: 'key',
@@ -102,7 +121,8 @@ Future<bool> showAslabCheckInCodeSheet(BuildContext context) async {
       },
     ),
   );
-  controller.dispose();
+  // Lepas controller setelah animasi tutup sheet selesai.
+  Future<void>.delayed(const Duration(milliseconds: 600), controller.dispose);
   if (result == true && context.mounted) {
     final now = DateTime.now();
     final hh = now.hour.toString().padLeft(2, '0');
@@ -120,7 +140,7 @@ Future<bool> showAslabCheckInCodeSheet(BuildContext context) async {
   return false;
 }
 
-/// Figma: "Pindai QR Laboran-Aslab" (5814:2844).
+/// Halaman Pindai QR Laboran Asisten Lab.
 class AslabPindaiQrLaboranPage extends StatefulWidget {
   final VoidCallback? onLogoTap;
   const AslabPindaiQrLaboranPage({super.key, this.onLogoTap});
@@ -174,12 +194,22 @@ class _AslabPindaiQrLaboranPageState extends State<AslabPindaiQrLaboranPage> {
       return;
     }
 
-    _done = true;
     final myShift = _resolveMyShift(_shiftSync);
-    await _shiftSync.updateShiftAttendance(
-      shiftId: myShift.id,
-      status: 'hadir',
-    );
+    if (myShift == null) {
+      labToast(context, 'Tidak ada jadwal mengajar kamu hari ini', error: true);
+      return;
+    }
+    _done = true;
+    try {
+      await _shiftSync.updateShiftAttendance(
+        shiftId: myShift.id,
+        status: 'hadir',
+      );
+    } on StateError catch (e) {
+      _done = false;
+      if (mounted) labToast(context, e.message);
+      return;
+    }
     NotificationSyncService.instance.push(
       role: 'laboran',
       icon: 'qrcode',
@@ -218,8 +248,7 @@ class _AslabPindaiQrLaboranPageState extends State<AslabPindaiQrLaboranPage> {
               subtitle:
                   'Pindai QR yang ditampilkan Laboran di meja Laboran untuk mencatat kehadiran mengajar.',
             ),
-            // Figma: Area kamera gelap radius 24 dengan pill "Kamera Aktif",
-            // 4 siku putih, garis pindai hijau, dan caption bawah (5814:2844).
+            // Area kamera gelap dengan pill "Kamera Aktif"
             ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: Container(
@@ -279,19 +308,21 @@ class _AslabPindaiQrLaboranPageState extends State<AslabPindaiQrLaboranPage> {
                   right: LabMeta(
                       icon: 'calendar', text: 'Sisa ${prakClock(_remaining)}'),
                 ),
-                Text(myShift.courseName,
+                Text(myShift?.courseName ?? 'Tidak ada jadwal mengajar hari ini',
                     style: labText(20, w: kBold, c: Colors.black)),
-                Row(
-                  children: [
-                    Flexible(
-                      child: LabMeta(
-                          icon: 'clock',
-                          text: '${myShift.dayLabel} • ${myShift.timeRange}'),
-                    ),
-                    const SizedBox(width: 14),
-                    Flexible(child: LabMeta(icon: 'location', text: myShift.room)),
-                  ],
-                ),
+                if (myShift != null)
+                  Row(
+                    children: [
+                      Flexible(
+                        child: LabMeta(
+                            icon: 'clock',
+                            text: '${myShift.shiftLabel} • ${myShift.timeRange}'),
+                      ),
+                      const SizedBox(width: 14),
+                      Flexible(
+                          child: LabMeta(icon: 'location', text: myShift.room)),
+                    ],
+                  ),
                 const LabMeta(icon: 'person', text: 'Laboran: Reagan Brian'),
                 LabInsetBox(
                   padding: const EdgeInsets.all(12),
@@ -416,7 +447,7 @@ class _QrBracketsPainter extends CustomPainter {
       p,
     );
 
-    // Garis pindai hijau (Figma 5814:2844)
+    // Garis pindai hijau
     final linePaint = Paint()
       ..color = LabColors.green
       ..strokeWidth = 2.5

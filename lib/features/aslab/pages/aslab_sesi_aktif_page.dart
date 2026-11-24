@@ -12,10 +12,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Sesi Aktif & QR Presensi-Aslab".
-///
-/// QR berganti otomatis tiap 5 menit dengan token stabil yang tersinkron ke
-/// backend agar dapat langsung dipindai oleh Praktikan.
+/// Halaman Sesi Aktif & QR Presensi Asisten Lab.
 class AslabSesiAktifPage extends StatefulWidget {
   final AslabNav nav;
   const AslabSesiAktifPage({super.key, required this.nav});
@@ -57,7 +54,10 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
             meetingNumber: _sync.activeSession.meetingNumber,
             generation: _generation,
           );
-    _rotateQr(publishImmediate: true);
+    // Putar token setelah frame pertama: rotateActiveQrToken memanggil
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _rotateQr(publishImmediate: true);
+    });
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       if (_left > 1) {
@@ -92,7 +92,22 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
   }
 
   Future<void> _akhiri() async {
-    await _sync.endActiveSession();
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'clock',
+      title: 'Akhiri Sesi Presensi?',
+      message: 'Praktikan tidak bisa presensi lagi dan meja yang masih '
+          'ditempati akan dikosongkan.',
+      confirmLabel: 'Akhiri Sesi',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await _sync.endActiveSession();
+    } on StateError catch (e) {
+      if (!mounted) return;
+      labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
     labToast(context, 'Sesi presensi diakhiri');
     widget.nav.goTab(AslabTab.absensi);
@@ -208,25 +223,27 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
             Builder(
               builder: (_) {
                 final session = _sync.activeSession;
-                final liveList = _sync
-                    .recordsForMeeting(session.courseId, session.meetingNumber)
-                    .where((r) => r.status.name == 'hadir')
-                    .toList();
-                final totalHadir = (15 + liveList.length).clamp(0, 24);
-                final pct = ((totalHadir * 100) / 24).round();
+                final allRecs = _sync.recordsForMeeting(
+                    session.courseId, session.meetingNumber);
+                final liveList =
+                    allRecs.where((r) => r.status.name == 'hadir').toList();
+                final totalHadir = liveList.length;
+                final pct = allRecs.isEmpty
+                    ? 0
+                    : ((totalHadir * 100) / allRecs.length).round();
                 return LabColumn(
                   gap: 14,
                   children: [
                     PrakSpaceRow(
                       left: const LabSectionTitle(
                           icon: 'people_group', text: 'Kehadiran Praktikan'),
-                      right: Text('$totalHadir / 24',
+                      right: Text('$totalHadir hadir',
                           style: labText(16, w: kBold, c: ItlgColors.primary)),
                     ),
                     LabProgress(
                       label: 'Rasio Kehadiran',
                       value: '$pct%',
-                      fraction: totalHadir / 24,
+                      fraction: allRecs.isEmpty ? 0 : totalHadir / allRecs.length,
                     ),
                     LabColumn(
                       gap: 8,
@@ -266,7 +283,7 @@ class _AslabSesiAktifPageState extends State<AslabSesiAktifPage> {
                           meetingNumber: session.meetingNumber,
                         ),
                         child: Text(
-                          'Lihat Semua Praktikan (24) →',
+                          'Lihat Semua Praktikan (${allRecs.length}) →',
                           style: labText(12, w: kBold, c: ItlgColors.primary),
                         ),
                       ),

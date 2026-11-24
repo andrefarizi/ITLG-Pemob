@@ -8,7 +8,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Persetujuan Izin-Aslab".
+/// Halaman Persetujuan Izin Asisten Lab.
 class AslabPersetujuanIzinPage extends StatefulWidget {
   final AslabNav nav;
   const AslabPersetujuanIzinPage({super.key, required this.nav});
@@ -42,18 +42,39 @@ class _AslabPersetujuanIzinPageState extends State<AslabPersetujuanIzinPage> {
   }
 
   Future<void> _decide(LeaveRequestRecord l, bool approve) async {
-    await _sync.decideLeaveRequest(
-      leave: l,
-      approve: approve,
-      decidedBy: AuthController.instance.userName,
-    );
+    try {
+      await _sync.decideLeaveRequest(
+        leave: l,
+        approve: approve,
+        decidedBy: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() {});
+      labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
-    labToast(
-      context,
-      approve
-          ? 'Pengajuan ${l.userName} disetujui'
-          : 'Pengajuan ${l.userName} ditolak',
-    );
+    if (approve) {
+      final isQr = l.leaveType.toLowerCase().contains('qr') ||
+          l.leaveType.toLowerCase().contains('kendala');
+      await labShowResult(
+        context,
+        icon: 'circle_check',
+        title: isQr ? 'Ditandai Hadir' : 'Izin Disetujui',
+        message: isQr
+            ? 'Status kehadiran praktikan pada pertemuan ini berubah menjadi Hadir.'
+            : 'Status kehadiran praktikan pada pertemuan ini berubah menjadi Izin.',
+      );
+    } else {
+      await labShowResult(
+        context,
+        icon: 'person_cross',
+        title: 'Permintaan Ditolak',
+        message:
+            'Pemohon akan menerima notifikasi bahwa permintaannya ditolak.',
+      );
+    }
   }
 
   @override

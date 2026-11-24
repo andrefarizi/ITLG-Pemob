@@ -8,7 +8,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Hasil Kuis-Aslab".
+/// Halaman Hasil Kuis Asisten Lab.
 class AslabHasilKuisPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
@@ -30,7 +30,7 @@ class _Result {
   final String benar;
   final String waktu;
 
-  /// Gaya chip di Figma berbeda: 0 putih polos, 1 kuning, 2 hijau berikon.
+  /// Gaya chip.
   final int chip;
   final KuisAttemptRecord? attempt;
   const _Result(this.student, this.score, this.benar, this.waktu, this.chip,

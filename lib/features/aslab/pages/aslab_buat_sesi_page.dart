@@ -3,44 +3,114 @@ import 'package:flutter/material.dart';
 import '../../../core/services/jadwal_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../praktikan/praktikan_store.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../praktikan/widgets/prak_google_map.dart';
 import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Buat Sesi Presensi-Aslab".
+/// Halaman Buat Sesi Presensi Asisten Lab.
 class AslabBuatSesiPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
-  final int meetingNumber;
+
+  /// Null = pertemuan berikutnya yang belum dilaksanakan.
+  final int? meetingNumber;
 
   const AslabBuatSesiPage({
     super.key,
     required this.nav,
     this.courseId = 'pemob',
-    this.meetingNumber = 5,
+    this.meetingNumber,
   });
+
+  /// Pertemuan berikutnya: setelah pertemuan terakhir yang sudah punya
+  /// catatan presensi atau status kehadiran.
+  static int nextMeetingFor(String courseId) {
+    final course = PraktikumSyncService.instance.courseById(courseId);
+    final numbers = [for (final m in course.meetings) m.number]..sort();
+    if (numbers.isEmpty) return 1;
+    final presensi = PresensiSyncService.instance;
+    var lastHeld = 0;
+    for (final m in course.meetings) {
+      final held = m.status != PrakAttend.upcoming ||
+          presensi.recordsForMeeting(courseId, m.number).isNotEmpty;
+      if (held && m.number > lastHeld) lastHeld = m.number;
+    }
+    return numbers.firstWhere((n) => n > lastHeld,
+        orElse: () => numbers.last);
+  }
 
   @override
   State<AslabBuatSesiPage> createState() => _AslabBuatSesiPageState();
 }
 
 class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
-  static const List<String> _titik = [
-    'Lab Komputer 1 • Gedung C Lantai 2',
-    'Lab Komputer 2 • Gedung C Lantai 2',
-    'Lab Jaringan 2 • Gedung D Lantai 1',
+  late final int _meetingNo = widget.meetingNumber ??
+      AslabBuatSesiPage.nextMeetingFor(widget.courseId);
+
+  /// Titik lokasi = lab di tabel `labs` (Lab Jaringan 1–4). Nilai awal ini
+  List<String> _titik = const [
+    'Lab Jaringan 1 • Gedung C Lantai 2',
+    'Lab Jaringan 2 • Gedung C Lantai 2',
+    'Lab Jaringan 3 • Gedung D Lantai 2',
+    'Lab Jaringan 4 • Gedung D Lantai 3',
   ];
+
   /// Koordinat tiap titik lokasi (urutan sama dengan [_titik]).
-  static const List<String> _koordinat = [
+  List<String> _koordinat = const [
     '3.5621, 98.6600',
-    '3.5623, 98.6604',
-    '3.5617, 98.6612',
+    '3.5621, 98.6601',
+    '3.5622, 98.6602',
+    '3.5622, 98.6603',
   ];
+
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLabs();
+  }
+
+  Future<void> _loadLabs() async {
+    final client = SupabaseService.instance.client;
+    if (client == null) return;
+    try {
+      final rows = await client
+          .from('labs')
+          .select('name, building_floor, lat, lng')
+          .order('name', ascending: true);
+      if (rows.isEmpty || !mounted) return;
+      setState(() {
+        _titik = [
+          for (final r in rows)
+            [
+              (r['name'] ?? '').toString(),
+              // Building_floor memakai pemisah "•"; tampilkan sebagai spasi.
+              (r['building_floor'] ?? '').toString().replaceAll(
+                RegExp(r'\s*•\s*'),
+                ' ',
+              ),
+            ].where((e) => e.trim().isNotEmpty).join(' • '),
+        ];
+        _koordinat = [
+          for (final r in rows)
+            '${(r['lat'] as num?)?.toStringAsFixed(4) ?? '3.5621'}, '
+                '${(r['lng'] as num?)?.toStringAsFixed(4) ?? '98.6600'}',
+        ];
+        if (_tt >= _titik.length) _tt = 0;
+      });
+    } catch (e) {
+      debugPrint('[BuatSesi] Gagal memuat daftar lab: $e');
+    }
+  }
+
   static const List<String> _radius = [
     '25 meter dari titik lab',
     '50 meter dari titik lab',
@@ -60,10 +130,18 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
   int _rd = 1;
   int _bt = 1;
 
-  Future<void> _pick(String title, List<String> options, int current,
-      ValueChanged<int> onPicked) async {
-    final i = await prakShowPicker(context,
-        title: title, options: options, selected: current);
+  Future<void> _pick(
+    String title,
+    List<String> options,
+    int current,
+    ValueChanged<int> onPicked,
+  ) async {
+    final i = await prakShowPicker(
+      context,
+      title: title,
+      options: options,
+      selected: current,
+    );
     if (i != null && mounted) setState(() => onPicked(i));
   }
 
@@ -87,27 +165,40 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
   }
 
   Future<void> _mulai() async {
+    if (_busy) return;
     if (!_qr && !_tombol) {
       labToast(context, 'Pilih minimal satu cara verifikasi');
       return;
     }
-    final coords = _koordinat[_tt].split(',').map((e) => double.tryParse(e.trim())).toList();
+    final coords = _koordinat[_tt]
+        .split(',')
+        .map((e) => double.tryParse(e.trim()))
+        .toList();
     final radii = const [25.0, 50.0, 100.0];
     final durations = const [10, 15, 30];
-    await PresensiSyncService.instance.startSession(
-      courseId: widget.courseId,
-      meetingNumber: widget.meetingNumber,
-      labName: _titik[_tt].split(' • ').first,
-      lat: coords.isNotEmpty ? (coords[0] ?? 3.5621) : 3.5621,
-      lng: coords.length > 1 ? (coords[1] ?? 98.6600) : 98.6600,
-      radiusMeters: radii[_rd],
-      allowQr: _qr,
-      allowButton: _tombol,
-      requireSignature: _ttd,
-      durationMinutes: durations[_bt],
-      startedBy: AuthController.instance.userName,
-    );
+    setState(() => _busy = true);
+    try {
+      await PresensiSyncService.instance.startSession(
+        courseId: widget.courseId,
+        meetingNumber: _meetingNo,
+        labName: _titik[_tt].split(' • ').first,
+        lat: coords.isNotEmpty ? (coords[0] ?? 3.5621) : 3.5621,
+        lng: coords.length > 1 ? (coords[1] ?? 98.6600) : 98.6600,
+        radiusMeters: radii[_rd],
+        allowQr: _qr,
+        allowButton: _tombol,
+        requireSignature: _ttd,
+        durationMinutes: durations[_bt],
+        startedBy: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
+    setState(() => _busy = false);
     widget.nav.sesiAktif(context, replace: true);
   }
 
@@ -127,11 +218,15 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
             'Kom C • Sesi C2 (10:00–11:40 WIB)',
           ];
     final safeSesi = _sesi.clamp(0, sesiOptions.length - 1);
-    final meetingObj = course.meetings.firstWhere(
-      (m) => m.number == widget.meetingNumber,
-      orElse: () => course.meetings.first,
-    );
-    final meetingDateShort = meetingObj.date.split(' • ').first;
+    // Sesi dibuat sekarang → tanggal hari ini (WIB).
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    const hari = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    const bulan = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    final meetingDateShort = '${hari[now.weekday - 1]}, '
+        '${now.day.toString().padLeft(2, '0')} ${bulan[now.month - 1]} ${now.year}';
 
     return LabSubPage(
       onLogoTap: widget.nav.home,
@@ -142,26 +237,20 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
               overline: 'Praktikum ${course.name} • ${course.kelas}',
               title: 'Buat Sesi\nPresensi',
             ),
-            Row(
-              children: [
-                Flexible(
-                  child: LabMeta(
-                    icon: 'calendar',
-                    text: 'Pertemuan ${widget.meetingNumber} • $meetingDateShort',
-                  ),
-                ),
-                const SizedBox(width: 24),
-                const Flexible(
-                  child: LabMeta(icon: 'people_group', text: '24 Praktikan'),
-                ),
-              ],
+            LabMeta(
+              icon: 'calendar',
+              text: 'Pertemuan $_meetingNo • $meetingDateShort',
             ),
             PrakField(
               label: 'Sesi Kom C (Durasi 1 jam 40 menit)',
               child: PrakSelect(
                 value: sesiOptions[safeSesi],
                 onTap: () => _pick(
-                    'Pilih Sesi Kom C', sesiOptions, safeSesi, (i) => _sesi = i),
+                  'Pilih Sesi Kom C',
+                  sesiOptions,
+                  safeSesi,
+                  (i) => _sesi = i,
+                ),
               ),
             ),
           ],
@@ -171,7 +260,9 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
             const Align(
               alignment: Alignment.centerLeft,
               child: LabSectionTitle(
-                  icon: 'shield_check_outline', text: 'Cara Verifikasi'),
+                icon: 'shield_check_outline',
+                text: 'Cara Verifikasi',
+              ),
             ),
             Text(
               'Pilih cara praktikan membuktikan kehadiran. Boleh lebih dari '
@@ -183,8 +274,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
               children: [
                 PrakCheckOption(
                   title: 'QR Code Dinamis',
-                  subtitle:
-                      'Praktikan memindai QR yang berganti tiap 5 menit',
+                  subtitle: 'Praktikan memindai QR yang berganti tiap 5 menit',
                   checked: _qr,
                   onTap: () => setState(() => _qr = !_qr),
                 ),
@@ -208,8 +298,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
               label: 'Titik Lokasi',
               child: PrakSelect(
                 value: _titik[_tt],
-                onTap: () =>
-                    _pick('Titik Lokasi', _titik, _tt, (i) => _tt = i),
+                onTap: () => _pick('Titik Lokasi', _titik, _tt, (i) => _tt = i),
               ),
             ),
             LabInsetBox(
@@ -219,16 +308,24 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const LabIcon('location',
-                          size: 16, color: ItlgColors.primary),
+                      const LabIcon(
+                        'location',
+                        size: 16,
+                        color: ItlgColors.primary,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: LabColumn(
                           gap: 2,
                           children: [
-                            Text('Alamat Titik Presensi',
-                                style: labText(11,
-                                    w: kMedium, c: ItlgColors.textSubtle)),
+                            Text(
+                              'Alamat Titik Presensi',
+                              style: labText(
+                                11,
+                                w: kMedium,
+                                c: ItlgColors.textSubtle,
+                              ),
+                            ),
                             Text(
                               _titik[_tt].replaceAll(' • ', ', '),
                               style: labText(12, w: kBold),
@@ -246,7 +343,9 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
                   const PrakDivider(),
                   PrakSpaceRow(
                     left: LabMeta(
-                        icon: 'crosshairs_gps', text: _koordinat[_tt]),
+                      icon: 'crosshairs_gps',
+                      text: _koordinat[_tt],
+                    ),
                     right: PrakSideLink('Ubah di Peta', onTap: _openMap),
                   ),
                 ],
@@ -256,8 +355,7 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
               label: 'Radius Area',
               child: PrakSelect(
                 value: _radius[_rd],
-                onTap: () =>
-                    _pick('Radius Area', _radius, _rd, (i) => _rd = i),
+                onTap: () => _pick('Radius Area', _radius, _rd, (i) => _rd = i),
               ),
             ),
           ],
@@ -267,7 +365,9 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
             const Align(
               alignment: Alignment.centerLeft,
               child: LabSectionTitle(
-                  icon: 'signature_freehand', text: 'Tanda Tangan & Waktu'),
+                icon: 'signature_freehand',
+                text: 'Tanda Tangan & Waktu',
+              ),
             ),
             LabListItem(
               leading: const LabIconTile('signature_freehand'),
@@ -284,8 +384,8 @@ class _AslabBuatSesiPageState extends State<AslabBuatSesiPage> {
               label: 'Batas Waktu Presensi',
               child: PrakSelect(
                 value: _batas[_bt],
-                onTap: () => _pick(
-                    'Batas Waktu Presensi', _batas, _bt, (i) => _bt = i),
+                onTap: () =>
+                    _pick('Batas Waktu Presensi', _batas, _bt, (i) => _bt = i),
               ),
             ),
           ],

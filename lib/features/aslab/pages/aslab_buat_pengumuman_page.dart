@@ -8,7 +8,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 
-/// Figma: "Buat Pengumuman-Aslab".
+/// Halaman Buat Pengumuman Asisten Lab.
 class AslabBuatPengumumanPage extends StatefulWidget {
   final AslabNav nav;
   const AslabBuatPengumumanPage({super.key, required this.nav});
@@ -24,18 +24,36 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
     ('info', 'Umum'),
     ('triangle_alert', 'Penting'),
   ];
-  static const List<(int, String, String, String)> _jadwalOptions = [
-    (0, '08:00', '09:40', 'Sen, 28 Sep 2026 • 08:00–09:40 (1j 40m)'),
-    (0, '10:00', '11:40', 'Sen, 28 Sep 2026 • 10:00–11:40 (1j 40m)'),
-    (1, '08:00', '09:40', 'Sel, 29 Sep 2026 • 08:00–09:40 (1j 40m)'),
-    (1, '10:00', '11:40', 'Sel, 29 Sep 2026 • 10:00–11:40 (1j 40m)'),
-    (2, '10:00', '11:40', 'Rab, 30 Sep 2026 • 10:00–11:40 (1j 40m)'),
-    (2, '13:00', '14:40', 'Rab, 30 Sep 2026 • 13:00–14:40 (1j 40m)'),
-    (3, '13:00', '14:40', 'Kam, 01 Okt 2026 • 13:00–14:40 (1j 40m)'),
-    (3, '15:00', '16:40', 'Kam, 01 Okt 2026 • 15:00–16:40 (1j 40m)'),
-    (4, '08:00', '09:40', 'Jum, 02 Okt 2026 • 08:00–09:40 (1j 40m)'),
-    (5, '10:00', '11:40', 'Sab, 03 Okt 2026 • 10:00–11:40 (1j 40m)'),
+  static const List<String> _hari = [
+    'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min',
   ];
+  static const List<String> _bulan = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+  ];
+  static const List<(String, String)> _slots = [
+    ('08:00', '09:40'),
+    ('10:00', '11:40'),
+    ('13:00', '14:40'),
+    ('15:00', '16:40'),
+  ];
+
+  /// Pilihan jadwal pengganti: 14 hari ke depan (Senin–Sabtu) × 4 slot
+  late final List<(int, String, String, String)> _jadwalOptions = () {
+    final out = <(int, String, String, String)>[];
+    final today = DateTime.now();
+    for (var i = 1; i <= 14; i++) {
+      final d = DateTime(today.year, today.month, today.day + i);
+      if (d.weekday == DateTime.sunday) continue;
+      final label =
+          '${_hari[d.weekday - 1]}, ${d.day.toString().padLeft(2, '0')} ${_bulan[d.month - 1]} ${d.year}';
+      for (final sl in _slots) {
+        out.add((d.weekday - 1, sl.$1, sl.$2,
+            '$label • ${sl.$1}–${sl.$2} (1j 40m)'));
+      }
+    }
+    return out;
+  }();
   static const List<String> _ruang = [
     'Lab Jaringan 1',
     'Lab Jaringan 2',
@@ -43,12 +61,10 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
     'Lab Jaringan 4',
   ];
 
-  final TextEditingController _judul =
-      TextEditingController(text: 'Praktikum pengganti Pertemuan 4');
-  final TextEditingController _isi = TextEditingController(
-      text: 'Pertemuan dipindahkan karena bertepatan dengan kegiatan lab. '
-          'Mohon hadir sesuai jadwal baru.');
-  int _kat = 0;
+  final TextEditingController _judul = TextEditingController();
+  final TextEditingController _isi = TextEditingController();
+  int _kat = 1; // bawaan "Umum": ubah jadwal harus dipilih dengan sadar
+  bool _sending = false;
   int _to = 0;
   int _jd = 0;
   int _rg = 0;
@@ -77,25 +93,47 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
   }
 
   Future<void> _kirim() async {
+    if (_sending) return;
+    final judul = _judul.text.trim();
+    final isi = _isi.text.trim();
+    if (judul.length < 5) {
+      labToast(context, 'Isi judul pengumuman (minimal 5 karakter)');
+      return;
+    }
+    if (isi.length < 10) {
+      labToast(context, 'Tulis isi pengumuman (minimal 10 karakter)');
+      return;
+    }
     final scheds = JadwalSyncService.instance.schedules;
     final targetSched = _to < scheds.length ? scheds[_to] : null;
+    if (_kat == 0 && targetSched == null) {
+      labToast(context, 'Pilih praktikum yang jadwalnya diubah');
+      return;
+    }
     final courseId = targetSched?.courseId;
     final sched = _jadwalOptions[_jd];
-    await JadwalSyncService.instance.publishAnnouncementAndSchedule(
-      courseId: courseId,
-      scheduleId: targetSched?.id,
-      categoryIndex: _kat,
-      title: _judul.text.trim().isEmpty
-          ? 'Pengumuman Praktikum'
-          : _judul.text.trim(),
-      body: _isi.text.trim(),
-      author: AuthController.instance.userName,
-      newDayIndex: _kat == 0 ? sched.$1 : null,
-      newStartTime: _kat == 0 ? sched.$2 : null,
-      newEndTime: _kat == 0 ? sched.$3 : null,
-      newScheduleLabel: _kat == 0 ? sched.$4 : null,
-      newRoom: _kat == 0 ? _ruang[_rg] : null,
-    );
+    setState(() => _sending = true);
+    try {
+      await JadwalSyncService.instance.publishAnnouncementAndSchedule(
+        courseId: courseId,
+        scheduleId: targetSched?.id,
+        categoryIndex: _kat,
+        title: judul,
+        body: isi,
+        author: AuthController.instance.userName,
+        newDayIndex: _kat == 0 ? sched.$1 : null,
+        newStartTime: _kat == 0 ? sched.$2 : null,
+        newEndTime: _kat == 0 ? sched.$3 : null,
+        newScheduleLabel: _kat == 0 ? sched.$4 : null,
+        newRoom: _kat == 0 ? _ruang[_rg] : null,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(
@@ -178,7 +216,7 @@ class _AslabBuatPengumumanPageState extends State<AslabBuatPengumumanPage> {
           large: true,
           onTap: _kirim,
         ),
-        // Figma: Kartu "Status Peminjaman Ruangan" (5486:688)
+        // Kartu "Status Peminjaman Ruangan"
         ListenableBuilder(
           listenable: JadwalSyncService.instance,
           builder: (_, __) {

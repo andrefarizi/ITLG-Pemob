@@ -1,8 +1,4 @@
-/// Data contoh & status tampilan peran Asisten Lab (tanpa backend).
-///
-/// Teks diambil dari Figma (section "02 Asisten Lab"). Isi praktikum kedua
-/// (Basis Data) dibuat mengikuti pola yang sama karena Figma hanya memuat
-/// contoh Pemrograman Mobile.
+/// Penyimpanan data lokal peran Asisten Lab.
 
 class AslabStudent {
   final String initials;
@@ -193,14 +189,12 @@ class AslabReport {
 }
 
 class AslabStore {
-  // ---------------------------------------------------------------------------
   // Praktikum yang diampu
-  // ---------------------------------------------------------------------------
 
   final AslabCourse mobile = const AslabCourse(
     name: 'Pemrograman Mobile',
     kelas: 'TIF 3001 - Kelas C',
-    room: 'Lab Komputer 1',
+    room: 'Lab Jaringan 1',
     jadwal: 'Sen, 08:00–09:40',
     rataHadir: '91%',
     meetings: [
@@ -273,9 +267,7 @@ class AslabStore {
 
   List<AslabCourse> get courses => [mobile, basisData];
 
-  // ---------------------------------------------------------------------------
   // Shift jaga
-  // ---------------------------------------------------------------------------
 
   /// null = belum dijawab, true = diterima, false = ditolak.
   bool? swapAnswer;
@@ -313,9 +305,7 @@ class AslabStore {
     ),
   ];
 
-  // ---------------------------------------------------------------------------
   // Izin, presensi, laporan
-  // ---------------------------------------------------------------------------
 
   final List<AslabLeave> leaves = [
     AslabLeave(
@@ -386,16 +376,12 @@ class AslabStore {
         'projector', 'Proyektor buram', 'Lab Komputer 1 • 24 Sep', 2),
   ];
 
-  // ---------------------------------------------------------------------------
-  // Sesi presensi berjalan (Figma: 00:24:18)
-  // ---------------------------------------------------------------------------
+  // Sesi presensi berjalan
 
   final DateTime sessionStart =
       DateTime.now().subtract(const Duration(minutes: 24, seconds: 18));
 
-  // ---------------------------------------------------------------------------
   // Notifikasi
-  // ---------------------------------------------------------------------------
 
   final List<AslabNotif> notifs = [
     AslabNotif(
@@ -459,9 +445,7 @@ class AslabStore {
 
   int get unreadCount => notifs.where((n) => n.unread).length;
 
-  // ---------------------------------------------------------------------------
   // Profil
-  // ---------------------------------------------------------------------------
 
   bool pushOn = true;
 }

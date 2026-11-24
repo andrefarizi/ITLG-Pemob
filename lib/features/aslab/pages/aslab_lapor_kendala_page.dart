@@ -9,7 +9,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 
-/// Figma: "Lapor Kendala-Aslab".
+/// Halaman Lapor Kendala Asisten Lab.
 class AslabLaporKendalaPage extends StatefulWidget {
   final AslabNav nav;
   const AslabLaporKendalaPage({super.key, required this.nav});
@@ -48,13 +48,13 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
       imagesOnly: true,
     );
     if (picked == null || !mounted) return;
+    if (!picked.uploadedToCloud) {
+      labToast(context,
+          'Gagal mengunggah ${picked.name}. Periksa koneksi lalu coba lagi.');
+      return;
+    }
     setState(() => _photoName = picked.name);
-    labToast(
-      context,
-      picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
-          : '${picked.name} dipilih dari perangkat',
-    );
+    labToast(context, '${picked.name} berhasil diunggah');
   }
 
   @override
@@ -92,6 +92,10 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
 
   Future<void> _kirim() async {
     if (_submitting) return;
+    if (_deskripsi.text.trim().length < 10) {
+      labToast(context, 'Jelaskan kendala minimal 10 karakter');
+      return;
+    }
     setState(() => _submitting = true);
 
     final k = _kategori[_kat];
@@ -104,7 +108,8 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
         ? '${k.$2} bermasalah${pc.isEmpty ? '' : ' • $pc'}'
         : desc;
 
-    await _sync.createTicket(
+    try {
+      await _sync.createTicket(
       labName: labName,
       deskNumber: deskNum,
       pcCode: deskNum != null
@@ -118,7 +123,17 @@ class _AslabLaporKendalaPageState extends State<AslabLaporKendalaPage> {
       reporterName: auth.userName,
       reporterRole: 'aslab',
       photoName: _photoName ?? 'tanpa_foto.jpg',
+      photoPath: _photoName == null
+          ? null
+          : FileUploadService.instance.remotePathForName(_photoName!),
     );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _submitting = false);

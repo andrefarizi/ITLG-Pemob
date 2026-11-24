@@ -7,7 +7,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 
-/// Figma: "Praktikum Saya-Aslab".
+/// Halaman Praktikum Saya Asisten Lab.
 class AslabPraktikumSayaPage extends StatefulWidget {
   final AslabNav nav;
   const AslabPraktikumSayaPage({super.key, required this.nav});
@@ -90,7 +90,7 @@ class _AslabPraktikumSayaPageState extends State<AslabPraktikumSayaPage> {
   }
 }
 
-/// Dua kartu praktikum 178 x 270 berdampingan (dipakai juga di Absensi).
+/// Dua kartu praktikum berdampingan (dipakai juga di Absensi).
 class AslabCourseGrid extends StatelessWidget {
   final List<AslabCourse> courses;
   final (String, String) Function(AslabCourse) thirdMeta;
@@ -180,7 +180,6 @@ class _CourseCard extends StatelessWidget {
             LabColumn(
               gap: 6,
               children: [
-                const LabMeta(icon: 'people_group', text: '24 Praktikan'),
                 LabMeta(icon: 'clock', text: course.jadwal),
                 LabMeta(icon: third.$1, text: third.$2),
               ],

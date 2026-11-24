@@ -12,7 +12,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Page Beranda-Aslab".
+/// Halaman Beranda Asisten Lab.
 class AslabBerandaPage extends StatefulWidget {
   final AslabNav nav;
   final ValueChanged<int> onOpenTab;
@@ -83,7 +83,7 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
                 ),
                 LabMeta(
                   icon: 'people_group',
-                  text: '${activeCourse.kelas} • 24 Praktikan',
+                  text: activeCourse.kelas,
                 ),
               ],
             ),
@@ -181,19 +181,8 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
                   },
                 )
             else
-              for (final s in const [kRina, kDimas])
-                LabListItem(
-                  leading: LabAvatar(s.initials),
-                  title: s.name,
-                  subtitle: 'Tugas 4 • Praktikum Pemrograman Mobile',
-                  trailing: const LabIcon('chevron_right',
-                      size: 16, color: ItlgColors.primary),
-                  onTap: () => _nav.penilaianTugas(
-                    context,
-                    student: s,
-                    courseId: 'pemob',
-                  ),
-                ),
+              Text('Belum ada tugas yang perlu dinilai.',
+                  style: labText(12, c: ItlgColors.textSubtle)),
           ],
         ),
       ],
@@ -215,7 +204,7 @@ class _AslabBerandaPageState extends State<AslabBerandaPage> {
     );
   }
 
-  // Kartu sapaan (370 x 89).
+  // Kartu sapaan.
   Widget _greeting() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

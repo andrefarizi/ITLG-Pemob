@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Aslab Dashboard Page
 class AslabDashboardPage extends StatelessWidget {
   final VoidCallback? onNavigateToAttendance;
   final VoidCallback? onNavigateToReports;

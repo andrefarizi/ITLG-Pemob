@@ -5,11 +5,12 @@ import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
+import '../../praktikan/praktikan_store.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import 'aslab_sanggahan_nilai_page.dart';
 
-/// Figma: "Penilaian-Aslab".
+/// Halaman Penilaian Asisten Lab.
 class AslabPenilaianPage extends StatefulWidget {
   final AslabNav nav;
   const AslabPenilaianPage({super.key, required this.nav});
@@ -73,12 +74,12 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
           final subs = sync.submissionsForCourse(c.id, activeMeeting);
           final pendingExtra = subs.where((s) => s.status != 'graded').length;
           final appeals = nilaiSync.pendingAppealsForCourse(c.id).length;
-          return sum + 6 + pendingExtra + appeals;
+          return sum + pendingExtra + appeals;
         });
         final totalGraded = courses.fold<int>(0, (sum, c) {
           final subs = sync.submissionsForCourse(c.id, activeMeeting);
           final gradedExtra = subs.where((s) => s.status == 'graded').length;
-          return sum + 14 + gradedExtra;
+          return sum + gradedExtra;
         });
 
         final pendingAppeals = nilaiSync.pendingAppealCount;
@@ -142,7 +143,7 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                 ),
               ],
             ),
-            // Figma: Kartu "Status Rekap Nilai" (5498:2230)
+            // Kartu "Status Rekap Nilai"
             LabCard(
               gap: 12,
               children: [
@@ -161,7 +162,7 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                   'Rekap Pertemuan 1–$activeMeeting • Pemrograman Mobile Kom C',
                   style: labText(12, w: kMedium, c: ItlgColors.textSubtle),
                 ),
-                // 4-segment horizontal progress bar (Figma 5498:2230)
+                // 4-segment horizontal progress bar
                 Row(
                   children: [
                     for (var i = 0; i < 4; i++) ...[
@@ -241,14 +242,19 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                     label: 'Ajukan Ulang Rekap ke Dosen',
                     large: true,
                     onTap: () async {
-                      await nilaiSync.resubmitValidation(
-                        'pemob',
-                        submittedBy: AuthController.instance.userName,
-                      );
+                      try {
+                        await nilaiSync.resubmitValidation(
+                          'pemob',
+                          submittedBy: AuthController.instance.userName,
+                        );
+                      } on StateError catch (e) {
+                        if (context.mounted) labToast(context, e.message);
+                        return;
+                      }
                       if (!context.mounted) return;
                       await labShowResultDialog(
                         context,
-                        icon: 'circle_check',
+                        icon: 'send',
                         title: 'Rekap Terkirim ke Dosen',
                         message:
                             'Rekap nilai yang telah direvisi sudah diajukan ulang untuk validasi Dosen Pengampu.',
@@ -262,14 +268,19 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                     label: 'Ajukan Rekap ke Dosen',
                     large: true,
                     onTap: () async {
-                      await nilaiSync.resubmitValidation(
-                        'pemob',
-                        submittedBy: AuthController.instance.userName,
-                      );
+                      try {
+                        await nilaiSync.resubmitValidation(
+                          'pemob',
+                          submittedBy: AuthController.instance.userName,
+                        );
+                      } on StateError catch (e) {
+                        if (context.mounted) labToast(context, e.message);
+                        return;
+                      }
                       if (!context.mounted) return;
                       await labShowResultDialog(
                         context,
-                        icon: 'circle_check',
+                        icon: 'send',
                         title: 'Rekap Terkirim ke Dosen',
                         message:
                             'Rekap nilai sudah diajukan dari Draft untuk validasi Dosen Pengampu.',
@@ -280,7 +291,7 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                 ],
               ],
             ),
-            // Figma: Kartu Pintasan "Sanggahan Nilai" (5498:2230)
+            // Kartu Pintasan "Sanggahan Nilai"
             LabListItem(
               leading: const LabIconTile('triangle_alert'),
               title: 'Sanggahan Nilai',
@@ -306,42 +317,79 @@ class _AslabPenilaianPageState extends State<AslabPenilaianPage> {
                 ),
               ),
             ),
-            LabTabs(
-              labels: ['Perlu Dinilai (${courses.length})', 'Selesai'],
-              index: _tab,
-              onChanged: (i) => setState(() => _tab = i),
-            ),
-            if (_tab == 0) ...[
-              for (final c in courses)
-                Builder(
-                  builder: (_) {
-                    final subs = sync.submissionsForCourse(c.id, 4);
-                    final gradedExtra =
-                        subs.where((s) => s.status == 'graded').length;
-                    final totalSubs = (20 + subs.length).clamp(1, 24);
-                    final gradedCount = (14 + gradedExtra).clamp(0, totalSubs);
-                    return _TaskCard(
-                      tag: 'Tugas 4',
-                      title: c.tugasTitle.replaceFirst('Tugas 4 : ', ''),
-                      course: 'Praktikum ${c.name} • Kom C (C1 & C2)',
-                      deadline: c.tugasDeadline,
-                      done: '$gradedCount / $totalSubs',
-                      fraction: (gradedCount / totalSubs).clamp(0.0, 1.0),
-                      onTap: () => nav.evaluasiTugas(context, courseId: c.id),
-                    );
-                  },
-                ),
-            ] else
-              for (final c in courses.take(2))
-                _TaskCard(
-                  tag: 'Tugas 3',
-                  title: c.grades.length > 1 ? c.grades[1].title : c.modulTitle,
-                  course: 'Praktikum ${c.name} • Kom C (C1 & C2)',
-                  done: '24 / 24',
-                  fraction: 1,
-                  finished: true,
-                  onTap: () => nav.evaluasiTugas(context, courseId: c.id),
-                ),
+            Builder(builder: (_) {
+              // Data nyata pertemuan yang dipilih di filter.
+              final cards = <(PrakCourse, int, int)>[
+                for (final c in courses)
+                  (
+                    c,
+                    sync.submissionsForCourse(c.id, activeMeeting).length,
+                    sync
+                        .submissionsForCourse(c.id, activeMeeting)
+                        .where((s) => s.status == 'graded')
+                        .length,
+                  ),
+              ];
+              bool isDone((PrakCourse, int, int) e) => e.$2 > 0 && e.$3 == e.$2;
+              final pending = cards.where((e) => !isDone(e)).toList();
+              final done = cards.where(isDone).toList();
+              final shown = _tab == 0 ? pending : done;
+              return LabColumn(
+                gap: 16,
+                children: [
+                  LabTabs(
+                    labels: [
+                      'Perlu Dinilai (${pending.length})',
+                      'Selesai (${done.length})',
+                    ],
+                    index: _tab,
+                    onChanged: (i) => setState(() => _tab = i),
+                  ),
+                  for (final e in shown)
+                    Builder(builder: (_) {
+                      final c = e.$1;
+                      final meeting = sync.meetingFor(c.id, activeMeeting);
+                      final tugasTitle =
+                          (meeting?.tugasTitle.isNotEmpty ?? false)
+                              ? meeting!.tugasTitle
+                              : 'Tugas $activeMeeting';
+                      final deadline =
+                          (meeting?.tugasDeadline.isNotEmpty ?? false)
+                              ? meeting!.tugasDeadline
+                              : c.tugasDeadline;
+                      return _TaskCard(
+                        tag: 'Tugas $activeMeeting',
+                        title: tugasTitle.replaceFirst(
+                            RegExp(r'^Tugas \d+ : '), ''),
+                        course: 'Praktikum ${c.name} • Kom C (C1 & C2)',
+                        deadline: deadline,
+                        done: e.$2 == 0
+                            ? 'Belum ada pengumpulan'
+                            : '${e.$3} / ${e.$2} dinilai',
+                        fraction:
+                            e.$2 == 0 ? 0 : (e.$3 / e.$2).clamp(0.0, 1.0),
+                        finished: isDone(e),
+                        onTap: () => nav.evaluasiTugas(
+                          context,
+                          courseId: c.id,
+                          meetingNumber: activeMeeting,
+                        ),
+                      );
+                    }),
+                  if (shown.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        _tab == 0
+                            ? 'Semua tugas pertemuan ini sudah dinilai.'
+                            : 'Belum ada tugas yang selesai dinilai.',
+                        textAlign: TextAlign.center,
+                        style: labText(12, c: ItlgColors.textSubtle),
+                      ),
+                    ),
+                ],
+              );
+            }),
           ],
         );
       },
@@ -386,7 +434,7 @@ class _TaskCard extends StatelessWidget {
         Text(title, style: labText(16, w: kBold, c: Colors.black)),
         LabMeta(icon: 'book_open', text: course),
         LabProgress(
-          label: 'Sudah dinilai',
+          label: 'Progres penilaian',
           value: done,
           fraction: fraction,
           color: finished ? LabColors.green : ItlgColors.primary,

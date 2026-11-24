@@ -8,7 +8,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../aslab_nav.dart';
 
-/// Figma: "Detail Modul-Aslab".
+/// Halaman Detail Modul Asisten Lab.
 class AslabDetailModulPage extends StatelessWidget {
   final AslabNav nav;
   final String courseId;
@@ -61,14 +61,6 @@ class AslabDetailModulPage extends StatelessWidget {
                   desc,
                   style: labText(12, c: ItlgColors.textMuted),
                 ),
-                const LabStatRow(
-                  gap: 13,
-                  stats: [
-                    LabStat(icon: 'eye', label: 'Dilihat', value: '21 / 24'),
-                    LabStat(
-                        icon: 'download', label: 'Diunduh', value: '18 kali'),
-                  ],
-                ),
               ],
             ),
             LabCard(
@@ -115,8 +107,8 @@ class AslabDetailModulPage extends StatelessWidget {
                     onTap: () => labShowFilePreview(
                       context,
                       name: fileName,
-                      size: '3,2 MB',
                       source: 'Modul Pertemuan $meetingNumber • ${course.name}',
+                      searchFolders: ['materi/${course.id}/modul'],
                     ),
                   ),
                   right: LabPrimaryButton(
@@ -128,6 +120,7 @@ class AslabDetailModulPage extends StatelessWidget {
                         fileName: fileName,
                         source:
                             'Modul Pertemuan $meetingNumber • ${course.name}',
+                        searchFolders: ['materi/${course.id}/modul'],
                         contentLines: [
                           'ITLG MOBILE - MODUL ASISTEN LAB',
                           'Praktikum : ${course.name} (${course.kelas})',
@@ -139,47 +132,19 @@ class AslabDetailModulPage extends StatelessWidget {
                         ],
                       );
                       if (!context.mounted) return;
-                      labToast(
-                        context,
-                        res.success
-                            ? 'Tersimpan di ${res.location}'
-                            : 'Gagal mengunduh $fileName',
-                      );
+                      if (res.success) {
+                        await labShowResult(
+                          context,
+                          icon: 'download',
+                          title: 'Berkas Diunduh',
+                          message:
+                              'Berkas tersimpan di folder Unduhan perangkat anda.',
+                        );
+                      } else {
+                        labToast(context, 'Gagal mengunduh $fileName');
+                      }
                     },
                   ),
-                ),
-              ],
-            ),
-            LabCard(
-              children: [
-                const PrakSpaceRow(
-                  left: LabSectionTitle(
-                      icon: 'attach', text: 'Lampiran Pendukung'),
-                  right: PrakSideLink('1 Berkas'),
-                ),
-                PrakFileItem(
-                  name: 'starter_project.zip',
-                  meta: 'ZIP • 4,1 MB',
-                  action: 'download',
-                  onAction: () async {
-                    final res = await FileDownloadService.instance.downloadFile(
-                      fileName: 'starter_project.zip',
-                      source:
-                          'Lampiran Modul $meetingNumber • ${course.name}',
-                      contentLines: [
-                        'Starter Project - ${course.name}',
-                        'Modul $meetingNumber: $title',
-                        desc,
-                      ],
-                    );
-                    if (!context.mounted) return;
-                    labToast(
-                      context,
-                      res.success
-                          ? 'Tersimpan di ${res.location}'
-                          : 'Gagal mengunduh starter_project.zip',
-                    );
-                  },
                 ),
               ],
             ),
@@ -198,14 +163,28 @@ class AslabDetailModulPage extends StatelessWidget {
                   label: 'Hapus Modul',
                   large: true,
                   onTap: () async {
-                    await sync.deleteMeetingContentFromAslab(
-                      courseId: courseId,
-                      meetingNumber: meetingNumber,
-                      kind: 0,
+                    final ok = await labShowConfirmDialog(
+                      context,
+                      icon: 'delete_filled',
+                      title: 'Hapus Modul $meetingNumber?',
+                      message:
+                          'Modul dan berkasnya tidak lagi tampil untuk praktikan.',
+                      confirmLabel: 'Hapus',
                     );
+                    if (!ok || !context.mounted) return;
+                    try {
+                      await sync.deleteMeetingContentFromAslab(
+                        courseId: courseId,
+                        meetingNumber: meetingNumber,
+                        kind: 0,
+                      );
+                    } on StateError catch (e) {
+                      if (context.mounted) labToast(context, e.message);
+                      return;
+                    }
                     if (!context.mounted) return;
                     Navigator.of(context).maybePop();
-                    labToast(context, 'Modul $meetingNumber dihapus dari BE');
+                    labToast(context, 'Modul $meetingNumber dihapus');
                   },
                 ),
               ],

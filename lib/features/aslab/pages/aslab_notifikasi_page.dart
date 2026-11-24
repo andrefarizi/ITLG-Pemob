@@ -9,7 +9,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 
-/// Figma: "Notifikasi-Aslab".
+/// Halaman Notifikasi Asisten Lab.
 class AslabNotifikasiPage extends StatefulWidget {
   final AslabNav nav;
 
@@ -65,21 +65,44 @@ class _AslabNotifikasiPageState extends State<AslabNotifikasiPage> {
     if (n.title.toLowerCase().contains('arahan') ||
         n.title.toLowerCase().contains('tindak lanjut') ||
         n.body.toLowerCase().contains('arahan')) {
-      final fu = NilaiSyncService.instance.allFollowUps.isNotEmpty
-          ? NilaiSyncService.instance.allFollowUps.first
-          : null;
+      // Arahan yang dirujuk notifikasi ini (nama/NIM praktikan di isi pesan),
+      // bukan selalu arahan pertama.
+      final all = NilaiSyncService.instance.allFollowUps;
+      AssistantFollowUpRecord? fu;
+      for (final f in all) {
+        if (n.body.contains(f.studentNim) || n.body.contains(f.studentName)) {
+          fu = f;
+          break;
+        }
+      }
+      fu ??= all.isNotEmpty ? all.first : null;
+      if (fu == null) {
+        labToast(context, 'Arahan tindak lanjut tidak ditemukan', error: true);
+        return;
+      }
       _showDosenFollowUpSheet(fu);
       return;
     }
-    widget.nav.openNotif(context, _targetFor(n.targetKey));
+    widget.nav.openNotif(
+      context,
+      _targetFor(n.targetKey),
+      courseId: n.courseId,
+      meetingNumber: n.meetingNumber,
+    );
   }
 
-  /// Figma: "Sheet Arahan Tindak Lanjut Dosen-Aslab" (5816:3389).
-  void _showDosenFollowUpSheet(AssistantFollowUpRecord? fu) {
-    final student = fu?.studentName ?? 'Yoga Siregar';
-    final msg = fu?.message ??
-        'Mohon bantu ingatkan Yoga soal kehadiran dan jadwalkan konsultasi sebelum Pertemuan 6.';
-    final type = fu?.followUpType ?? 'Kehadiran';
+  /// Bottom sheet Arahan Tindak Lanjut Dosen (Asisten Lab).
+  void _showDosenFollowUpSheet(AssistantFollowUpRecord fu) {
+    final student = fu.studentName;
+    final msg = fu.message;
+    final type = fu.followUpType;
+    const bulan = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    final w = fu.createdAt.toUtc().add(const Duration(hours: 7));
+    final sentAt =
+        '${w.day.toString().padLeft(2, '0')} ${bulan[w.month - 1]}, ${w.hour.toString().padLeft(2, '0')}:${w.minute.toString().padLeft(2, '0')} WIB';
     labShowCustomSheet<void>(
       context,
       title: 'Arahan Tindak Lanjut Dosen',
@@ -87,16 +110,16 @@ class _AslabNotifikasiPageState extends State<AslabNotifikasiPage> {
         gap: 14,
         children: [
           LabPerson(
-            initials: 'DC',
-            name: 'Dr. Eng. Daniele Christian, M.Kom.',
-            caption: 'Dikirim 05 Okt, 09:12 • Kategori $type',
+            initials: 'DS',
+            name: 'Dosen Pengampu',
+            caption: 'Dikirim $sentAt • Kategori $type',
           ),
           LabInsetBox(
             child: LabColumn(
               gap: 8,
               cross: CrossAxisAlignment.start,
               children: [
-                Text('Praktikan: $student • Kehadiran 50%',
+                Text('Praktikan: $student (${fu.studentNim})',
                     style: labText(12, w: kBold)),
                 Text(msg, style: labText(12, c: ItlgColors.textMuted)),
               ],
@@ -112,6 +135,15 @@ class _AslabNotifikasiPageState extends State<AslabNotifikasiPage> {
               icon: 'phone_outline',
               label: 'Hubungi Praktikan',
               onTap: () {
+                NotificationSyncService.instance.push(
+                  role: 'praktikan',
+                  targetUser: fu.studentNim,
+                  icon: 'chat_bubble',
+                  title: 'Pengingat dari Asisten',
+                  body: 'Untuk $student (${fu.studentNim}): $msg',
+                  targetKey: 'detailAbsensi',
+                  important: true,
+                );
                 Navigator.of(context).pop();
                 labToast(context, 'Pesan pengingat dikirim ke $student');
               },
@@ -119,13 +151,17 @@ class _AslabNotifikasiPageState extends State<AslabNotifikasiPage> {
             right: LabPrimaryButton(
               icon: 'check',
               label: 'Tandai Ditindaklanjuti',
-              onTap: () {
-                if (fu != null) {
-                  NilaiSyncService.instance.markFollowUpDone(
+              onTap: () async {
+                try {
+                  await NilaiSyncService.instance.markFollowUpDone(
                     fu.id,
                     byAslab: AuthController.instance.userName,
                   );
+                } on StateError catch (e) {
+                  if (mounted) labToast(context, e.message);
+                  return;
                 }
+                if (!mounted) return;
                 Navigator.of(context).pop();
                 labToast(
                     context, 'Arahan ditandai ditindaklanjuti & Dosen diberi tahu');

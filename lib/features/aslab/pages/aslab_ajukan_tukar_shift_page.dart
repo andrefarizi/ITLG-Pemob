@@ -7,7 +7,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 
-/// Figma: "Ajukan Tukar Shift-Aslab".
+/// Halaman Ajukan Tukar Shift Asisten Lab.
 class AslabAjukanTukarShiftPage extends StatefulWidget {
   final AslabNav nav;
   const AslabAjukanTukarShiftPage({super.key, required this.nav});
@@ -58,7 +58,9 @@ class _AslabAjukanTukarShiftPageState extends State<AslabAjukanTukarShiftPage> {
     final toShift =
         replacementShifts[_ganti.clamp(0, replacementShifts.length - 1)];
 
-    final rec = await _sync.submitSwapRequest(
+    final ShiftSwapRecord rec;
+    try {
+      rec = await _sync.submitSwapRequest(
       requesterId: auth.userIdentifier,
       requesterName: auth.userName,
       targetName: targetName,
@@ -68,6 +70,13 @@ class _AslabAjukanTukarShiftPageState extends State<AslabAjukanTukarShiftPage> {
       toShiftLabel: toShift.shortLabel,
       reason: _alasan.text.trim(),
     );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _submitting = false);

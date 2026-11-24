@@ -8,7 +8,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Riwayat Tukar Shift-Aslab".
+/// Halaman Riwayat Tukar Shift Asisten Lab.
 class AslabRiwayatTukarShiftPage extends StatefulWidget {
   final AslabNav nav;
   const AslabRiwayatTukarShiftPage({super.key, required this.nav});
@@ -105,13 +105,25 @@ class _AslabRiwayatTukarShiftPageState
                 label: 'Tolak',
                 onTap: () async {
                   Navigator.of(context).pop();
-                  await _sync.decideSwap(
-                    swapCode: swap.swapCode,
-                    accept: false,
-                    decidedByName: AuthController.instance.userName,
-                  );
+                  try {
+                    await _sync.decideSwap(
+                      swapCode: swap.swapCode,
+                      accept: false,
+                      decidedByName: AuthController.instance.userName,
+                    );
+                  } on StateError catch (e) {
+                    if (mounted) labToast(context, e.message);
+                    return;
+                  }
                   if (mounted) {
-                    labToast(context, 'Permintaan $displayCode ditolak');
+                    await labShowResultDialog(
+                      context,
+                      icon: 'person_cross',
+                      title: 'Permintaan Ditolak',
+                      message:
+                          'Pemohon akan menerima notifikasi bahwa permintaannya ditolak.',
+                      button: 'Selesai',
+                    );
                   }
                 },
               ),
@@ -120,18 +132,23 @@ class _AslabRiwayatTukarShiftPageState
                 label: 'Setujui Penukaran',
                 onTap: () async {
                   Navigator.of(context).pop();
-                  await _sync.decideSwap(
-                    swapCode: swap.swapCode,
-                    accept: true,
-                    decidedByName: AuthController.instance.userName,
-                  );
+                  try {
+                    await _sync.decideSwap(
+                      swapCode: swap.swapCode,
+                      accept: true,
+                      decidedByName: AuthController.instance.userName,
+                    );
+                  } on StateError catch (e) {
+                    if (mounted) labToast(context, e.message);
+                    return;
+                  }
                   if (!mounted) return;
                   await labShowResultDialog(
                     context,
                     icon: 'circle_check',
                     title: 'Tukar Jadwal Diterima',
                     message:
-                        'Jadwal mengajar kamu sudah diperbarui dan pemohon akan menerima notifikasi.',
+                        'Jadwal mengajar anda sudah diperbarui dan pemohon akan menerima notifikasi.',
                     button: 'Selesai',
                   );
                 },
@@ -143,10 +160,16 @@ class _AslabRiwayatTukarShiftPageState
               label: 'Batalkan Permintaan Tukar Jadwal',
               onTap: () async {
                 Navigator.of(context).pop();
-                final ok = await _sync.cancelSwap(
-                  swapCode: swap.swapCode,
-                  requesterName: AuthController.instance.userName,
-                );
+                final bool ok;
+                try {
+                  ok = await _sync.cancelSwap(
+                    swapCode: swap.swapCode,
+                    requesterName: AuthController.instance.userName,
+                  );
+                } on StateError catch (e) {
+                  if (mounted) labToast(context, e.message);
+                  return;
+                }
                 if (mounted) {
                   labToast(
                     context,

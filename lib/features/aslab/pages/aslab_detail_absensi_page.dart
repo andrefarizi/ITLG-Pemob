@@ -8,7 +8,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Detail Absensi Praktikum-Aslab".
+/// Halaman Detail Absensi Praktikum Asisten Lab.
 class AslabDetailAbsensiPage extends StatefulWidget {
   final AslabNav nav;
   final AslabCourse course;
@@ -27,6 +27,19 @@ class _AslabDetailAbsensiPageState extends State<AslabDetailAbsensiPage> {
   /// 0 Semua, 1 Selesai, 2 Belum Dibuat.
   int _tab = 0;
 
+  static const List<String> _bulan = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+  ];
+
+  static DateTime? _parseTanggal(String s) {
+    final m = RegExp(r'(\d{1,2}) ([A-Za-z]{3}) (\d{4})').firstMatch(s);
+    if (m == null) return null;
+    final mon = _bulan.indexOf(m.group(2)!);
+    if (mon < 0) return null;
+    return DateTime(int.parse(m.group(3)!), mon + 1, int.parse(m.group(1)!));
+  }
+
   bool _match(AslabSession s) {
     if (_tab == 1) return s.state == 2;
     if (_tab == 2) return s.state != 2;
@@ -42,7 +55,34 @@ class _AslabDetailAbsensiPageState extends State<AslabDetailAbsensiPage> {
       listenable: presensiSync,
       builder: (context, _) {
         final activeSession = presensiSync.activeSession;
-        final items = c.sessions.where(_match).toList();
+        // Status & rekap tiap pertemuan dari catatan presensi nyata.
+        final today = DateTime.now();
+        final sessions = [
+          for (final s0 in c.sessions)
+            () {
+              final recs = presensiSync.recordsForMeeting(c.id, s0.number);
+              if (recs.isNotEmpty) {
+                return AslabSession(s0.number, s0.module, s0.date, 2,
+                    hadir: recs.where((r) => r.status == PrakAttend.hadir).length,
+                    izin: recs.where((r) => r.status == PrakAttend.izin).length,
+                    alpa: recs.where((r) => r.status == PrakAttend.alpa).length);
+              }
+              final d = _parseTanggal(s0.date);
+              final reached = d == null ||
+                  !DateTime(d.year, d.month, d.day)
+                      .isAfter(DateTime(today.year, today.month, today.day));
+              return AslabSession(s0.number, s0.module, s0.date, reached ? 0 : 1);
+            }(),
+        ];
+        final items = sessions.where(_match).toList();
+        final created = sessions.where((x) => x.state == 2).length;
+        final allRecs = [
+          for (final x in sessions)
+            ...presensiSync.recordsForMeeting(c.id, x.number),
+        ];
+        final rata = allRecs.isEmpty
+            ? '-'
+            : '${(allRecs.where((r) => r.status == PrakAttend.hadir).length * 100 / allRecs.length).round()}%';
         return LabSubPage(
           onLogoTap: nav.home,
           children: [
@@ -52,22 +92,24 @@ class _AslabDetailAbsensiPageState extends State<AslabDetailAbsensiPage> {
                 LabStatRow(
                   gap: 13,
                   stats: [
-                    const LabStat(
+                    LabStat(
                         icon: 'people_group',
                         label: 'Praktikan',
-                        value: '24 Orang'),
+                        value: () {
+                          final n = PresensiSyncService.instance
+                              .knownStudentCount(c.id);
+                          return n == 0 ? '-' : '$n Orang';
+                        }()),
                     LabStat(
                         icon: 'statistic_up',
                         label: 'Rata-rata Hadir',
-                        value: c.rataHadir),
+                        value: rata),
                   ],
                 ),
                 LabProgress(
                   label: 'Presensi dibuat',
-                  value: activeSession.courseId == c.id
-                      ? '5 / 12 pertemuan'
-                      : '4 / 12 pertemuan',
-                  fraction: activeSession.courseId == c.id ? 5 / 12 : 113 / 338,
+                  value: '$created / 12 pertemuan',
+                  fraction: created / 12,
                 ),
               ],
             ),
@@ -87,13 +129,16 @@ class _AslabDetailAbsensiPageState extends State<AslabDetailAbsensiPage> {
                           activeSession.isActive;
                       final liveRecs = presensiSync.recordsForMeeting(
                           c.id, s.number);
-                      final extraHadir = liveRecs
+                      final liveHadirCount = liveRecs
                           .where((r) => r.status == PrakAttend.hadir)
                           .length;
                       return _SessionCard(
                         session: s,
                         isLive: isLiveSession,
-                        liveHadir: (15 + extraHadir).clamp(0, 24),
+                        liveHadir: liveHadirCount,
+                        liveIzin: liveRecs
+                            .where((r) => r.status == PrakAttend.izin)
+                            .length,
                         onCreate: () => isLiveSession
                             ? nav.sesiAktif(context)
                             : nav.buatSesi(
@@ -122,13 +167,15 @@ class _SessionCard extends StatelessWidget {
   final AslabSession session;
   final bool isLive;
   final int liveHadir;
+  final int liveIzin;
   final VoidCallback onCreate;
   final VoidCallback onDetail;
 
   const _SessionCard({
     required this.session,
     this.isLive = false,
-    this.liveHadir = 18,
+    this.liveHadir = 0,
+    this.liveIzin = 0,
     required this.onCreate,
     required this.onDetail,
   });
@@ -167,7 +214,7 @@ class _SessionCard extends StatelessWidget {
         ),
         LabMeta(icon: 'calendar', text: s.date),
         if (isLive) ...[
-          AslabRekap(hadir: liveHadir, izin: 0, alpa: 24 - liveHadir),
+          AslabRekap(hadir: liveHadir, izin: liveIzin, alpa: 0),
           LabPrimaryButton(
               icon: 'qrcode',
               label: 'Lihat Sesi & QR Presensi',

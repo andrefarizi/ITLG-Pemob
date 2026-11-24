@@ -10,9 +10,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Penilaian Tugas-Aslab".
-///
-/// Nilai tiap rubrik bisa diketik; total dan batang progres ikut berubah.
+/// Halaman Penilaian Tugas Asisten Lab.
 class AslabPenilaianTugasPage extends StatefulWidget {
   final AslabNav nav;
   final AslabStudent student;
@@ -42,13 +40,19 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
 
   late final List<TextEditingController> _scores;
   late final TextEditingController _catatan;
+  bool _saving = false;
+
+  /// Sanggahan pending milik praktikan ini untuk modul yang sedang dinilai saja.
+  GradeAppealRecord? _appealFor(String courseId) {
+    final ap = NilaiSyncService.instance
+        .pendingAppealForStudent(courseId, widget.student.nim);
+    return (ap != null && ap.modul == widget.meetingNumber) ? ap : null;
+  }
 
   @override
   void initState() {
     super.initState();
-    final pendingAppeal = NilaiSyncService.instance
-        .pendingAppealForStudent(widget.courseId, widget.student.nim);
-    final targetModul = pendingAppeal?.modul ?? widget.meetingNumber;
+    final targetModul = widget.meetingNumber;
     final existing = PraktikumSyncService.instance
         .submissionFor(widget.courseId, targetModul, widget.student.nim);
     final prevScore = existing?.score;
@@ -62,14 +66,12 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
         TextEditingController(text: '$s2'),
       ];
     } else {
-      _scores = [
-        for (final r in _rubrik) TextEditingController(text: '${r.$3}'),
-      ];
+      _scores = [for (final _ in _rubrik) TextEditingController()];
     }
     _catatan = TextEditingController(
       text: (existing?.feedback != null && existing!.feedback!.isNotEmpty)
           ? existing.feedback!
-          : 'Implementasi sudah baik dan sesuai instruksi modul.',
+          : '',
     );
   }
 
@@ -96,6 +98,7 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
   }
 
   Future<void> _simpan() async {
+    if (_saving) return;
     if (NilaiSyncService.instance.isCourseValidated(widget.courseId)) {
       labToast(
         context,
@@ -103,25 +106,46 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
       );
       return;
     }
-    final pendingAppeal = NilaiSyncService.instance
-        .pendingAppealForStudent(widget.courseId, widget.student.nim);
-    final targetModul = pendingAppeal?.modul ?? widget.meetingNumber;
-    await PraktikumSyncService.instance.gradeTugasSubmission(
-      courseId: widget.courseId,
-      meetingNumber: targetModul,
-      userIdentifier: widget.student.nim,
-      userName: widget.student.name,
-      score: _total,
-      feedback: _catatan.text.trim(),
-    );
-    if (pendingAppeal != null) {
-      await NilaiSyncService.instance.resolveAppeal(
+    for (var i = 0; i < _rubrik.length; i++) {
+      final raw = _scores[i].text.trim();
+      final v = int.tryParse(raw);
+      if (raw.isEmpty || v == null || v < 0 || v > _rubrik[i].$4) {
+        labToast(context,
+            'Nilai "${_rubrik[i].$1}" harus bilangan bulat 0–${_rubrik[i].$4}');
+        return;
+      }
+    }
+    if (_catatan.text.trim().length < 5) {
+      labToast(context, 'Tulis catatan evaluasi untuk praktikan');
+      return;
+    }
+    final pendingAppeal = _appealFor(widget.courseId);
+    final targetModul = widget.meetingNumber;
+    setState(() => _saving = true);
+    try {
+      await PraktikumSyncService.instance.gradeTugasSubmission(
         courseId: widget.courseId,
-        modul: targetModul,
+        meetingNumber: targetModul,
         userIdentifier: widget.student.nim,
-        newScore: _total,
+        userName: widget.student.name,
+        score: _total,
         feedback: _catatan.text.trim(),
       );
+      if (pendingAppeal != null) {
+        await NilaiSyncService.instance.resolveAppeal(
+          courseId: widget.courseId,
+          modul: targetModul,
+          userIdentifier: widget.student.nim,
+          newScore: _total,
+          feedback: _catatan.text.trim(),
+        );
+      }
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        labToast(context, e.message);
+      }
+      return;
     }
     if (!mounted) return;
     Navigator.of(context).maybePop();
@@ -153,9 +177,8 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
       listenable: Listenable.merge([sync, nilaiSync]),
       builder: (context, _) {
         final course = sync.courseById(widget.courseId);
-        final pendingAppeal =
-            nilaiSync.pendingAppealForStudent(course.id, s.nim);
-        final targetModul = pendingAppeal?.modul ?? widget.meetingNumber;
+        final pendingAppeal = _appealFor(course.id);
+        final targetModul = widget.meetingNumber;
         final meeting = sync.meetingFor(course.id, targetModul);
         final existing = sync.submissionFor(course.id, targetModul, s.nim);
         final isGraded = existing?.status == 'graded' && pendingAppeal == null;
@@ -204,7 +227,7 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
                   icon: 'clock',
                   text: existing != null
                       ? _formatSubmittedAt(existing.updatedAt)
-                      : 'Dikumpulkan Senin 10:12 WIB, 29 September 2026',
+                      : 'Belum ada pengumpulan',
                 ),
               ],
             ),
@@ -229,6 +252,9 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
                           context,
                           name: pendingAppeal.attachmentName!,
                           source: 'Bukti Sanggahan • ${s.name}',
+                          searchFolders: [
+                            'sanggah/${course.id}/m${pendingAppeal.modul}',
+                          ],
                         ),
                       ),
                     if (hasRealFiles) ...[
@@ -243,6 +269,7 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
                             name: f.name,
                             size: f.meta,
                             source: 'Tugas $targetModul • ${s.name}',
+                            searchFolders: ['tugas/${course.id}/m$targetModul'],
                           ),
                         ),
                       if (existing.repoUrl.isNotEmpty)
@@ -258,32 +285,9 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
                                 : 'https://${existing.repoUrl}',
                           ),
                         ),
-                    ] else ...[
-                      _FileRow(
-                        icon: 'file',
-                        title: 'laporan_tugas$targetModul.pdf',
-                        meta: 'Laporan PDF • 1,2 MB',
-                        action: 'download',
-                        onTap: () => labShowFilePreview(
-                          context,
-                          name: 'laporan_tugas$targetModul.pdf',
-                          size: '1,2 MB',
-                          source: 'Tugas $targetModul • ${s.name}',
-                        ),
-                      ),
-                      _FileRow(
-                        icon: 'link_chain',
-                        title:
-                            'github.com/${s.name.toLowerCase().replaceAll(' ', '')}/tugas-$targetModul',
-                        meta: 'Tautan Repositori Kode',
-                        action: 'chevron_right',
-                        onTap: () => labShowLink(
-                          context,
-                          url:
-                              'https://github.com/${s.name.toLowerCase().replaceAll(' ', '')}/tugas-$targetModul',
-                        ),
-                      ),
-                    ],
+                    ] else
+                      Text('Belum ada berkas atau tautan yang dikirim.',
+                          style: labText(12, c: ItlgColors.textSubtle)),
                   ],
                 ),
               ],
@@ -363,7 +367,7 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
             ),
             LabPrimaryButton(
               icon: 'check',
-              label: 'Simpan Nilai',
+              label: _saving ? 'Menyimpan…' : 'Simpan Nilai',
               large: true,
               onTap: _simpan,
             ),
@@ -374,7 +378,7 @@ class _AslabPenilaianTugasPageState extends State<AslabPenilaianTugasPage> {
   }
 }
 
-/// Baris berkas 58 px dengan kotak ikon timbul 36 px.
+/// Baris berkas dengan kotak ikon timbul.
 class _FileRow extends StatelessWidget {
   final String icon;
   final String title;

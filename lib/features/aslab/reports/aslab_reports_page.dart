@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Aslab Reports Page
 class AslabReportsPage extends StatelessWidget {
   const AslabReportsPage({super.key});
 

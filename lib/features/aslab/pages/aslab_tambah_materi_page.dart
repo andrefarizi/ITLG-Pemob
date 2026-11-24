@@ -8,8 +8,7 @@ import '../../praktikan/praktikan_store.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 
-/// Figma: "Tambah Materi (Modul)", "Tambah Materi (Tugas)", dan "Tambah
-/// Materi (Kuis)". Pilihan Jenis Materi berpindah di antara ketiganya.
+/// Halaman Tambah Materi.
 class AslabTambahMateriPage extends StatefulWidget {
   final AslabNav nav;
 
@@ -40,25 +39,78 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
     ('clipboard', 'Tugas'),
     ('question', 'Kuis'),
   ];
-  static const List<(int, String)> _pertemuanData = [
-    (3, 'Pertemuan 3 • Sen, 21 Sep 2026'),
-    (4, 'Pertemuan 4 • Sen, 28 Sep 2026'),
-    (5, 'Pertemuan 5 • Sen, 05 Okt 2026'),
-    (6, 'Pertemuan 6 • Sen, 12 Okt 2026'),
-    (7, 'Pertemuan 7 • Sen, 19 Okt 2026'),
+  static const List<String> _bulan = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
   ];
-  static List<String> get _pertemuan => [for (final p in _pertemuanData) p.$2];
-  static const List<String> _deadline = [
-    'Sen, 12 Okt 2026 • 10:30 WIB',
-    'Sen, 12 Okt 2026 • 23:59 WIB',
-    'Sen, 19 Okt 2026 • 10:30 WIB',
+  static const List<String> _hari = [
+    'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min',
   ];
+
+  /// (nomor, label pilihan, label tanggal yang disimpan, tanggal pertemuan).
+  late final List<(int, String, String, DateTime?)> _pertemuanData =
+      _buildPertemuan();
+  List<String> get _pertemuan => [for (final p in _pertemuanData) p.$2];
+
+  static DateTime? _parseTanggal(String s) {
+    final m = RegExp(r'(\d{1,2}) ([A-Za-z]{3}) (\d{4})').firstMatch(s);
+    if (m == null) return null;
+    final mon = _bulan.indexOf(m.group(2)!);
+    if (mon < 0) return null;
+    return DateTime(int.parse(m.group(3)!), mon + 1, int.parse(m.group(1)!));
+  }
+
+  static String _fmtTanggal(DateTime d) =>
+      '${_hari[d.weekday - 1]}, ${d.day.toString().padLeft(2, '0')} '
+      '${_bulan[d.month - 1]} ${d.year}';
+
+  /// Daftar Pertemuan 1–12 dari jadwal praktikum ini.
+  List<(int, String, String, DateTime?)> _buildPertemuan() {
+    final sync = PraktikumSyncService.instance;
+    DateTime? base;
+    var baseN = 0;
+    var suffix = '';
+    final out = <(int, String, String, DateTime?)>[];
+    for (var n = 1; n <= 12; n++) {
+      final m = sync.meetingFor(widget.courseId, n);
+      if (m != null && m.date.isNotEmpty) {
+        final d = _parseTanggal(m.date);
+        if (d != null) {
+          base = d;
+          baseN = n;
+          final i = m.date.indexOf(' • ');
+          suffix = i == -1 ? '' : m.date.substring(i);
+        }
+        out.add((n, 'Pertemuan $n • ${m.date.split(' • ').first}', m.date, d));
+      } else {
+        final est = base?.add(Duration(days: 7 * (n - baseN)));
+        out.add((
+          n,
+          est == null ? 'Pertemuan $n (baru)' : 'Pertemuan $n • ${_fmtTanggal(est)} (baru)',
+          est == null ? 'Pertemuan $n' : '${_fmtTanggal(est)}$suffix',
+          est,
+        ));
+      }
+    }
+    return out;
+  }
+
+  /// Pilihan batas pengumpulan dihitung dari tanggal pertemuan terpilih.
+  List<String> get _deadline {
+    final d = _pertemuanData[_pt].$4 ?? DateTime.now();
+    String f(DateTime x, String jam) =>
+        'Batas $jam WIB, ${x.day.toString().padLeft(2, '0')} ${_bulan[x.month - 1]} ${x.year}';
+    final w1 = d.add(const Duration(days: 7));
+    final w2 = d.add(const Duration(days: 14));
+    return [f(w1, '10:30'), f(w1, '23:59'), f(w2, '10:30')];
+  }
+
   static const List<String> _jenisKuis = ['Pre-Test', 'Post-Test', 'Kuis Harian'];
   static const List<String> _durasi = ['10 menit', '15 menit', '20 menit', '30 menit'];
   static const List<String> _letters = ['A', 'B', 'C', 'D'];
 
   late int _kind = widget.kind;
-  int _pt = 2; // default Pertemuan 5
+  int _pt = 4; // default Pertemuan 5
   int _dl = 0;
   int _jk = 0;
   int _dr = 0;
@@ -69,20 +121,17 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
 
   final TextEditingController _nama = TextEditingController();
   final TextEditingController _desk = TextEditingController();
-  final TextEditingController _tanya = TextEditingController(
-      text: 'Widget manakah yang membangun ulang tampilan ketika state '
-          'berubah?');
+  final TextEditingController _tanya = TextEditingController();
   final List<TextEditingController> _opsi = [
-    TextEditingController(text: 'StatelessWidget'),
-    TextEditingController(text: 'StatefulWidget'),
-    TextEditingController(text: 'InheritedWidget'),
-    TextEditingController(text: 'Container'),
+    for (var i = 0; i < 4; i++) TextEditingController(),
   ];
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    final targetNum = widget.meetingNumber ?? 5;
+    final targetNum = widget.meetingNumber ??
+        PraktikumSyncService.instance.courseById(widget.courseId).meetings.length;
     final idx = _pertemuanData.indexWhere((p) => p.$1 == targetNum);
     if (idx != -1) _pt = idx;
     if (widget.meetingNumber != null && widget.kind == 2) {
@@ -121,64 +170,95 @@ class _AslabTambahMateriPageState extends State<AslabTambahMateriPage> {
       folder: 'materi/${widget.courseId}/$sub',
     );
     if (picked == null || !mounted) return;
+    if (!picked.uploadedToCloud) {
+      labToast(context,
+          'Gagal mengunggah ${picked.name}. Periksa koneksi lalu coba lagi.');
+      return;
+    }
     setState(() => _files.add((picked.name, picked.metaLabel)));
-    labToast(
-      context,
-      picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
-          : '${picked.name} dipilih dari perangkat',
-    );
+    labToast(context, '${picked.name} berhasil diunggah');
   }
 
-  void _appendCurrentQuestionIfValid() {
+  /// Simpan soal yang sedang diketik. Mengembalikan pesan kesalahan bila
+  String? _appendCurrentQuestionIfValid() {
     final qText = _tanya.text.trim();
-    if (qText.isEmpty) return;
-    final opts = [
-      for (var i = 0; i < 4; i++)
-        _opsi[i].text.trim().isNotEmpty
-            ? _opsi[i].text.trim()
-            : 'Pilihan ${_letters[i]}',
-    ];
+    final opts = [for (final o in _opsi) o.text.trim()];
+    if (qText.isEmpty && opts.every((o) => o.isEmpty)) return null;
+    if (qText.isEmpty) return 'Tulis pertanyaan Soal $_soal';
+    if (opts.any((o) => o.isEmpty)) {
+      return 'Isi keempat pilihan jawaban Soal $_soal';
+    }
     _savedQuestions.add(PrakQuestion(qText, opts, _kunci));
+    return null;
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final meetingNum = _pertemuanData[_pt].$1;
-    final dateLabel = _pertemuanData[_pt].$2;
-    final title = _nama.text.trim().isNotEmpty
-        ? _nama.text.trim()
-        : [
-            'Modul $meetingNum : Materi Praktikum',
-            'Tugas $meetingNum : Implementasi Praktikum',
-            '${_jenisKuis[_jk]} Modul $meetingNum',
-          ][_kind];
+    final dateLabel = _pertemuanData[_pt].$3;
+    final kindLabel = const ['modul', 'tugas', 'kuis'][_kind];
+    final title = _nama.text.trim();
+    if (title.length < 5) {
+      labToast(context, 'Isi nama $kindLabel (minimal 5 karakter)');
+      return;
+    }
+    if (_kind == 0 && _files.isEmpty) {
+      labToast(context, 'Unggah berkas modul terlebih dahulu');
+      return;
+    }
+    if (_kind == 1 && _desk.text.trim().length < 10) {
+      labToast(context, 'Tulis deskripsi/instruksi tugas (minimal 10 karakter)');
+      return;
+    }
     if (_kind == 2) {
-      _appendCurrentQuestionIfValid();
-      if (_savedQuestions.isNotEmpty) {
-        PraktikumSyncService.instance.saveQuizQuestionsFromAslab(
+      final err = _appendCurrentQuestionIfValid();
+      if (err != null) {
+        labToast(context, err);
+        return;
+      }
+      if (_savedQuestions.isEmpty) {
+        labToast(context, 'Tulis minimal 1 soal beserta 4 pilihan jawaban');
+        return;
+      }
+    }
+    setState(() => _saving = true);
+    try {
+      await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
+        courseId: widget.courseId,
+        meetingNumber: meetingNum,
+        dateLabel: dateLabel,
+        kind: _kind,
+        title: title,
+        description: _desk.text.trim(),
+        fileName: _files.isNotEmpty ? _files.first.$1 : null,
+        deadline: _kind == 1 ? _deadline[_dl] : null,
+      );
+      if (_kind == 2) {
+        await PraktikumSyncService.instance.saveQuizQuestionsFromAslab(
           courseId: widget.courseId,
+          meetingNumber: meetingNum,
           questions: _savedQuestions,
         );
       }
+    } on StateError catch (e) {
+      if (_kind == 2 && _savedQuestions.isNotEmpty) {
+        // Soal terakhir dimasukkan lagi ke form saat dicoba ulang.
+        _savedQuestions.removeLast();
+      }
+      if (mounted) {
+        setState(() => _saving = false);
+        labToast(context, e.message);
+      }
+      return;
     }
-    await PraktikumSyncService.instance.upsertMeetingContentFromAslab(
-      courseId: widget.courseId,
-      meetingNumber: meetingNum,
-      dateLabel: dateLabel,
-      kind: _kind,
-      title: title,
-      description: _desk.text.trim(),
-      fileName: _files.isNotEmpty ? _files.first.$1 : null,
-      deadline: _kind == 1 ? _deadline[_dl] : null,
-    );
     if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(
       context,
       const [
-        'Modul disimpan & diterbitkan ke BE',
-        'Tugas diterbitkan ke BE',
-        'Kuis & soal diterbitkan ke BE'
+        'Modul disimpan & diterbitkan',
+        'Tugas diterbitkan',
+        'Kuis & soal diterbitkan'
       ][_kind],
     );
   }

@@ -11,7 +11,7 @@ import '../aslab_nav.dart';
 import '../widgets/aslab_ui.dart';
 import 'aslab_pindai_qr_laboran_page.dart';
 
-/// Figma: "Jadwal Mengajar-Aslab" (5497:1743).
+/// Halaman Jadwal Mengajar Asisten Lab.
 class AslabShiftJagaPage extends StatefulWidget {
   final AslabNav nav;
   const AslabShiftJagaPage({super.key, required this.nav});
@@ -21,18 +21,53 @@ class AslabShiftJagaPage extends StatefulWidget {
 }
 
 class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
-  static const List<(String, String, String)> _days = [
-    ('Sen', '28', 'Sep'),
-    ('Sel', '29', 'Sep'),
-    ('Rab', '30', 'Sep'),
-    ('Kam', '01', 'Okt'),
-    ('Jum', '02', 'Okt'),
-    ('Sab', '03', 'Okt'),
+  static const List<String> _hari = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  static const List<String> _bulan = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
   ];
+  static const List<String> _bulanPanjang = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli',
+    'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
+
+  /// Senin minggu berjalan (hari Minggu → minggu berikutnya). Shift bersifat
+  /// mingguan (`day_index`), jadi tanggal dihitung dari minggu ini, bukan
+  /// label tetap "Sen, 28 Sep" dari data.
+  static DateTime get _weekMonday {
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final today = DateTime(now.year, now.month, now.day);
+    if (today.weekday == DateTime.sunday) {
+      return today.add(const Duration(days: 1));
+    }
+    return today.subtract(Duration(days: today.weekday - 1));
+  }
+
+  static DateTime _dateFor(int dayIndex) =>
+      _weekMonday.add(Duration(days: dayIndex.clamp(0, 5)));
+
+  static String _dayLabel(int dayIndex) {
+    final d = _dateFor(dayIndex);
+    return '${_hari[dayIndex.clamp(0, 5)]}, ${d.day.toString().padLeft(2, '0')} ${_bulan[d.month - 1]}';
+  }
+
+  static List<(String, String, String)> get _days => [
+        for (var i = 0; i < 6; i++)
+          (
+            _hari[i],
+            _dateFor(i).day.toString().padLeft(2, '0'),
+            _bulan[_dateFor(i).month - 1],
+          ),
+      ];
+
+  static int get _todayIndex {
+    final wd = DateTime.now().toUtc().add(const Duration(hours: 7)).weekday;
+    return wd == DateTime.sunday ? 0 : wd - 1;
+  }
 
   final ShiftSyncService _shiftSync = ShiftSyncService.instance;
   final JadwalSyncService _jadwalSync = JadwalSyncService.instance;
-  int _day = 0;
+  int _day = _todayIndex;
 
   @override
   void initState() {
@@ -55,18 +90,36 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
   }
 
   Future<void> _answer(ShiftSwapRecord swap, bool accept) async {
-    widget.nav.store.swapAnswer = accept;
-    await _shiftSync.decideSwap(
-      swapCode: swap.swapCode,
-      accept: accept,
-      decidedByName: AuthController.instance.userName,
-    );
-    if (!mounted) return;
-    labToast(
+    // Menerima menukar penugasan shift nyata: minta konfirmasi dulu.
+    final ok = await labShowConfirmDialog(
       context,
-      accept
-          ? 'Tukar shift dengan ${swap.requesterName} diterima & jadwal diperbarui'
-          : 'Permintaan tukar shift dari ${swap.requesterName} ditolak',
+      icon: accept ? 'check' : 'cross',
+      title: accept ? 'Terima Tukar Jadwal?' : 'Tolak Tukar Jadwal?',
+      message: accept
+          ? 'Shift anda dan ${swap.requesterName} akan langsung ditukar.'
+          : 'Permintaan dari ${swap.requesterName} akan ditolak.',
+      confirmLabel: accept ? 'Terima' : 'Tolak',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await _shiftSync.decideSwap(
+        swapCode: swap.swapCode,
+        accept: accept,
+        decidedByName: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
+    widget.nav.store.swapAnswer = accept;
+    if (!mounted) return;
+    await labShowResult(
+      context,
+      icon: accept ? 'circle_check' : 'person_cross',
+      title: accept ? 'Tukar Jadwal Diterima' : 'Permintaan Ditolak',
+      message: accept
+          ? 'Jadwal mengajar kamu sudah diperbarui dan pemohon akan menerima notifikasi.'
+          : 'Pemohon akan menerima notifikasi bahwa permintaannya ditolak.',
     );
   }
 
@@ -80,11 +133,14 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
         final featuredSwap = _shiftSync.featuredIncomingSwap;
         final pendingCount = _shiftSync.pendingSwapCount;
 
-        final myShiftToday = _shiftSync.allShifts.firstWhere(
-          (s) => s.asistenName == AuthController.instance.userName,
-          orElse: () => _shiftSync.allShifts.first,
-        );
-        final checkedIn = myShiftToday.attendanceStatus == 'Hadir';
+        // Shift milik Aslab yang login pada HARI INI saja.
+        final me = AuthController.instance.userName;
+        final myShiftToday = _shiftSync.allShifts
+            .where((s) => s.asistenName == me && s.dayIndex == _todayIndex)
+            .firstOrNull;
+        final checkedIn = myShiftToday != null &&
+            (myShiftToday.attendanceStatus.toLowerCase() == 'hadir' ||
+                myShiftToday.attendanceStatus.toLowerCase() == 'terlambat');
 
         return LabSubPage(
           onLogoTap: nav.home,
@@ -99,12 +155,18 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                 PrakSpaceRow(
                   left: const LabSectionTitle(
                       icon: 'qrcode', text: 'Presensi Mengajar Hari Ini'),
-                  right: checkedIn
-                      ? const LabChip.live('Sudah Check-In')
-                      : const LabChip.warn('Belum Check-In'),
+                  right: myShiftToday == null
+                      ? const LabChip.idle('Tidak Ada Jadwal')
+                      : (checkedIn
+                          ? const LabChip.live('Sudah Check-In')
+                          : const LabChip.warn('Belum Check-In')),
                 ),
+                if (myShiftToday == null)
+                  Text('Tidak ada jadwal mengajar hari ini.',
+                      style: labText(13, c: ItlgColors.textSubtle))
+                else ...[
                 Text(
-                  '${myShiftToday.dayLabel} • ${myShiftToday.shiftLabel} • ${myShiftToday.timeRange}',
+                  '${_dayLabel(myShiftToday.dayIndex)} • ${myShiftToday.shiftLabel} • ${myShiftToday.timeRange}',
                   style: labText(13, w: kBold),
                 ),
                 LabMeta(
@@ -126,18 +188,21 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                     ),
                   ),
                 ),
+                ],
               ],
             ),
             LabColumn(
               gap: 8,
               children: [
                 PrakSpaceRow(
-                  left: const LabHeading(
-                      icon: 'calendar', text: 'September 2026'),
+                  left: LabHeading(
+                      icon: 'calendar',
+                      text:
+                          '${_bulanPanjang[_weekMonday.month - 1]} ${_weekMonday.year}'),
                   right: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _syncCalendar,
-                    child: const LabPill(icon: 'calendar', text: 'Minggu ke-4'),
+                    child: const LabPill(icon: 'calendar', text: 'Minggu ini'),
                   ),
                 ),
                 AslabDaySelector(
@@ -158,7 +223,7 @@ class _AslabShiftJagaPageState extends State<AslabShiftJagaPage> {
                           ? '${s.asistenName} • ${s.partnerName}'
                           : 'Bersama ${s.asistenName}',
                       course: s.courseName,
-                      time: '${s.dayLabel} • ${s.timeRange}',
+                      time: '${_dayLabel(s.dayIndex)} • ${s.timeRange}',
                       room: s.room,
                     ),
                 ],

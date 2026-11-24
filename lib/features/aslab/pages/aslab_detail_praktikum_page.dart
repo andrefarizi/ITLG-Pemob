@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
@@ -8,7 +9,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Detail Praktikum Saya-Aslab".
+/// Halaman Detail Praktikum Saya Asisten Lab.
 class AslabDetailPraktikumPage extends StatefulWidget {
   final AslabNav nav;
   final AslabCourse course;
@@ -48,10 +49,14 @@ class _AslabDetailPraktikumPageState extends State<AslabDetailPraktikumPage> {
                 LabStatRow(
                   gap: 13,
                   stats: [
-                    const LabStat(
+                    LabStat(
                         icon: 'people_group',
                         label: 'Praktikan',
-                        value: '24 Orang'),
+                        value: () {
+                          final n = PresensiSyncService.instance
+                              .knownStudentCount(c.id);
+                          return n == 0 ? '-' : '$n Orang';
+                        }()),
                     LabStat(icon: 'clock', label: 'Waktu', value: c.jadwal),
                   ],
                 ),

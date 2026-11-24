@@ -7,7 +7,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import 'aslab_edit_modul_page.dart';
 
-/// Figma: "Edit Tugas-Aslab".
+/// Halaman Edit Tugas Asisten Lab.
 class AslabEditTugasPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
@@ -24,17 +24,12 @@ class AslabEditTugasPage extends StatefulWidget {
 }
 
 class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
-  static const List<String> _deadline = [
-    'Sel, 29 Sep 2026 • 10:30 WIB',
-    'Sel, 29 Sep 2026 • 23:59 WIB',
-    'Rab, 30 Sep 2026 • 10:30 WIB',
-    'Sen, 12 Okt 2026 • 10:30 WIB',
-  ];
-
   late final TextEditingController _nama;
   late final TextEditingController _desk;
-  final int _dl = 0;
+  /// Deadline yang sudah tersimpan; tidak ditimpa kecuali Aslab memilih baru.
+  String _savedDeadline = '';
   String? _customDeadline;
+  bool _busy = false;
   late final List<(String, String)> _files;
 
   @override
@@ -53,9 +48,10 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
           ? m.description
           : c.modulDesc,
     );
-    _files = [
-      ('Tugas_${widget.meetingNumber}_Praktikum.pdf', 'PDF • 640 KB'),
-    ];
+    _savedDeadline = (m != null && m.tugasDeadline.isNotEmpty)
+        ? m.tugasDeadline
+        : '';
+    _files = [];
   }
 
   @override
@@ -71,18 +67,17 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
       title: 'Pilih Tanggal & Jam',
     );
     if (picked == null || !mounted) return;
-    const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
       'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
     ];
-    final dName = days[picked.weekday - 1];
     final dd = picked.day.toString().padLeft(2, '0');
     final hh = picked.hour.toString().padLeft(2, '0');
     final mm = picked.minute.toString().padLeft(2, '0');
+    // Format sama dengan yang dibaca Praktikan: "Batas 10:30 WIB, 12 Okt 2026".
     setState(() {
       _customDeadline =
-          '$dName, $dd ${months[picked.month - 1]} ${picked.year} • $hh:$mm WIB';
+          'Batas $hh:$mm WIB, $dd ${months[picked.month - 1]} ${picked.year}';
     });
   }
 
@@ -91,41 +86,84 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
       folder: 'materi/${widget.courseId}/tugas',
     );
     if (picked == null || !mounted) return;
+    if (!picked.uploadedToCloud) {
+      labToast(context,
+          'Gagal mengunggah ${picked.name}. Periksa koneksi lalu coba lagi.');
+      return;
+    }
     setState(() => _files.insert(0, (picked.name, picked.metaLabel)));
-    labToast(
-      context,
-      picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
-          : '${picked.name} dipilih dari perangkat',
-    );
+    labToast(context, '${picked.name} berhasil diunggah');
   }
 
   Future<void> _save() async {
+    if (_busy) return;
+    final title = _nama.text.trim();
+    final deadline = _customDeadline ?? _savedDeadline;
+    if (title.length < 5) {
+      labToast(context, 'Isi nama tugas (minimal 5 karakter)');
+      return;
+    }
+    if (_desk.text.trim().length < 10) {
+      labToast(context, 'Tulis deskripsi/instruksi tugas (minimal 10 karakter)');
+      return;
+    }
+    if (deadline.isEmpty) {
+      labToast(context, 'Pilih deadline pengumpulan');
+      return;
+    }
     final sync = PraktikumSyncService.instance;
     final c = sync.courseById(widget.courseId);
     final m = sync.meetingFor(widget.courseId, widget.meetingNumber);
-    await sync.upsertMeetingContentFromAslab(
-      courseId: c.id,
-      meetingNumber: widget.meetingNumber,
-      dateLabel: m?.date ?? 'Sen, 28 Sep 2026 • ${c.jam}',
-      kind: 1,
-      title: _nama.text.trim().isEmpty ? c.tugasTitle : _nama.text.trim(),
-      description: _desk.text.trim(),
-      fileName: _files.isNotEmpty ? _files.first.$1 : null,
-      deadline: _customDeadline ?? _deadline[_dl],
-    );
+    setState(() => _busy = true);
+    try {
+      await sync.upsertMeetingContentFromAslab(
+        courseId: c.id,
+        meetingNumber: widget.meetingNumber,
+        dateLabel: m?.date ?? 'Pertemuan ${widget.meetingNumber}',
+        kind: 1,
+        title: title,
+        description: _desk.text.trim(),
+        fileName: _files.isNotEmpty ? _files.first.$1 : null,
+        deadline: deadline,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
-    _close('Perubahan tugas Pertemuan ${widget.meetingNumber} disimpan ke BE');
+    _close('Perubahan tugas Pertemuan ${widget.meetingNumber} disimpan');
   }
 
   Future<void> _delete() async {
-    await PraktikumSyncService.instance.deleteMeetingContentFromAslab(
-      courseId: widget.courseId,
-      meetingNumber: widget.meetingNumber,
-      kind: 1,
+    if (_busy) return;
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'delete_filled',
+      title: 'Hapus Tugas ${widget.meetingNumber}?',
+      message: 'Tugas tidak lagi tampil untuk praktikan. Pengumpulan yang '
+          'sudah masuk tetap tersimpan.',
+      confirmLabel: 'Hapus',
     );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await PraktikumSyncService.instance.deleteMeetingContentFromAslab(
+        courseId: widget.courseId,
+        meetingNumber: widget.meetingNumber,
+        kind: 1,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
-    _close('Tugas ${widget.meetingNumber} dihapus dari BE');
+    _close('Tugas ${widget.meetingNumber} dihapus');
   }
 
   void _close(String message) {
@@ -140,10 +178,9 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
     final m = sync.meetingFor(widget.courseId, widget.meetingNumber);
     final dateText = m != null
         ? 'Pertemuan ${widget.meetingNumber} • ${m.date.split(' • ').first}'
-        : 'Pertemuan ${widget.meetingNumber} • Sen, 28 September 2026';
+        : 'Pertemuan ${widget.meetingNumber}';
     final subsCount =
-        (20 + sync.submissionsForCourse(c.id, widget.meetingNumber).length)
-            .clamp(0, 24);
+        sync.submissionsForCourse(c.id, widget.meetingNumber).length;
 
     return LabSubPage(
       onLogoTap: widget.nav.home,
@@ -155,8 +192,10 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
         ),
         PrakNotice.warn(
           icon: 'info',
-          text: '$subsCount praktikan sudah mengumpulkan. Perubahan deadline atau '
-              'berkas akan dikirim sebagai notif',
+          text: subsCount == 0
+              ? 'Belum ada pengumpulan. Perubahan tugas dikirim sebagai notifikasi ke praktikan'
+              : '$subsCount praktikan sudah mengumpulkan. Perubahan deadline atau '
+                  'berkas akan dikirim sebagai notifikasi',
         ),
         LabCard(
           children: [
@@ -172,7 +211,10 @@ class _AslabEditTugasPageState extends State<AslabEditTugasPage> {
             PrakField(
               label: 'Deadline Pengumpulan',
               child: PrakSelect(
-                value: _customDeadline ?? _deadline[_dl],
+                value: _customDeadline ??
+                    (_savedDeadline.isNotEmpty
+                        ? _savedDeadline
+                        : 'Pilih tanggal & jam'),
                 onTap: _pickDeadline,
               ),
             ),

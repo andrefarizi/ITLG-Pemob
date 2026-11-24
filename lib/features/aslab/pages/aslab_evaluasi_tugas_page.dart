@@ -10,7 +10,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Evaluasi Tugas-Aslab".
+/// Halaman Evaluasi Tugas Asisten Lab.
 class AslabEvaluasiTugasPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
@@ -30,25 +30,22 @@ class _Submission {
   final AslabStudent student;
   final bool graded;
   final List<(String, String)> files;
-  const _Submission(this.student, this.graded, this.files);
+
+  /// Ukuran berkas per nama (mis. "352 KB"), diambil dari metadata unggahan.
+  final Map<String, String> sizes;
+  const _Submission(this.student, this.graded, this.files,
+      {this.sizes = const {}});
+
+  /// Item pertama yang benar-benar berkas (bukan tautan / penanda sanggahan).
+  (String, String)? get firstFile {
+    for (final f in files) {
+      if (f.$1 == 'file' || f.$1 == 'attach') return f;
+    }
+    return null;
+  }
 }
 
 class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
-  static const List<_Submission> _all = [
-    _Submission(kRina, false, [
-      ('file', 'laporan_erd.pdf'),
-      ('database_outline', 'query.sql'),
-    ]),
-    _Submission(kDimas, false, [
-      ('file', 'laporan.pdf'),
-      ('link_chain', 'github.com/dimas'),
-    ]),
-    _Submission(kMaya, true, [
-      ('file', 'laporan_tugas4.pdf'),
-      ('database_outline', 'tugas4.sql'),
-    ]),
-  ];
-
   final TextEditingController _search = TextEditingController();
   String _query = '';
 
@@ -80,20 +77,48 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
       builder: (context, _) {
         final course = sync.courseById(widget.courseId);
         final dynamicSubs = <_Submission>[];
-        final seenNims = <String>{};
 
-        // Tampilkan praktikan yang mengajukan sanggahan nilai di paling atas
-        for (final ap in nilaiSync.pendingAppealsForCourse(course.id)) {
-          seenNims.add(ap.userIdentifier);
-          final parts = ap.userName.trim().split(RegExp(r'\s+'));
-          final initials = parts.length >= 2
-              ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-              : (ap.userName.isNotEmpty
-                  ? ap.userName.substring(0, 1).toUpperCase()
-                  : 'PR');
+        String initialsOf(String name) {
+          final parts = name.trim().split(RegExp(r'\s+'));
+          if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+            return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+          }
+          return name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'PR';
+        }
+
+        // Sanggahan hanya yang terkait modul/pertemuan ini.
+        final appealsByNim = {
+          for (final ap in nilaiSync.pendingAppealsForCourse(course.id))
+            if (ap.modul == widget.meetingNumber) ap.userIdentifier: ap,
+        };
+
+        for (final rec
+            in sync.submissionsForCourse(course.id, widget.meetingNumber)) {
+          final ap = appealsByNim.remove(rec.userIdentifier);
           dynamicSubs.add(
             _Submission(
-              AslabStudent(initials, ap.userName, ap.userIdentifier),
+              AslabStudent(
+                  initialsOf(rec.userName), rec.userName, rec.userIdentifier),
+              rec.status == 'graded',
+              [
+                for (final f in rec.files) ('file', f.name),
+                if (rec.repoUrl.isNotEmpty) ('link_chain', rec.repoUrl),
+                if (ap != null) ('chat_bubble', 'Sanggahan Modul ${ap.modul}'),
+              ],
+              sizes: {
+                for (final f in rec.files)
+                  if (f.meta.split(' • ').length >= 2)
+                    f.name: f.meta.split(' • ')[1],
+              },
+            ),
+          );
+        }
+        // Sanggahan modul ini dari praktikan yang belum tercatat mengumpulkan.
+        for (final ap in appealsByNim.values) {
+          dynamicSubs.add(
+            _Submission(
+              AslabStudent(
+                  initialsOf(ap.userName), ap.userName, ap.userIdentifier),
               false,
               [
                 ('chat_bubble', 'Sanggahan Modul ${ap.modul}'),
@@ -103,37 +128,12 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
             ),
           );
         }
-
-        for (final rec
-            in sync.submissionsForCourse(course.id, widget.meetingNumber)) {
-          if (seenNims.contains(rec.userIdentifier)) continue;
-          seenNims.add(rec.userIdentifier);
-          final parts = rec.userName.trim().split(RegExp(r'\s+'));
-          final initials = parts.length >= 2
-              ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-              : (rec.userName.isNotEmpty
-                  ? rec.userName.substring(0, 1).toUpperCase()
-                  : 'PR');
-          dynamicSubs.add(
-            _Submission(
-              AslabStudent(initials, rec.userName, rec.userIdentifier),
-              rec.status == 'graded',
-              [
-                for (final f in rec.files) ('file', f.name),
-                if (rec.repoUrl.isNotEmpty) ('link_chain', rec.repoUrl),
-              ],
-            ),
-          );
-        }
-        final seedFiltered =
-            _all.where((s) => !seenNims.contains(s.student.nim)).toList();
-        final combined = [...dynamicSubs, ...seedFiltered];
-        final items = combined.where(_match).toList();
-        final waitingExtra = dynamicSubs.where((s) => !s.graded).length;
-        final gradedExtra = dynamicSubs.where((s) => s.graded).length;
-        final waitingCount = 6 + waitingExtra;
-        final gradedCount = 14 + gradedExtra;
-        final totalCount = (20 + dynamicSubs.length).clamp(0, 24);
+        final items = dynamicSubs.where(_match).toList();
+        final waitingCount = dynamicSubs.where((s) => !s.graded).length;
+        final gradedCount = dynamicSubs.where((s) => s.graded).length;
+        // Kartu sanggahan tanpa pengumpulan tidak dihitung "Terkumpul".
+        final totalCount =
+            sync.submissionsForCourse(course.id, widget.meetingNumber).length;
         final meeting = sync.meetingFor(course.id, widget.meetingNumber);
         final tugasTitle = (meeting != null && meeting.tugasTitle.isNotEmpty)
             ? meeting.tugasTitle
@@ -184,7 +184,7 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
                     LabStat(
                       icon: 'file',
                       label: 'Terkumpul',
-                      value: '$totalCount / 24',
+                      value: '$totalCount',
                     ),
                     LabStat(
                       icon: 'check',
@@ -209,16 +209,18 @@ class _AslabEvaluasiTugasPageState extends State<AslabEvaluasiTugasPage> {
               _SubmissionCard(
                 item: s,
                 onDownload: () {
-                  if (s.files.isNotEmpty) {
+                  final f = s.firstFile;
+                  if (f != null) {
                     labShowFilePreview(
                       context,
-                      name: s.files.first.$2,
+                      name: f.$2,
+                      size: s.sizes[f.$2] ?? 'Berkas',
                       source:
                           'Tugas ${widget.meetingNumber} • ${s.student.name}',
                     );
                   } else {
-                    labToast(
-                        context, 'Berkas ${s.student.name} sedang diunduh');
+                    labToast(context,
+                        '${s.student.name} hanya mengirim tautan, tidak ada berkas');
                   }
                 },
                 onGrade: () => widget.nav.penilaianTugas(

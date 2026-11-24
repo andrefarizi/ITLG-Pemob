@@ -35,7 +35,7 @@ class AslabTab {
   static const int profil = 4;
 }
 
-/// Semua perpindahan halaman Asisten Lab, mengikuti prototipe Figma.
+/// Semua perpindahan halaman Asisten Lab.
 class AslabNav {
   final AslabStore store;
 
@@ -62,7 +62,7 @@ class AslabNav {
     );
   }
 
-  // --- Beranda ---------------------------------------------------------------
+  // Beranda
 
   Future<void> notifikasi(BuildContext c) =>
       _open(c, AslabNotifikasiPage(nav: this), false);
@@ -85,7 +85,7 @@ class AslabNav {
   Future<void> persetujuanIzin(BuildContext c) =>
       _open(c, AslabPersetujuanIzinPage(nav: this), false);
 
-  // --- Praktikum Saya --------------------------------------------------------
+  // Praktikum Saya
 
   Future<void> detailPraktikum(BuildContext c, AslabCourse course) =>
       _open(c, AslabDetailPraktikumPage(nav: this, course: course), false);
@@ -168,7 +168,7 @@ class AslabNav {
         false,
       );
 
-  // --- Penilaian -------------------------------------------------------------
+  // Penilaian
 
   Future<void> evaluasiTugas(
     BuildContext c, {
@@ -199,7 +199,7 @@ class AslabNav {
         false,
       );
 
-  // --- Absensi ---------------------------------------------------------------
+  // Absensi
 
   Future<void> detailAbsensi(BuildContext c, AslabCourse course) =>
       _open(c, AslabDetailAbsensiPage(nav: this, course: course), false);
@@ -207,7 +207,7 @@ class AslabNav {
   Future<void> buatSesi(
     BuildContext c, {
     String courseId = 'pemob',
-    int meetingNumber = 5,
+    int? meetingNumber,
   }) =>
       _open(
         c,
@@ -254,17 +254,26 @@ class AslabNav {
         false,
       );
 
-  // --- Profil ----------------------------------------------------------------
+  // Profil
 
   Future<void> ubahKataSandi(BuildContext c) =>
       _open(c, UbahKataSandiPage(onLogoTap: home), false);
 
-  // --- Notifikasi ------------------------------------------------------------
+  // Notifikasi
 
-  void openNotif(BuildContext c, AslabNotifTarget target) {
+  /// Buka tujuan notifikasi. Bila notifikasi membawa praktikum & pertemuan,
+  /// buka halaman itu (bukan selalu Pemrograman Mobile Pertemuan 4).
+  void openNotif(
+    BuildContext c,
+    AslabNotifTarget target, {
+    String? courseId,
+    int? meetingNumber,
+  }) {
+    final cid = courseId ?? 'pemob';
+    final mn = meetingNumber ?? 4;
     switch (target) {
       case AslabNotifTarget.evaluasi:
-        evaluasiTugas(c);
+        evaluasiTugas(c, courseId: cid, meetingNumber: mn);
         break;
       case AslabNotifTarget.shiftJaga:
         shiftJaga(c);
@@ -276,10 +285,10 @@ class AslabNav {
         laporKendala(c);
         break;
       case AslabNotifTarget.detailPresensi:
-        detailPresensi(c);
+        detailPresensi(c, courseId: cid, meetingNumber: mn);
         break;
       case AslabNotifTarget.hasilKuis:
-        hasilKuis(c);
+        hasilKuis(c, courseId: cid, meetingNumber: mn);
         break;
     }
   }

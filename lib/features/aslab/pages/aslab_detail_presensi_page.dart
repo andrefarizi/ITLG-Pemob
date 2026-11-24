@@ -12,10 +12,7 @@ import '../aslab_nav.dart';
 import '../aslab_store.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Detail Presensi Pertemuan-Aslab".
-///
-/// Status tiap praktikan bisa diubah (Hadir / Izin / Alpa); rekap di atas
-/// ikut berubah.
+/// Halaman Detail Presensi Pertemuan Asisten Lab.
 class AslabDetailPresensiPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
@@ -49,14 +46,9 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
     if (i != null && mounted) setState(() => _status = i);
   }
 
-  /// Status awal (untuk tanda "Diubah dari ..." dan tombol Simpan).
-  late final List<AslabAttend> _initial =
-      widget.nav.store.presences.map((p) => p.status).toList();
-
-  /// 19 praktikan lain (tidak ditampilkan) berstatus hadir: 21/2/1.
-  static const int _otherHadir = 19;
-
-  List<AslabPresence> get _list => widget.nav.store.presences;
+  /// Status awal (untuk tanda "Diubah dari..." dan tombol Simpan).
+  final List<AslabAttend> _initial = [];
+  final List<AslabPresence> _list = [];
 
   @override
   void initState() {
@@ -94,7 +86,11 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
         if (r.hasSignature) ('signature_freehand', 'Bertanda tangan'),
       ];
       if (idx != -1) {
-        _list[idx].status = mappedStatus;
+        // Jangan timpa perubahan yang sedang dibuat asisten.
+        if (_list[idx].status == _initial[idx]) {
+          _list[idx].status = mappedStatus;
+        }
+        _initial[idx] = mappedStatus;
       } else {
         final parts = r.userName.trim().split(RegExp(r'\s+'));
         final initials = parts.length >= 2
@@ -126,12 +122,27 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
   int _count(AslabAttend a) => _list.where((p) => p.status == a).length;
 
   Future<void> _simpan() async {
-    await PresensiSyncService.instance.saveManualStatuses(
-      courseId: widget.courseId,
-      meetingNumber: widget.meetingNumber,
-      presences: _list,
-      updatedBy: AuthController.instance.userName,
-    );
+    // Simpan hanya yang diubah agar metode (QR/Lokasi) & tanda tangan
+    final changed = [
+      for (var i = 0; i < _list.length; i++)
+        if (_list[i].status != _initial[i]) _list[i],
+    ];
+    if (changed.isEmpty) {
+      labToast(context, 'Belum ada status yang diubah');
+      return;
+    }
+    try {
+      await PresensiSyncService.instance.saveManualStatuses(
+        courseId: widget.courseId,
+        meetingNumber: widget.meetingNumber,
+        presences: changed,
+        updatedBy: AuthController.instance.userName,
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).maybePop();
     labToast(
@@ -186,7 +197,7 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
               title: 'Presensi\nPertemuan ${widget.meetingNumber}',
             ),
             AslabRekap(
-              hadir: _otherHadir + _count(AslabAttend.hadir),
+              hadir: _count(AslabAttend.hadir),
               izin: _count(AslabAttend.izin),
               alpa: _count(AslabAttend.alpa),
             ),
@@ -216,6 +227,7 @@ class _AslabDetailPresensiPageState extends State<AslabDetailPresensiPage> {
           children: [
             for (final i in items)
               _StudentCard(
+                izinFolder: 'izin/${widget.courseId}/m${widget.meetingNumber}',
                 presence: _list[i],
                 changedFrom: _list[i].status != _initial[i]
                     ? _initial[i]
@@ -248,11 +260,15 @@ class _StudentCard extends StatelessWidget {
   final ValueChanged<int> onStatus;
   final VoidCallback onProof;
 
+  /// Folder Storage tempat lampiran izin diunggah praktikan.
+  final String izinFolder;
+
   const _StudentCard({
     required this.presence,
     required this.changedFrom,
     required this.onStatus,
     required this.onProof,
+    required this.izinFolder,
   });
 
   static const List<String> _names = ['Hadir', 'Izin', 'Alpa'];
@@ -346,6 +362,7 @@ class _StudentCard extends StatelessWidget {
                           context,
                           name: izin.$3,
                           source: 'Lampiran izin praktikan',
+                          searchFolders: [izinFolder],
                         ),
                         child: Text('Lihat Lampiran',
                             style: labText(12, c: ItlgColors.primary)),

@@ -1,19 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 
-/// Komponen khusus halaman Asisten Lab (Figma: section "02 Asisten Lab").
-/// Komponen umum ada di laboran_ui.dart dan praktikan_ui.dart.
+/// Komponen khusus halaman Asisten Lab.
 
-// =============================================================================
 // Pemilih hari (Shift Jaga)
-// =============================================================================
 
-/// Deret 6 tombol hari 52 x 64. Terpilih: merah dengan cahaya. Lainnya
-/// #EEF0F3 timbul.
+/// Widget pemilih hari pada jadwal shift.
 class AslabDaySelector extends StatelessWidget {
   final List<(String, String, String)> days;
   final int index;
@@ -86,9 +83,7 @@ class AslabDaySelector extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Elemen kecil
-// =============================================================================
 
 /// Dua avatar bertumpuk (jarak -8).
 class AslabAvatarPair extends StatelessWidget {
@@ -140,8 +135,7 @@ class AslabSwapRow extends StatelessWidget {
   }
 }
 
-/// Pil berkas kecil. [raised] = putih timbul (radius 12, padding 6/10, ikon
-/// 12). Selain itu cekung (padding 8/10, ikon 14).
+/// Widget lencana nama berkas.
 class AslabFilePill extends StatelessWidget {
   final String icon;
   final String text;
@@ -191,7 +185,7 @@ class AslabFilePill extends StatelessWidget {
   }
 }
 
-/// Rekap Hadir / Izin / Alpa (3 kotak cekung 33 px).
+/// Rekap Hadir / Izin / Alpa.
 class AslabRekap extends StatelessWidget {
   final int hadir;
   final int izin;
@@ -235,7 +229,7 @@ class AslabRekap extends StatelessWidget {
   }
 }
 
-/// Pilihan status Hadir / Izin / Alpa (kotak 34 px, radius 10).
+/// Pilihan status Hadir / Izin / Alpa.
 class AslabStatusPicker extends StatelessWidget {
   /// 0 hadir, 1 izin, 2 alpa.
   final int value;
@@ -316,7 +310,7 @@ class _StatusBox extends StatelessWidget {
   }
 }
 
-/// Toggle 40 x 22 dengan knop putih 18 px.
+/// Toggle dengan knop putih.
 class AslabToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -356,7 +350,7 @@ class AslabToggle extends StatelessWidget {
   }
 }
 
-/// Kartu menu 178 x 140 di Beranda.
+/// Kartu menu di Beranda.
 class AslabMenuCard extends StatelessWidget {
   final String icon;
   final String title;
@@ -408,7 +402,7 @@ class AslabMenuCard extends StatelessWidget {
   }
 }
 
-/// Kolom nilai rubrik 67 x 33 (angka merah yang bisa diubah + "/ maks").
+/// Kolom nilai rubrik (angka merah yang bisa diubah + "/ maks").
 class AslabScoreInput extends StatelessWidget {
   final TextEditingController controller;
   final int max;
@@ -425,17 +419,23 @@ class AslabScoreInput extends StatelessWidget {
   Widget build(BuildContext context) {
     return InnerShadowBox(
       radius: 12,
-      width: 67,
+      width: 84,
       height: 33,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           SizedBox(
-            width: 20,
+            width: 28,
             child: TextField(
               controller: controller,
               onChanged: onChanged,
               keyboardType: TextInputType.number,
+              textAlign: TextAlign.right,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(3),
+              ],
               cursorColor: ItlgColors.primary,
               style: labText(14, w: kBold, c: ItlgColors.primary),
               decoration: const InputDecoration(
@@ -452,8 +452,12 @@ class AslabScoreInput extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Text('/ $max',
-              style: labText(11, w: kMedium, c: ItlgColors.textSubtle)),
+          Flexible(
+            child: Text('/ $max',
+                maxLines: 1,
+                softWrap: false,
+                style: labText(11, w: kMedium, c: ItlgColors.textSubtle)),
+          ),
         ],
       ),
     );
@@ -496,8 +500,7 @@ class _AslabElapsedPillState extends State<AslabElapsedPill> {
   }
 }
 
-/// "TIF 3001 - Kelas C" (Bold 16 merah tua) + "Praktikum Pemrograman
-/// Mobile" (Bold 22).
+/// Header informasi kode kelas dan nama mata kuliah.
 class AslabClassTitle extends StatelessWidget {
   final String kelas;
   final String name;

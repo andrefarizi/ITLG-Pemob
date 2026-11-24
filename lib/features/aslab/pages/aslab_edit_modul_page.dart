@@ -6,7 +6,7 @@ import '../../laboran/widgets/laboran_ui.dart';
 import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 
-/// Figma: "Edit Modul-Aslab".
+/// Halaman Edit Modul Asisten Lab.
 class AslabEditModulPage extends StatefulWidget {
   final AslabNav nav;
   final String courseId;
@@ -47,8 +47,7 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
         ? m.materiFile
         : c.materiFile;
     _files = [
-      if (primaryFile.isNotEmpty) (primaryFile, 'PDF • 3,2 MB'),
-      ('starter_project.zip', 'ZIP • 4,1 MB'),
+      if (primaryFile.isNotEmpty) (primaryFile, 'Berkas modul saat ini'),
     ];
   }
 
@@ -64,40 +63,79 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
       folder: 'materi/${widget.courseId}/modul',
     );
     if (picked == null || !mounted) return;
+    if (!picked.uploadedToCloud) {
+      labToast(context,
+          'Gagal mengunggah ${picked.name}. Periksa koneksi lalu coba lagi.');
+      return;
+    }
     setState(() => _files.insert(0, (picked.name, picked.metaLabel)));
-    labToast(
-      context,
-      picked.uploadedToCloud
-          ? '${picked.name} berhasil diunggah ke BE'
-          : '${picked.name} dipilih dari perangkat',
-    );
+    labToast(context, '${picked.name} berhasil diunggah');
   }
 
+  bool _busy = false;
+
   Future<void> _save() async {
+    if (_busy) return;
+    final title = _nama.text.trim();
+    if (title.length < 5) {
+      labToast(context, 'Isi nama modul (minimal 5 karakter)');
+      return;
+    }
+    if (_files.isEmpty) {
+      labToast(context, 'Unggah berkas modul terlebih dahulu');
+      return;
+    }
     final sync = PraktikumSyncService.instance;
     final c = sync.courseById(widget.courseId);
     final m = sync.meetingFor(widget.courseId, widget.meetingNumber);
-    await sync.upsertMeetingContentFromAslab(
-      courseId: c.id,
-      meetingNumber: widget.meetingNumber,
-      dateLabel: m?.date ?? 'Sen, 28 Sep 2026 • ${c.jam}',
-      kind: 0,
-      title: _nama.text.trim().isEmpty ? c.materiTitle : _nama.text.trim(),
-      description: _desk.text.trim(),
-      fileName: _files.isNotEmpty ? _files.first.$1 : c.materiFile,
-    );
+    setState(() => _busy = true);
+    try {
+      await sync.upsertMeetingContentFromAslab(
+        courseId: c.id,
+        meetingNumber: widget.meetingNumber,
+        dateLabel: m?.date ?? 'Pertemuan ${widget.meetingNumber}',
+        kind: 0,
+        title: title,
+        description: _desk.text.trim(),
+        fileName: _files.first.$1,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
-    _close('Perubahan modul Pertemuan ${widget.meetingNumber} disimpan ke BE');
+    _close('Perubahan modul Pertemuan ${widget.meetingNumber} disimpan');
   }
 
   Future<void> _delete() async {
-    await PraktikumSyncService.instance.deleteMeetingContentFromAslab(
-      courseId: widget.courseId,
-      meetingNumber: widget.meetingNumber,
-      kind: 0,
+    if (_busy) return;
+    final ok = await labShowConfirmDialog(
+      context,
+      icon: 'delete_filled',
+      title: 'Hapus Modul ${widget.meetingNumber}?',
+      message: 'Modul dan berkasnya tidak lagi tampil untuk praktikan.',
+      confirmLabel: 'Hapus',
     );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await PraktikumSyncService.instance.deleteMeetingContentFromAslab(
+        courseId: widget.courseId,
+        meetingNumber: widget.meetingNumber,
+        kind: 0,
+      );
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        labToast(context, e.message);
+      }
+      return;
+    }
     if (!mounted) return;
-    _close('Modul ${widget.meetingNumber} dihapus dari BE');
+    _close('Modul ${widget.meetingNumber} dihapus');
   }
 
   void _close(String message) {
@@ -187,8 +225,7 @@ class _AslabEditModulPageState extends State<AslabEditModulPage> {
   }
 }
 
-/// Kartu judul halaman edit: chip "Sudah Diterbitkan", nama praktikum,
-/// judul, dan tanggal pertemuan.
+/// Kartu judul halaman edit: chip "Sudah Diterbitkan", nama praktikum
 class AslabEditHeader extends StatelessWidget {
   final String title;
   final String courseName;

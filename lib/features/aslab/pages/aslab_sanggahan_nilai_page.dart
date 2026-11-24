@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/nilai_sync_service.dart';
+import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
@@ -8,8 +9,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../../shared/lab_actions.dart';
 import '../widgets/aslab_ui.dart';
 
-/// Figma: "Sanggahan Nilai-Aslab" (5815:2864) + "Pop up Sanggahan Disetujui" (5815:2849)
-/// serta "Sanggahan Nilai-Dosen" (5818:3083) + "Pop up Sanggahan Disetujui-Dosen" (5818:3068).
+/// Halaman Sanggahan Nilai Asisten Lab.
 class SanggahanNilaiReviewPage extends StatefulWidget {
   final bool isDosen;
   final VoidCallback? onLogoTap;
@@ -69,15 +69,21 @@ class _SanggahanNilaiReviewPageState extends State<SanggahanNilaiReviewPage> {
           ],
         ),
       );
-      ctrl.dispose();
+      // Lepas controller setelah animasi tutup sheet selesai (cegah crash).
+      Future<void>.delayed(const Duration(milliseconds: 600), ctrl.dispose);
       if (reason == null || !mounted) return;
-      await _sync.decideAppeal(
-        appeal: a,
-        approve: false,
-        rejectionReason: reason,
-        decidedBy: AuthController.instance.userName,
-        byDosen: widget.isDosen,
-      );
+      try {
+        await _sync.decideAppeal(
+          appeal: a,
+          approve: false,
+          rejectionReason: reason,
+          decidedBy: AuthController.instance.userName,
+          byDosen: widget.isDosen,
+        );
+      } on StateError catch (e) {
+        if (mounted) labToast(context, e.message);
+        return;
+      }
       if (!mounted) return;
       labToast(
         context,
@@ -88,13 +94,18 @@ class _SanggahanNilaiReviewPageState extends State<SanggahanNilaiReviewPage> {
       return;
     }
 
-    await _sync.decideAppeal(
-      appeal: a,
-      approve: true,
-      newScore: a.proposedScore,
-      decidedBy: AuthController.instance.userName,
-      byDosen: widget.isDosen,
-    );
+    try {
+      await _sync.decideAppeal(
+        appeal: a,
+        approve: true,
+        newScore: a.proposedScore,
+        decidedBy: AuthController.instance.userName,
+        byDosen: widget.isDosen,
+      );
+    } on StateError catch (e) {
+      if (mounted) labToast(context, e.message);
+      return;
+    }
     if (!mounted) return;
 
     await labShowResultDialog(
@@ -206,7 +217,8 @@ class _AppealCard extends StatelessWidget {
         LabPerson(
           initials: appeal.initials,
           name: appeal.userName,
-          caption: '${appeal.userIdentifier} • Kom C • Sesi C1',
+          caption:
+              '${appeal.userIdentifier} • ${PraktikumSyncService.instance.courseById(appeal.courseId).name} • Modul ${appeal.modul}',
         ),
         LabStatRow(
           gap: 12,
@@ -238,6 +250,9 @@ class _AppealCard extends StatelessWidget {
                     context,
                     name: appeal.attachmentName!,
                     source: 'Bukti lampiran sanggahan • Siap diunduh',
+                    searchFolders: [
+                      'sanggah/${appeal.courseId}/m${appeal.modul}',
+                    ],
                   ),
                   child: AslabFilePill(
                     icon: 'attach',

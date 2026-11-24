@@ -7,7 +7,7 @@ import '../../praktikan/widgets/praktikan_ui.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 
-/// Figma: "Detail Pertemuan-Aslab" (node 5703:2957).
+/// Halaman Detail Pertemuan Asisten Lab.
 class AslabDetailPertemuanPage extends StatelessWidget {
   final AslabNav nav;
   final AslabMeeting meeting;

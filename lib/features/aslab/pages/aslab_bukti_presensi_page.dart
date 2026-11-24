@@ -8,7 +8,7 @@ import '../../praktikan/widgets/prak_google_map.dart';
 import '../aslab_nav.dart';
 import '../aslab_store.dart';
 
-/// Figma: "Bukti Presensi-Aslab".
+/// Halaman Bukti Presensi Asisten Lab.
 class AslabBuktiPresensiPage extends StatelessWidget {
   final AslabNav nav;
   final AslabPresence? presence;
@@ -35,17 +35,20 @@ class AslabBuktiPresensiPage extends StatelessWidget {
     );
     final dateShort = meetingObj.date.split(' • ').first;
     final st = presence?.student ?? kRina;
-    final rec = presensi.recordFor(courseId, meetingNumber, st.nim) ??
-        presensi.recordFor(courseId, 4, st.nim) ??
-        presensi.recordFor(courseId, 5, st.nim);
+    // Hanya catatan pertemuan ini (tanpa cadangan dari pertemuan lain).
+    final rec = presensi.recordFor(courseId, meetingNumber, st.nim);
     final lat = rec?.lat ?? 3.5621;
     final lng = rec?.lng ?? 98.6600;
     final dist = rec?.distanceMeters != null
         ? '${rec!.distanceMeters!.round()} meter'
-        : '12 meter';
+        : '-';
     final clock = rec != null
         ? '${rec.recordedAt.toLocal().hour.toString().padLeft(2, '0')}:${rec.recordedAt.toLocal().minute.toString().padLeft(2, '0')} WIB'
-        : '08:02 WIB';
+        : '-';
+    final signatureUrl = (rec != null && rec.hasSignature)
+        ? presensi.signatureUrl(courseId, meetingNumber, st.nim,
+            version: rec.recordedAt)
+        : null;
     final methodText = rec?.method == 'qr'
         ? 'Diverifikasi dengan Pindai QR Presensi'
         : 'Diverifikasi dengan Tombol Hadir + Lokasi';
@@ -158,13 +161,29 @@ class AslabBuktiPresensiPage extends StatelessWidget {
                 builder: (context, box) => Stack(
                   children: [
                     const Positioned.fill(child: LabInsetBox(child: SizedBox())),
-                    Positioned(
-                      left: (box.maxWidth - 230) / 2,
-                      top: 26,
-                      width: 230,
-                      height: 96,
-                      child: Image.asset('assets/praktikan_signature.png',
-                          fit: BoxFit.fill),
+                    // Goresan asli praktikan dari Storage (ukuran kanvas sama).
+                    Positioned.fill(
+                      child: signatureUrl == null
+                          ? Center(
+                              child: Text(
+                                rec == null
+                                    ? 'Belum ada presensi'
+                                    : 'Tanpa tanda tangan',
+                                style: labText(12,
+                                    c: const Color(0xFF6B7280)),
+                              ),
+                            )
+                          : Image.network(
+                              signatureUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  'Gambar tanda tangan tidak ditemukan',
+                                  style: labText(12,
+                                      c: const Color(0xFF6B7280)),
+                                ),
+                              ),
+                            ),
                     ),
                     Positioned(
                       left: 25,
