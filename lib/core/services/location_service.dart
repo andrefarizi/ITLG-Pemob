@@ -9,12 +9,22 @@ import 'package:geolocator/geolocator.dart';
 
 import '../config/app_config.dart';
 
-/// Koordinat Lab Komputer 1, Gedung C Lantai 2, Fasilkom-TI USU, Medan.
+/// Koordinat cadangan (Lab Jaringan 1, Gedung C Lantai 2, Fasilkom-TI USU)
+/// bila sesi tidak membawa koordinat lab. Titik sebenarnya diambil dari sesi
+/// presensi yang dibuka Aslab (tabel `labs` → `attendance_sessions.lat/lng`).
 const double kLabLat = 3.5621;
 const double kLabLng = 98.6600;
 
-/// Radius area presensi dalam meter.
+/// Radius cadangan area presensi dalam meter.
 const double kLabRadius = 50.0;
+
+/// Akurasi GPS terburuk yang masih diterima untuk presensi (meter). Posisi
+/// dari jaringan/IP (ratusan meter) tidak cukup untuk membuktikan berada di lab.
+const double kMaxGpsAccuracy = 100.0;
+
+/// Umur maksimal posisi terakhir yang tersimpan di perangkat. Posisi lama
+/// (mis. saat masih di lab tadi pagi) tidak boleh dipakai untuk presensi.
+const Duration kMaxLastKnownAge = Duration(minutes: 2);
 
 /// Service GPS real-time dan Reverse Geocoding perangkat aktual.
 class LocationService {
@@ -41,14 +51,12 @@ class LocationService {
   }
 
   /// Deteksi koordinat default bawaan Android Emulator (Googleplex, California)
-  /// jika emulator baru saja dijalankan setelah restart laptop.
   bool _isDefaultGoogleplex(Position pos) {
     return distanceInMeters(pos.latitude, pos.longitude, 37.421998, -122.084) <
         5000.0;
   }
 
   /// Fallback otomatis berbasis Google Geolocation API / IP khusus untuk
-  /// emulator bila GPS emulator belum terinisialisasi dari host Windows.
   Future<Position?> _fetchNetworkFallbackPosition() async {
     final apiKey = await _getMapsApiKey();
     if (apiKey.isNotEmpty) {
@@ -224,7 +232,10 @@ class LocationService {
           '[LocationService] getCurrentPosition error: $e. Fallback ke lastKnownPosition...');
       try {
         final last = await Geolocator.getLastKnownPosition();
-        if (last != null) {
+        // Posisi tersimpan yang sudah lama ditolak (bisa dari waktu lain).
+        if (last != null &&
+            DateTime.now().difference(last.timestamp).abs() <=
+                kMaxLastKnownAge) {
           if (await _isAndroidEmulator() && _isDefaultGoogleplex(last)) {
             final netPos = await _fetchNetworkFallbackPosition();
             if (netPos != null) return netPos;
@@ -247,7 +258,6 @@ class LocationService {
   }
 
   /// Stream lokasi real-time: otomatis memancarkan posisi baru setiap perangkat
-  /// berpindah tempat (minimal 3 meter) agar map dan alamat selalu akurat.
   Stream<Position> getPositionStream() {
     return Geolocator.getPositionStream(
       locationSettings: _locationSettings(distanceFilter: 3),
@@ -268,7 +278,7 @@ class LocationService {
 
   static double _rad(double deg) => deg * pi / 180;
 
-  /// Periksa apakah posisi berada dalam radius 50 meter dari lab.
+  /// Cek apakah posisi berada dalam radius laboratorium.
   static bool isInsideLab(Position pos) {
     final d = distanceInMeters(pos.latitude, pos.longitude, kLabLat, kLabLng);
     return d <= kLabRadius;
@@ -278,14 +288,18 @@ class LocationService {
   static double distanceToLab(Position pos) =>
       distanceInMeters(pos.latitude, pos.longitude, kLabLat, kLabLng);
 
-  /// Reverse Geocoding real-time menggunakan Google Maps Geocoding API & fallback Nominatim.
+  /// Hitung jarak dari posisi ke titik lab sesi (meter).
+  static double distanceToPoint(Position pos, double lat, double lng) =>
+      distanceInMeters(pos.latitude, pos.longitude, lat, lng);
+
+  /// Reverse Geocoding real-time menggunakan Google Maps Geocoding API & fallback.
   Future<({String title, String detail})> getAddress(
       double lat, double lng) async {
-    // 1. Jika berada dalam radius 50m dari Lab Komputer 1
+    // 1. Jika berada dalam radius 50m dari titik cadangan (Lab Jaringan 1)
     final dist = distanceInMeters(lat, lng, kLabLat, kLabLng);
     if (dist <= kLabRadius) {
       return (
-        title: 'Lab Komputer 1, Gedung C Lantai 2',
+        title: 'Lab Jaringan 1, Gedung C Lantai 2',
         detail: 'Fasilkom-TI USU, Jl. Alumni, Padang Bulan, Medan',
       );
     }

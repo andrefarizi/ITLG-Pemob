@@ -20,8 +20,6 @@ class CalendarSyncResult {
 }
 
 /// Service native untuk meminta izin Kalender Android (READ/WRITE_CALENDAR)
-/// dan menyinkronkan jadwal praktikum ITLG ke aplikasi Kalender di HP user
-/// lengkap dengan pengingat 15 menit sebelum praktikum dimulai.
 class DeviceCalendarService {
   static final DeviceCalendarService instance = DeviceCalendarService._();
   DeviceCalendarService._();
@@ -52,12 +50,11 @@ class DeviceCalendarService {
     }
   }
 
-  /// Konversi dayIndex (0=Sen .. 5=Sab) + jam (HH:mm) ke DateTime minggu ini
-  /// agar jadwal langsung terlihat di kalender perangkat pengguna.
+  /// Konversi dayIndex (0=Sen.. 5=Sab) + jam (HH:mm) ke DateTime minggu ini
   (DateTime start, DateTime end) _nextOccurrence(
       int dayIndex, String startTime, String endTime) {
     final now = DateTime.now();
-    // weekday Dart: 1 = Senin .. 7 = Minggu
+    // Weekday Dart: 1 = Senin.. 7 = Minggu
     final targetWeekday = (dayIndex + 1).clamp(1, 6);
     final monday = DateTime(now.year, now.month, now.day)
         .subtract(Duration(days: now.weekday - 1));
@@ -76,8 +73,7 @@ class DeviceCalendarService {
     return (start, end);
   }
 
-  /// Minta izin kalender otomatis satu kali saat pengguna membuka Beranda,
-  /// lalu langsung memasukkan jadwal praktikum ke Kalender perangkat.
+  /// Minta izin kalender otomatis satu kali saat pengguna membuka Beranda
   Future<CalendarSyncResult> ensurePermissionAndSyncOnce(
       List<PraktikumScheduleRecord> schedules) async {
     if (_promptedOnce) {

@@ -43,11 +43,10 @@ class UploadedDeviceFile {
   }
 
   String get metaLabel =>
-      '$extensionLabel • $formattedSize${uploadedToCloud ? ' • Tersimpan di BE' : ''}';
+      '$extensionLabel • $formattedSize${uploadedToCloud ? ' • Tersimpan di server' : ''}';
 }
 
 /// Service pemilih berkas/foto nyata dari penyimpanan perangkat (Android SAF)
-/// sekaligus pengunggah langsung ke Supabase Storage bucket `itlg-uploads`.
 class FileUploadService {
   static final FileUploadService instance = FileUploadService._();
   FileUploadService._();
@@ -62,9 +61,43 @@ class FileUploadService {
   String? localPathForName(String name) => _localPathByName[name];
   String? remotePathForName(String name) => _remotePathByName[name];
 
+  /// Daftarkan path Storage untuk nama berkas yang dibaca dari database
+  void registerRemote(String name, String? objectPath) {
+    if (objectPath == null || objectPath.trim().isEmpty) return;
+    _remotePathByName[name] = objectPath.trim();
+  }
+
+  /// Cari objek Storage untuk [name] di salah satu [folders]. Berkas unggahan
+  Future<String?> findRemote(String name, List<String> folders) async {
+    final known = _remotePathByName[name];
+    if (known != null) return known;
+    final client = SupabaseService.instance.client;
+    if (client == null || folders.isEmpty) return null;
+    final safe = name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    for (final folder in folders) {
+      try {
+        final items = await client.storage.from(bucketName).list(
+              path: folder,
+              searchOptions: const SearchOptions(
+                limit: 1000,
+                sortBy: SortBy(column: 'created_at', order: 'desc'),
+              ),
+            );
+        for (final it in items) {
+          if (it.name == safe || it.name.endsWith('_$safe')) {
+            final objectPath = '$folder/${it.name}';
+            _remotePathByName[name] = objectPath;
+            return objectPath;
+          }
+        }
+      } catch (e) {
+        debugPrint('[FileUpload] Gagal mencari $name di $folder: $e');
+      }
+    }
+    return null;
+  }
+
   /// Membuka pemilih berkas/galeri asli perangkat lalu langsung mengunggahnya
-  /// ke Supabase Storage (`itlg-uploads/<folder>/...`).
-  /// Mengembalikan `null` jika pengguna membatalkan pemilihan.
   Future<UploadedDeviceFile?> pickAndUpload({
     required String folder,
     bool imagesOnly = false,

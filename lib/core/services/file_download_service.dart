@@ -34,12 +34,6 @@ class DeviceDownloadResult {
 }
 
 /// Service pengunduhan berkas nyata ke penyimpanan perangkat user
-/// (`Download/ITLG Mobile/<nama_berkas>` via Android MediaStore.Downloads).
-///
-/// - Jika berkas sebelumnya diunggah dari perangkat / Supabase Storage,
-///   mengambil byte asli dari cache lokal atau bucket `itlg-uploads`.
-/// - Untuk modul, tugas, lampiran, dan laporan dinamis, menghasilkan berkas
-///   valid yang bisa langsung dibuka (PDF 1.4, Excel `.xlsx` OOXML, ZIP, SQL, dll.).
 class FileDownloadService {
   static final FileDownloadService instance = FileDownloadService._();
   FileDownloadService._();
@@ -86,6 +80,7 @@ class FileDownloadService {
     List<String>? contentLines,
     List<List<String>>? spreadsheetRows,
     Uint8List? rawBytes,
+    List<String> searchFolders = const [],
   }) async {
     final safeName = fileName.trim().isEmpty ? 'dokumen_itlg.pdf' : fileName.trim();
     final mimeType = _mimeFor(safeName);
@@ -105,7 +100,8 @@ class FileDownloadService {
 
     // 2. Cek apakah berkas tersimpan di Supabase Storage (bucket itlg-uploads)
     if (bytes == null) {
-      final remotePath = FileUploadService.instance.remotePathForName(safeName);
+      final remotePath = FileUploadService.instance.remotePathForName(safeName) ??
+          await FileUploadService.instance.findRemote(safeName, searchFolders);
       final client = SupabaseService.instance.client;
       if (remotePath != null && client != null) {
         try {
@@ -118,7 +114,17 @@ class FileDownloadService {
       }
     }
 
-    // 3. Buat berkas valid siap buka sesuai ekstensi jika belum ada byte mentah
+    // 3. Berkas unggahan (tanpa isi bawaan) tidak ditemukan di perangkat
+    if (bytes == null && contentLines == null && spreadsheetRows == null) {
+      return DeviceDownloadResult(
+        success: false,
+        fileName: safeName,
+        location: '',
+        error: 'Berkas tidak ditemukan di server',
+      );
+    }
+
+    // 4. Dokumen yang dibuat dari data (laporan, ringkasan): susun isinya.
     bytes ??= _generateValidBytes(
       fileName: safeName,
       source: source,

@@ -6,19 +6,18 @@ import 'package:mailer/smtp_server.dart';
 import '../config/app_config.dart';
 
 /// Service untuk pengiriman email OTP via SMTP Gmail.
-/// OTP disimpan in-memory selama sesi aktif (60 menit).
 class EmailService {
   static final EmailService instance = EmailService._internal();
   EmailService._internal();
 
-  // ── SMTP credentials ──────────────────────────────────────────────────────
+  // SMTP credentials
   static const String _smtpHost = AppConfig.smtpHost;
   static const int _smtpPort = AppConfig.smtpPort;
   static const String _smtpUser = AppConfig.smtpUser;
   static const String _smtpPass = AppConfig.smtpPass;
   static const String _fromName = 'ITLG Mobile';
 
-  // ── OTP store (in-memory) ─────────────────────────────────────────────────
+  // OTP store (in-memory)
   final Map<String, _OtpEntry> _otpStore = {};
 
   static const Duration _otpTtl = Duration(minutes: 60);
@@ -59,7 +58,6 @@ class EmailService {
   }
 
   /// Validasi OTP yang dimasukkan user. Return true jika cocok & belum expired.
-  /// Validasi OTP yang dimasukkan user. Hanya cocok jika persis dengan kode yang dikirim ke email.
   bool verifyOtp(String email, String code) {
     final trimmed = code.trim();
     final entry = _otpStore[email];
@@ -77,7 +75,7 @@ class EmailService {
   /// Hapus OTP untuk email tertentu (misalnya saat user kembali ke halaman 1).
   void clearOtp(String email) => _otpStore.remove(email);
 
-  // ── Private helpers ───────────────────────────────────────────────────────
+  // Private helpers
 
   String _generateCode() {
     final rng = Random.secure();

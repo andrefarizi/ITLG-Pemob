@@ -5,9 +5,11 @@ import '../../features/aslab/aslab_store.dart';
 import '../../features/laboran/laboran_store.dart';
 import '../../features/praktikan/praktikan_store.dart';
 import 'notification_sync_service.dart';
+import 'presensi_sync_service.dart';
+import 'file_upload_service.dart';
 import 'supabase_service.dart';
 
-/// Model terpadu satu meja + PC di sebuah laboratorium (6 baris x 5 kolom: 1-3 kiri, 4-5 kanan).
+/// Model data meja dan PC laboratorium.
 class LabDeskRecord {
   final String labName;
   final int deskNumber;
@@ -31,8 +33,8 @@ class LabDeskRecord {
     this.bookedByUserId,
     this.bookedByName,
     this.bookedAt,
-  })  : rowNum = rowNum ?? ((deskNumber - 1) ~/ 5) + 1,
-        colNum = colNum ?? ((deskNumber - 1) % 5) + 1;
+  }) : rowNum = rowNum ?? ((deskNumber - 1) ~/ 5) + 1,
+       colNum = colNum ?? ((deskNumber - 1) % 5) + 1;
 
   String get displayName =>
       'Meja ${deskNumber.toString().padLeft(2, '0')} • $pcCode';
@@ -66,7 +68,8 @@ class LabDeskRecord {
     return LabDeskRecord(
       labName: (json['lab_name'] as String?) ?? LabDeskSyncService.defaultLab,
       deskNumber: numVal,
-      pcCode: (json['pc_code'] as String?) ??
+      pcCode:
+          (json['pc_code'] as String?) ??
           'PC-${numVal.toString().padLeft(2, '0')}',
       spec: (json['spec'] as String?) ?? LaboranStore.defaultSpec,
       status: parseStatus(json['status'] as String?),
@@ -79,8 +82,7 @@ class LabDeskRecord {
   }
 }
 
-/// Model terpadu tiket laporan kendala/kerusakan yang tersinkron antar role
-/// (Praktikan, Aslab, Laboran).
+/// Model data tiket laporan kendala laboratorium.
 class LabTicketRecord {
   final String ticketCode;
   final String labName;
@@ -120,8 +122,8 @@ class LabTicketRecord {
     this.handlingNote = '',
     List<Map<String, dynamic>>? statusHistory,
     DateTime? createdAt,
-  })  : statusHistory = statusHistory ?? <Map<String, dynamic>>[],
-        createdAt = createdAt ?? DateTime.now();
+  }) : statusHistory = statusHistory ?? <Map<String, dynamic>>[],
+       createdAt = createdAt ?? DateTime.now();
 
   String get initials {
     final parts = reporterName
@@ -131,13 +133,29 @@ class LabTicketRecord {
         .toList();
     if (parts.isEmpty) return 'US';
     if (parts.length == 1) {
-      return parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+      return parts.first
+          .substring(0, parts.first.length >= 2 ? 2 : 1)
+          .toUpperCase();
     }
     return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
   }
 
+  /// Waktu laporan dalam WIB (UTC+7), tidak bergantung zona waktu HP.
+  DateTime get _wib => createdAt.toUtc().add(const Duration(hours: 7));
+
+  /// "Hari ini" / "Kemarin" / "23 Nov" sesuai tanggal laporan (WIB).
+  String get _dayWord {
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(_wib.year, _wib.month, _wib.day);
+    final diff = today.difference(d).inDays;
+    if (diff == 0) return 'Hari ini';
+    if (diff == 1) return 'Kemarin';
+    return formattedDateShort;
+  }
+
   String get formattedClock {
-    final local = createdAt.toLocal();
+    final local = _wib;
     final hh = local.hour.toString().padLeft(2, '0');
     final mm = local.minute.toString().padLeft(2, '0');
     return '$hh:$mm';
@@ -145,16 +163,30 @@ class LabTicketRecord {
 
   String get formattedDateShort {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
     ];
-    final local = createdAt.toLocal();
+    final local = _wib;
     final dd = local.day.toString().padLeft(2, '0');
     return '$dd ${months[local.month - 1]}';
   }
 
-  String get timeLabel => 'Hari ini, $formattedClock';
-  String get reportedAtLabel => 'Dilaporkan hari ini $formattedClock WIB';
+  String get timeLabel => '$_dayWord, $formattedClock';
+  String get reportedAtLabel {
+    final w = _dayWord;
+    final word = (w == 'Hari ini' || w == 'Kemarin') ? w.toLowerCase() : w;
+    return 'Dilaporkan $word $formattedClock WIB';
+  }
 
   String get placeLabel {
     final shortCat = category.split('•').first.trim();
@@ -185,21 +217,29 @@ class LabTicketRecord {
   }
 
   PrakReport toPrakReport() => PrakReport(
-        icon,
-        title,
-        '$labName • $formattedDateShort',
-        status,
-        ticketCode: ticketCode,
-        description: description,
-        photoName: photoName,
-        handlingNote: handlingNote,
-      );
+    icon,
+    title,
+    '$labName • $formattedDateShort',
+    status,
+    ticketCode: ticketCode,
+    description: description,
+    photoName: photoName,
+    handlingNote: handlingNote,
+  );
 
   AslabReport toAslabReport() =>
       AslabReport(icon, title, '$labName • $formattedDateShort', status);
 
   factory LabTicketRecord.fromJson(Map<String, dynamic> json) {
     final rawHist = (json['status_history_json'] as List?) ?? const [];
+    // Daftarkan path Storage foto agar perangkat lain (Laboran) bisa
+    final photoPath = json['photo_url'] as String?;
+    if (photoPath != null &&
+        photoPath.isNotEmpty &&
+        !photoPath.startsWith('http')) {
+      FileUploadService.instance
+          .registerRemote((json['photo_name'] as String?) ?? '', photoPath);
+    }
     return LabTicketRecord(
       ticketCode: (json['ticket_code'] as String?) ?? '#LK-0000',
       labName: (json['lab_name'] as String?) ?? LabDeskSyncService.defaultLab,
@@ -270,23 +310,27 @@ class DeskBookingResult {
   });
 }
 
-/// Service pusat sinkronisasi Meja Praktikum, Booking, Inventaris, dan Tiket
-/// Kerusakan antar peran (Praktikan ↔ Aslab ↔ Laboran) dengan backend Supabase
-/// + Realtime serta fallback lokal otomatis bila tabel/jaringan belum aktif.
+/// Layanan sinkronisasi meja, inventaris, dan tiket kerusakan.
 class LabDeskSyncService extends ChangeNotifier {
   static final LabDeskSyncService instance = LabDeskSyncService._internal();
   LabDeskSyncService._internal() {
     _seedDefaults();
   }
 
-  static const String defaultLab = 'Lab Komputer 1';
-  static const String currentSessionKey = 'PEMOB-PERTEMUAN-5';
+  /// Lab cadangan bila belum ada sesi presensi (data lokal/offline).
+  static const String defaultLab = 'Lab Jaringan 1';
+
+  /// Kunci sesi pemakaian meja = praktikum + pertemuan dari sesi presensi
+  static String get currentSessionKey {
+    final s = PresensiSyncService.instance.activeSession;
+    return '${s.courseId.toUpperCase()}-PERTEMUAN-${s.meetingNumber}';
+  }
 
   final Map<String, Map<int, LabDeskRecord>> _desksByLab = {};
   final Map<String, List<LabSoftwareRecord>> _softwareByLab = {};
   final List<LabTicketRecord> _tickets = [];
 
-  /// Riwayat laporan bawaan Figma (ditampilkan bersama laporan baru dari DB).
+  /// Riwayat laporan bawaan (ditampilkan bersama laporan baru dari DB).
   final List<PrakReport> _seedPraktikanReports = const [
     PrakReport('wifi', 'Koneksi jaringan putus', 'Lab Jaringan 2 • 27 Sep', 1),
     PrakReport('projector', 'Proyektor buram', 'Lab Komputer 1 • 24 Sep', 2),
@@ -309,7 +353,7 @@ class LabDeskSyncService extends ChangeNotifier {
     _desksByLab.clear();
     const availableDesks = {3, 8, 14, 17, 25, 27, 30};
 
-    // 30 meja untuk Lab Komputer 1 sesuai Figma
+    // 30 meja untuk Lab Komputer 1
     _desksByLab[defaultLab] = {
       for (var i = 1; i <= 30; i++)
         i: LabDeskRecord(
@@ -324,18 +368,38 @@ class LabDeskSyncService extends ChangeNotifier {
           bookedByName: i == 12
               ? 'Rina Novita'
               : (!availableDesks.contains(i) && i != 23
-                  ? 'Praktikan Sesi Aktif'
-                  : null),
+                    ? 'Praktikan Sesi Aktif'
+                    : null),
         ),
     };
 
     // Lab lain (30 meja masing-masing) untuk Denah Meja & Data Inventaris Laboran
     final labConfigs = <String, ({int broken, int takenCount, String spec})>{
-      'Lab Jaringan 1': (broken: 23, takenCount: 22, spec: LaboranStore.defaultSpec),
-      'Lab Jaringan 2': (broken: 12, takenCount: 16, spec: LaboranStore.defaultSpec),
-      'Lab Jaringan 3': (broken: 7, takenCount: 12, spec: 'Core i7-12700 • 16 GB • SSD 512 GB'),
-      'Lab Jaringan 4': (broken: 19, takenCount: 10, spec: 'Core i7-12700 • 16 GB • SSD 512 GB'),
-      'Lab Multimedia': (broken: 12, takenCount: 8, spec: LaboranStore.defaultSpec),
+      'Lab Jaringan 1': (
+        broken: 23,
+        takenCount: 22,
+        spec: LaboranStore.defaultSpec,
+      ),
+      'Lab Jaringan 2': (
+        broken: 12,
+        takenCount: 16,
+        spec: LaboranStore.defaultSpec,
+      ),
+      'Lab Jaringan 3': (
+        broken: 7,
+        takenCount: 12,
+        spec: 'Core i7-12700 • 16 GB • SSD 512 GB',
+      ),
+      'Lab Jaringan 4': (
+        broken: 19,
+        takenCount: 10,
+        spec: 'Core i7-12700 • 16 GB • SSD 512 GB',
+      ),
+      'Lab Multimedia': (
+        broken: 12,
+        takenCount: 8,
+        spec: LaboranStore.defaultSpec,
+      ),
     };
     for (final entry in labConfigs.entries) {
       final lab = entry.key;
@@ -362,138 +426,163 @@ class LabDeskSyncService extends ChangeNotifier {
       ..addAll({
         defaultLab: [
           LabSoftwareRecord(
-              labName: defaultLab,
-              name: 'MySQL 8.0',
-              icon: 'database_outline',
-              installed: true),
+            labName: defaultLab,
+            name: 'MySQL 8.0',
+            icon: 'database_outline',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: defaultLab,
-              name: 'PostgreSQL 16',
-              icon: 'database_outline',
-              installed: true),
+            labName: defaultLab,
+            name: 'PostgreSQL 16',
+            icon: 'database_outline',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: defaultLab,
-              name: 'Android Studio',
-              icon: 'code_tags',
-              installed: false),
+            labName: defaultLab,
+            name: 'Android Studio',
+            icon: 'code_tags',
+            installed: false,
+          ),
           LabSoftwareRecord(
-              labName: defaultLab,
-              name: 'Visual Studio Code',
-              icon: 'code_tags',
-              installed: true),
+            labName: defaultLab,
+            name: 'Visual Studio Code',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: defaultLab,
-              name: 'Figma Desktop',
-              icon: 'pencil',
-              installed: true),
+            labName: defaultLab,
+            name: 'Figma Desktop',
+            icon: 'pencil',
+            installed: true,
+          ),
         ],
         'Lab Jaringan 2': [
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 2',
-              name: 'Cisco Packet Tracer',
-              icon: 'wifi',
-              installed: true),
+            labName: 'Lab Jaringan 2',
+            name: 'Cisco Packet Tracer',
+            icon: 'wifi',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 2',
-              name: 'Wireshark',
-              icon: 'wifi',
-              installed: true),
+            labName: 'Lab Jaringan 2',
+            name: 'Wireshark',
+            icon: 'wifi',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 2',
-              name: 'PuTTY / OpenSSH',
-              icon: 'code_tags',
-              installed: true),
+            labName: 'Lab Jaringan 2',
+            name: 'PuTTY / OpenSSH',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 2',
-              name: 'VirtualBox',
-              icon: 'desktop_device',
-              installed: true),
+            labName: 'Lab Jaringan 2',
+            name: 'VirtualBox',
+            icon: 'desktop_device',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 2',
-              name: 'GNS3',
-              icon: 'wifi',
-              installed: false),
+            labName: 'Lab Jaringan 2',
+            name: 'GNS3',
+            icon: 'wifi',
+            installed: false,
+          ),
         ],
         'Lab Jaringan 3': [
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 3',
-              name: 'Figma Desktop',
-              icon: 'pencil',
-              installed: true),
+            labName: 'Lab Jaringan 3',
+            name: 'Figma Desktop',
+            icon: 'pencil',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 3',
-              name: 'Blender 4.2',
-              icon: 'desktop_device',
-              installed: true),
+            labName: 'Lab Jaringan 3',
+            name: 'Blender 4.2',
+            icon: 'desktop_device',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 3',
-              name: 'Visual Studio Code',
-              icon: 'code_tags',
-              installed: true),
+            labName: 'Lab Jaringan 3',
+            name: 'Visual Studio Code',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 3',
-              name: 'Unity Hub',
-              icon: 'code_tags',
-              installed: false),
+            labName: 'Lab Jaringan 3',
+            name: 'Unity Hub',
+            icon: 'code_tags',
+            installed: false,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 3',
-              name: 'OBS Studio',
-              icon: 'camera',
-              installed: true),
+            labName: 'Lab Jaringan 3',
+            name: 'OBS Studio',
+            icon: 'camera',
+            installed: true,
+          ),
         ],
         'Lab Jaringan 4': [
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 4',
-              name: 'Python 3.12 & Anaconda',
-              icon: 'code_tags',
-              installed: true),
+            labName: 'Lab Jaringan 4',
+            name: 'Python 3.12 & Anaconda',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 4',
-              name: 'JupyterLab',
-              icon: 'code_tags',
-              installed: true),
+            labName: 'Lab Jaringan 4',
+            name: 'JupyterLab',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 4',
-              name: 'Docker Desktop',
-              icon: 'database_outline',
-              installed: true),
+            labName: 'Lab Jaringan 4',
+            name: 'Docker Desktop',
+            icon: 'database_outline',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 4',
-              name: 'Visual Studio Code',
-              icon: 'code_tags',
-              installed: true),
+            labName: 'Lab Jaringan 4',
+            name: 'Visual Studio Code',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Jaringan 4',
-              name: 'CUDA Toolkit 12',
-              icon: 'desktop_device',
-              installed: false),
+            labName: 'Lab Jaringan 4',
+            name: 'CUDA Toolkit 12',
+            icon: 'desktop_device',
+            installed: false,
+          ),
         ],
         'Lab Multimedia': [
           LabSoftwareRecord(
-              labName: 'Lab Multimedia',
-              name: 'Figma Desktop',
-              icon: 'pencil',
-              installed: true),
+            labName: 'Lab Multimedia',
+            name: 'Figma Desktop',
+            icon: 'pencil',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Multimedia',
-              name: 'Blender 4.2',
-              icon: 'desktop_device',
-              installed: true),
+            labName: 'Lab Multimedia',
+            name: 'Blender 4.2',
+            icon: 'desktop_device',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Multimedia',
-              name: 'Visual Studio Code',
-              icon: 'code_tags',
-              installed: true),
+            labName: 'Lab Multimedia',
+            name: 'Visual Studio Code',
+            icon: 'code_tags',
+            installed: true,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Multimedia',
-              name: 'Unity Hub',
-              icon: 'code_tags',
-              installed: false),
+            labName: 'Lab Multimedia',
+            name: 'Unity Hub',
+            icon: 'code_tags',
+            installed: false,
+          ),
           LabSoftwareRecord(
-              labName: 'Lab Multimedia',
-              name: 'OBS Studio',
-              icon: 'camera',
-              installed: true),
+            labName: 'Lab Multimedia',
+            name: 'OBS Studio',
+            icon: 'camera',
+            installed: true,
+          ),
         ],
       });
 
@@ -594,8 +683,11 @@ class LabDeskSyncService extends ChangeNotifier {
       if (ticketRows.isNotEmpty) {
         _tickets
           ..clear()
-          ..addAll(ticketRows
-              .map((r) => LabTicketRecord.fromJson(Map<String, dynamic>.from(r))));
+          ..addAll(
+            ticketRows.map(
+              (r) => LabTicketRecord.fromJson(Map<String, dynamic>.from(r)),
+            ),
+          );
         _backendAvailable = true;
       }
 
@@ -607,7 +699,9 @@ class LabDeskSyncService extends ChangeNotifier {
         if (swRows.isNotEmpty) {
           final grouped = <String, List<LabSoftwareRecord>>{};
           for (final r in swRows) {
-            final rec = LabSoftwareRecord.fromJson(Map<String, dynamic>.from(r));
+            final rec = LabSoftwareRecord.fromJson(
+              Map<String, dynamic>.from(r),
+            );
             grouped.putIfAbsent(rec.labName, () => []).add(rec);
           }
           for (final entry in grouped.entries) {
@@ -620,11 +714,13 @@ class LabDeskSyncService extends ChangeNotifier {
 
       notifyListeners();
       debugPrint(
-          '[LabDeskSync] Berhasil sinkronisasi dari Supabase (${deskRows.length} meja, ${ticketRows.length} tiket).');
+        '[LabDeskSync] Berhasil sinkronisasi dari Supabase (${deskRows.length} meja, ${ticketRows.length} tiket).',
+      );
     } catch (e) {
       _backendAvailable = false;
       debugPrint(
-          '[LabDeskSync] Tabel Supabase belum tersedia / offline, menggunakan sinkronisasi memori bersama: $e');
+        '[LabDeskSync] Tabel Supabase belum tersedia / offline, menggunakan sinkronisasi memori bersama: $e',
+      );
     }
   }
 
@@ -659,15 +755,11 @@ class LabDeskSyncService extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Getter untuk Praktikan, Aslab, dan Laboran
-  // ---------------------------------------------------------------------------
 
   Map<int, PrakDesk> deskStatusMap({String labName = defaultLab}) {
     final map = _desksByLab[labName] ?? const {};
-    return {
-      for (var i = 1; i <= 30; i++) i: map[i]?.status ?? PrakDesk.taken,
-    };
+    return {for (var i = 1; i <= 30; i++) i: map[i]?.status ?? PrakDesk.taken};
   }
 
   LabDeskRecord? deskRecord(int deskNumber, {String labName = defaultLab}) {
@@ -675,8 +767,7 @@ class LabDeskSyncService extends ChangeNotifier {
   }
 
   int takenCount({String labName = defaultLab}) {
-    return deskStatusMap(labName: labName)
-        .values
+    return deskStatusMap(labName: labName).values
         .where((s) => s == PrakDesk.taken)
         .length;
   }
@@ -730,7 +821,7 @@ class LabDeskSyncService extends ChangeNotifier {
     return ((ok * 100) / list.length).round();
   }
 
-  /// Tambah software baru ke inventaris lab (Figma: "Sheet Tambah Software-Laboran").
+  /// Bottom sheet Tambah Software (Laboran).
   Future<void> addSoftware({
     required String labName,
     required String softwareName,
@@ -740,33 +831,35 @@ class LabDeskSyncService extends ChangeNotifier {
     String icon = 'code_tags',
   }) async {
     final list = _softwareByLab.putIfAbsent(labName, () => []);
-    list.add(LabSoftwareRecord(
-      labName: labName,
-      name: softwareName,
-      version: version,
-      targetScope: targetScope,
-      icon: icon,
-      installed: installed,
-    ));
+    list.add(
+      LabSoftwareRecord(
+        labName: labName,
+        name: softwareName,
+        version: version,
+        targetScope: targetScope,
+        icon: icon,
+        installed: installed,
+      ),
+    );
     notifyListeners();
 
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client.from('lab_software').upsert(
-          {
-            'lab_name': labName,
-            'software_name': softwareName,
-            'version': version,
-            'target_scope': targetScope,
-            'icon': icon,
-            'is_installed': installed,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onConflict: 'lab_name,software_name',
-        );
+        await client.from('lab_software').upsert({
+          'lab_name': labName,
+          'software_name': softwareName,
+          'version': version,
+          'target_scope': targetScope,
+          'icon': icon,
+          'is_installed': installed,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'lab_name,software_name');
       } catch (e) {
         debugPrint('[LabDeskSync] addSoftware error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Perubahan inventaris gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -789,6 +882,9 @@ class LabDeskSyncService extends ChangeNotifier {
             .eq('software_name', softwareName);
       } catch (e) {
         debugPrint('[LabDeskSync] deleteSoftware error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Perubahan inventaris gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -805,8 +901,10 @@ class LabDeskSyncService extends ChangeNotifier {
   }
 
   /// Tiket aktif terbaru untuk nomor meja tertentu (jika ada).
-  LabTicketRecord? activeTicketForDesk(int deskNumber,
-      {String labName = defaultLab}) {
+  LabTicketRecord? activeTicketForDesk(
+    int deskNumber, {
+    String labName = defaultLab,
+  }) {
     for (final t in _tickets) {
       if (t.labName == labName && t.deskNumber == deskNumber && t.status < 2) {
         return t;
@@ -842,11 +940,13 @@ class LabDeskSyncService extends ChangeNotifier {
   /// Laporan untuk Praktikan (laporan dari praktikan + riwayat bawaan).
   List<PrakReport> reportsForPraktikan({String? reporterId}) {
     final mine = _tickets
-        .where((t) =>
-            t.reporterRole == 'praktikan' &&
-            (reporterId == null ||
-                t.reporterId == null ||
-                t.reporterId == reporterId))
+        .where(
+          (t) =>
+              t.reporterRole == 'praktikan' &&
+              (reporterId == null ||
+                  t.reporterId == null ||
+                  t.reporterId == reporterId),
+        )
         .map((t) => t.toPrakReport())
         .toList();
     return [...mine, ..._seedPraktikanReports];
@@ -861,12 +961,9 @@ class LabDeskSyncService extends ChangeNotifier {
     return [...aslabTickets, ..._seedAslabReports];
   }
 
-  // ---------------------------------------------------------------------------
   // Aksi lintas role (menulis ke Supabase + update memori + notifyListeners)
-  // ---------------------------------------------------------------------------
 
-  /// Booking meja oleh Praktikan. Sinkron ke Praktikan Meja Kamu,
-  /// Laboran Denah Meja, dan Supabase (`lab_desks` + `desk_bookings`).
+  /// Booking meja oleh Praktikan. Sinkron ke Praktikan Meja Kamu
   Future<DeskBookingResult> bookDesk({
     String labName = defaultLab,
     required int deskNumber,
@@ -910,7 +1007,9 @@ class LabDeskSyncService extends ChangeNotifier {
             .maybeSingle();
 
         if (fresh != null) {
-          final freshStatus = LabDeskRecord.parseStatus(fresh['status'] as String?);
+          final freshStatus = LabDeskRecord.parseStatus(
+            fresh['status'] as String?,
+          );
           final freshUser = fresh['booked_by_user_id'] as String?;
           if (freshStatus == PrakDesk.broken) {
             target.status = PrakDesk.broken;
@@ -968,16 +1067,18 @@ class LabDeskSyncService extends ChangeNotifier {
 
     if (client != null) {
       try {
-        // 1. Utamakan RPC PostgreSQL `claim_or_move_desk` (1 transaksi atomik + row lock FOR UPDATE)
         bool rpcHandled = false;
         try {
-          final rpcRes = await client.rpc('claim_or_move_desk', params: {
-            'p_lab_name': labName,
-            'p_desk_number': deskNumber,
-            'p_user_id': userKey,
-            'p_user_name': userName,
-            'p_session_key': currentSessionKey,
-          });
+          final rpcRes = await client.rpc(
+            'claim_or_move_desk',
+            params: {
+              'p_lab_name': labName,
+              'p_desk_number': deskNumber,
+              'p_user_id': userKey,
+              'p_user_name': userName,
+              'p_session_key': currentSessionKey,
+            },
+          );
           if (rpcRes is Map) {
             rpcHandled = true;
             final ok = rpcRes['success'] == true;
@@ -989,16 +1090,19 @@ class LabDeskSyncService extends ChangeNotifier {
               await refreshFromBackend();
               return DeskBookingResult(
                 success: false,
-                errorMessage: (rpcRes['error'] ??
-                        'Meja ${deskNumber.toString().padLeft(2, '0')} sudah ditempati praktikan lain')
-                    .toString(),
+                errorMessage:
+                    (rpcRes['error'] ??
+                            'Meja ${deskNumber.toString().padLeft(2, '0')} sudah ditempati praktikan lain')
+                        .toString(),
               );
             }
             synced = true;
             _backendAvailable = true;
           }
         } catch (e) {
-          debugPrint('[LabDeskSync] RPC claim_or_move_desk fallback conditional update: $e');
+          debugPrint(
+            '[LabDeskSync] RPC claim_or_move_desk fallback conditional update: $e',
+          );
         }
 
         if (!rpcHandled) {
@@ -1009,9 +1113,9 @@ class LabDeskSyncService extends ChangeNotifier {
                 'status': 'taken',
                 'booked_by_user_id': userKey,
                 'booked_by_name': userName,
-                'booked_at': now.toIso8601String(),
+                'booked_at': now.toUtc().toIso8601String(),
                 'session_key': currentSessionKey,
-                'updated_at': now.toIso8601String(),
+                'updated_at': now.toUtc().toIso8601String(),
               })
               .eq('lab_name', labName)
               .eq('desk_number', deskNumber)
@@ -1037,23 +1141,20 @@ class LabDeskSyncService extends ChangeNotifier {
                     'Meja ${deskNumber.toString().padLeft(2, '0')} baru saja ditempati praktikan lain',
               );
             }
-            await client.from('lab_desks').upsert(
-              {
-                'lab_name': labName,
-                'desk_number': deskNumber,
-                'pc_code': target.pcCode,
-                'row_num': target.rowNum,
-                'col_num': target.colNum,
-                'spec': target.spec,
-                'status': 'taken',
-                'booked_by_user_id': userKey,
-                'booked_by_name': userName,
-                'booked_at': now.toIso8601String(),
-                'session_key': currentSessionKey,
-                'updated_at': now.toIso8601String(),
-              },
-              onConflict: 'lab_name,desk_number',
-            );
+            await client.from('lab_desks').upsert({
+              'lab_name': labName,
+              'desk_number': deskNumber,
+              'pc_code': target.pcCode,
+              'row_num': target.rowNum,
+              'col_num': target.colNum,
+              'spec': target.spec,
+              'status': 'taken',
+              'booked_by_user_id': userKey,
+              'booked_by_name': userName,
+              'booked_at': now.toUtc().toIso8601String(),
+              'session_key': currentSessionKey,
+              'updated_at': now.toUtc().toIso8601String(),
+            }, onConflict: 'lab_name,desk_number');
           }
 
           if (prevDeskNum != null && prevDeskNum != deskNumber) {
@@ -1064,7 +1165,7 @@ class LabDeskSyncService extends ChangeNotifier {
                   'booked_by_user_id': null,
                   'booked_by_name': null,
                   'booked_at': null,
-                  'updated_at': now.toIso8601String(),
+                  'updated_at': now.toUtc().toIso8601String(),
                 })
                 .eq('lab_name', labName)
                 .eq('desk_number', prevDeskNum);
@@ -1086,18 +1187,60 @@ class LabDeskSyncService extends ChangeNotifier {
             'user_identifier': userKey,
             'user_name': userName,
             'status': 'active',
-            'booked_at': now.toIso8601String(),
+            'booked_at': now.toUtc().toIso8601String(),
           });
 
           synced = true;
           _backendAvailable = true;
         }
       } catch (e) {
-        debugPrint('[LabDeskSync] Pemakaian meja disimpan lokal (Supabase error): $e');
+        debugPrint(
+          '[LabDeskSync] Pemakaian meja disimpan lokal (Supabase error): $e',
+        );
       }
     }
 
+    // Satu praktikan hanya boleh memakai satu meja: lepaskan meja lain yang
+    await _releaseOtherDesksOf(userKey, keepLab: labName, keepDesk: deskNumber);
+
     return DeskBookingResult(success: true, syncedToBackend: synced);
+  }
+
+  Future<void> _releaseOtherDesksOf(
+    String userKey, {
+    required String keepLab,
+    required int keepDesk,
+  }) async {
+    final others = <(String, int)>{};
+    _desksByLab.forEach((lab, desks) {
+      desks.forEach((n, rec) {
+        if (rec.bookedByUserId == userKey &&
+            !(lab == keepLab && n == keepDesk)) {
+          others.add((lab, n));
+        }
+      });
+    });
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        final rows = await client
+            .from('lab_desks')
+            .select('lab_name, desk_number')
+            .eq('booked_by_user_id', userKey);
+        for (final r in rows) {
+          final lab = (r['lab_name'] ?? '').toString();
+          final n = (r['desk_number'] as num?)?.toInt();
+          if (n != null && !(lab == keepLab && n == keepDesk)) {
+            others.add((lab, n));
+          }
+        }
+      } catch (e) {
+        debugPrint('[LabDeskSync] Gagal membaca meja lain milik $userKey: $e');
+      }
+    }
+    for (final (lab, n) in others) {
+      await releaseDesk(labName: lab, deskNumber: n, userKey: userKey);
+    }
   }
 
   /// Lepaskan meja yang sedang dipakai Praktikan ("Akhiri Pemakaian Meja").
@@ -1124,11 +1267,11 @@ class LabDeskSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        final now = DateTime.now().toIso8601String();
+        final now = DateTime.now().toUtc().toIso8601String();
+        // Kosongkan pemakai meja. Status hanya kembali "available" bila meja
         await client
             .from('lab_desks')
             .update({
-              'status': 'available',
               'booked_by_user_id': null,
               'booked_by_name': null,
               'booked_at': null,
@@ -1136,12 +1279,18 @@ class LabDeskSyncService extends ChangeNotifier {
             })
             .eq('lab_name', labName)
             .eq('desk_number', deskNumber);
+        await client
+            .from('lab_desks')
+            .update({'status': 'available', 'updated_at': now})
+            .eq('lab_name', labName)
+            .eq('desk_number', deskNumber)
+            .eq('status', 'taken');
 
         await client
             .from('desk_bookings')
             .update({'status': 'released'})
             .eq('lab_name', labName)
-            .eq('session_key', currentSessionKey)
+            .eq('desk_number', deskNumber)
             .eq('user_identifier', userKey)
             .eq('status', 'active');
       } catch (e) {
@@ -1171,7 +1320,7 @@ class LabDeskSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        final now = DateTime.now().toIso8601String();
+        final now = DateTime.now().toUtc().toIso8601String();
         await client
             .from('lab_desks')
             .update({
@@ -1196,8 +1345,6 @@ class LabDeskSyncService extends ChangeNotifier {
   }
 
   /// Ubah kesiapan meja (Siap / Rusak) dari Inventaris Laboran atau
-  /// otomatis saat Praktikan/Aslab melapor kerusakan meja.
-  /// Sinkron langsung ke Denah Meja Laboran, Inventaris & Pilih Meja Praktikan.
   Future<void> setDeskReadiness({
     required String labName,
     required int deskNumber,
@@ -1234,20 +1381,17 @@ class LabDeskSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client.from('lab_desks').upsert(
-          {
-            'lab_name': labName,
-            'desk_number': deskNumber,
-            'pc_code': rec.pcCode,
-            'spec': rec.spec,
-            'status': LabDeskRecord.serializeStatus(rec.status),
-            'booked_by_user_id': rec.bookedByUserId,
-            'booked_by_name': rec.bookedByName,
-            'booked_at': rec.bookedAt?.toIso8601String(),
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'lab_name,desk_number',
-        );
+        await client.from('lab_desks').upsert({
+          'lab_name': labName,
+          'desk_number': deskNumber,
+          'pc_code': rec.pcCode,
+          'spec': rec.spec,
+          'status': LabDeskRecord.serializeStatus(rec.status),
+          'booked_by_user_id': rec.bookedByUserId,
+          'booked_by_name': rec.bookedByName,
+          'booked_at': rec.bookedAt?.toUtc().toIso8601String(),
+          'updated_at': now.toUtc().toIso8601String(),
+        }, onConflict: 'lab_name,desk_number');
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[LabDeskSync] Update readiness error: $e');
@@ -1279,20 +1423,20 @@ class LabDeskSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client.from('lab_desks').upsert(
-          {
-            'lab_name': labName,
-            'desk_number': deskNumber,
-            'pc_code': rec.pcCode,
-            'spec': rec.spec,
-            'status': LabDeskRecord.serializeStatus(rec.status),
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onConflict: 'lab_name,desk_number',
-        );
+        await client.from('lab_desks').upsert({
+          'lab_name': labName,
+          'desk_number': deskNumber,
+          'pc_code': rec.pcCode,
+          'spec': rec.spec,
+          'status': LabDeskRecord.serializeStatus(rec.status),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'lab_name,desk_number');
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[LabDeskSync] Add device error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Perubahan inventaris gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
     return true;
@@ -1310,8 +1454,8 @@ class LabDeskSyncService extends ChangeNotifier {
     final existing = labMap[deskNumber];
     final nextStatus = ready
         ? (existing?.status == PrakDesk.taken
-            ? PrakDesk.taken
-            : PrakDesk.available)
+              ? PrakDesk.taken
+              : PrakDesk.available)
         : PrakDesk.broken;
     final updated = LabDeskRecord(
       labName: labName,
@@ -1329,23 +1473,23 @@ class LabDeskSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client.from('lab_desks').upsert(
-          {
-            'lab_name': labName,
-            'desk_number': deskNumber,
-            'pc_code': updated.pcCode,
-            'spec': updated.spec,
-            'status': LabDeskRecord.serializeStatus(updated.status),
-            'booked_by_user_id': updated.bookedByUserId,
-            'booked_by_name': updated.bookedByName,
-            'booked_at': updated.bookedAt?.toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onConflict: 'lab_name,desk_number',
-        );
+        await client.from('lab_desks').upsert({
+          'lab_name': labName,
+          'desk_number': deskNumber,
+          'pc_code': updated.pcCode,
+          'spec': updated.spec,
+          'status': LabDeskRecord.serializeStatus(updated.status),
+          'booked_by_user_id': updated.bookedByUserId,
+          'booked_by_name': updated.bookedByName,
+          'booked_at': updated.bookedAt?.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'lab_name,desk_number');
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[LabDeskSync] Update device error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Perubahan inventaris gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -1373,6 +1517,9 @@ class LabDeskSyncService extends ChangeNotifier {
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[LabDeskSync] Delete device error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Perubahan inventaris gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -1399,19 +1546,19 @@ class LabDeskSyncService extends ChangeNotifier {
     final client = SupabaseService.instance.client;
     if (client != null) {
       try {
-        await client.from('lab_software').upsert(
-          {
-            'lab_name': labName,
-            'software_name': target.name,
-            'icon': target.icon,
-            'is_installed': target.installed,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onConflict: 'lab_name,software_name',
-        );
+        await client.from('lab_software').upsert({
+          'lab_name': labName,
+          'software_name': target.name,
+          'icon': target.icon,
+          'is_installed': target.installed,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'lab_name,software_name');
         _backendAvailable = true;
       } catch (e) {
         debugPrint('[LabDeskSync] Toggle software error: $e');
+        await refreshFromBackend();
+        throw StateError(
+            'Perubahan inventaris gagal disimpan. Periksa koneksi lalu coba lagi.');
       }
     }
   }
@@ -1429,8 +1576,6 @@ class LabDeskSyncService extends ChangeNotifier {
   }
 
   /// Buat laporan kerusakan dari Praktikan (halaman Laporkan Kerusakan Meja)
-  /// atau Aslab (halaman Lapor Kendala). Langsung masuk ke Tiket Perbaikan &
-  /// Denah Meja Laboran.
   Future<LabTicketRecord> createTicket({
     required String labName,
     int? deskNumber,
@@ -1443,9 +1588,41 @@ class LabDeskSyncService extends ChangeNotifier {
     required String reporterName,
     required String reporterRole,
     String photoName = 'foto_kendala.jpg',
+    String? photoPath,
   }) async {
     final code = _nextTicketCode();
     final now = DateTime.now();
+
+    // Simpan perubahan ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('lab_tickets').insert({
+          'ticket_code': code,
+          'lab_name': labName,
+          'desk_number': deskNumber,
+          'pc_code': pcCode,
+          'icon': icon,
+          'category': category,
+          'title': title,
+          'description': description,
+          'reporter_id': reporterId,
+          'reporter_name': reporterName,
+          'reporter_role': reporterRole,
+          'photo_name': photoName,
+          'photo_url': photoPath,
+          'status': 0,
+          'handling_note': '',
+          'created_at': now.toUtc().toIso8601String(),
+          'updated_at': now.toUtc().toIso8601String(),
+        });
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[LabDeskSync] createTicket error: $e');
+        throw StateError(
+            'Laporan gagal dikirim. Periksa koneksi internet lalu coba lagi.');
+      }
+    }
     final rec = LabTicketRecord(
       ticketCode: code,
       labName: labName,
@@ -1459,6 +1636,7 @@ class LabDeskSyncService extends ChangeNotifier {
       reporterName: reporterName,
       reporterRole: reporterRole,
       photoName: photoName,
+      photoUrl: photoPath,
       status: 0,
       createdAt: now,
     );
@@ -1479,9 +1657,10 @@ class LabDeskSyncService extends ChangeNotifier {
     NotificationSyncService.instance.push(
       role: 'laboran',
       icon: 'wrench_outline',
-      title: 'Tiket Kerusakan Baru ($code)',
+      title: 'Laporan Kerusakan Baru ($code)',
       body: '$labName • $title (dilaporkan oleh $reporterName)',
       targetKey: 'tiket',
+      courseId: null,
       important: true,
     );
 
@@ -1496,38 +1675,10 @@ class LabDeskSyncService extends ChangeNotifier {
       );
     }
 
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('lab_tickets').insert({
-          'ticket_code': code,
-          'lab_name': labName,
-          'desk_number': deskNumber,
-          'pc_code': pcCode,
-          'icon': icon,
-          'category': category,
-          'title': title,
-          'description': description,
-          'reporter_id': reporterId,
-          'reporter_name': reporterName,
-          'reporter_role': reporterRole,
-          'photo_name': photoName,
-          'status': 0,
-          'handling_note': '',
-          'created_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
-        });
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[LabDeskSync] Create ticket disimpan lokal (Supabase error): $e');
-      }
-    }
     return rec;
   }
 
   /// Perbarui status tiket (0 Reported, 1 In Progress, 2 Resolved) oleh Laboran.
-  /// Otomatis sinkron ke Praktikan ("Laporan Saya"), Aslab ("Laporan Saya"),
-  /// Denah Meja, dan Data Inventaris (jika Resolved, meja rusak kembali Siap).
   Future<void> updateTicketStatus({
     required String ticketCode,
     required int status,
@@ -1542,16 +1693,45 @@ class LabDeskSyncService extends ChangeNotifier {
     }
     if (target == null) return;
 
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    final statusLabel = status == 2
+        ? 'Selesai'
+        : (status == 1 ? 'Ditangani' : 'Baru');
+    final newHistory = [
+      ...target.statusHistory,
+      {
+        'status': statusLabel.toLowerCase(),
+        'note': handlingNote,
+        'updated_at': nowIso,
+      },
+    ];
+
+    // Simpan perubahan ke database
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client
+            .from('lab_tickets')
+            .update({
+              'status': status,
+              'handling_note': handlingNote,
+              'status_history_json': newHistory,
+              'updated_at': nowIso,
+            })
+            .eq('ticket_code', ticketCode);
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[LabDeskSync] Update ticket error: $e');
+        throw StateError(
+            'Status tiket gagal disimpan. Periksa koneksi lalu coba lagi.');
+      }
+    }
+
     target.status = status;
     target.handlingNote = handlingNote;
-    final nowIso = DateTime.now().toIso8601String();
-    final statusLabel =
-        status == 2 ? 'Selesai' : (status == 1 ? 'Ditangani' : 'Baru');
-    target.statusHistory.add({
-      'status': statusLabel.toLowerCase(),
-      'note': handlingNote,
-      'updated_at': nowIso,
-    });
+    target.statusHistory
+      ..clear()
+      ..addAll(newHistory);
 
     // Sinkronkan kondisi meja di Denah & Inventaris berdasarkan status tiket
     if (target.deskNumber != null) {
@@ -1579,6 +1759,7 @@ class LabDeskSyncService extends ChangeNotifier {
     final noteSuffix = handlingNote.isNotEmpty ? ' • $handlingNote' : '';
     NotificationSyncService.instance.push(
       role: target.reporterRole == 'aslab' ? 'aslab' : 'praktikan',
+      targetUser: target.reporterId,
       icon: status == 2 ? 'circle_check' : 'wrench_outline',
       title: 'Laporan $ticketCode: $statusLabel',
       body: '${target.title} (${target.labName})$noteSuffix',
@@ -1593,25 +1774,11 @@ class LabDeskSyncService extends ChangeNotifier {
         role: 'aslab',
         icon: 'circle_check',
         title: 'Perbaikan Meja Selesai ($ticketCode)',
-        body: '${target.title} (${target.labName}) siap digunakan kembali$noteSuffix',
+        body:
+            '${target.title} (${target.labName}) siap digunakan kembali$noteSuffix',
         targetKey: 'laporKendala',
         important: false,
       );
-    }
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.from('lab_tickets').update({
-          'status': status,
-          'handling_note': handlingNote,
-          'status_history_json': target.statusHistory,
-          'updated_at': nowIso,
-        }).eq('ticket_code', ticketCode);
-        _backendAvailable = true;
-      } catch (e) {
-        debugPrint('[LabDeskSync] Update ticket error: $e');
-      }
     }
   }
 }
