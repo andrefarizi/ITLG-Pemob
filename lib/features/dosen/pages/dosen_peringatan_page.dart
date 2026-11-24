@@ -6,6 +6,7 @@ import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
+import '../widgets/dosen_ui.dart';
 
 /// Figma: "Peringatan Dini-Dosen".
 class DosenPeringatanPage extends StatefulWidget {
@@ -25,13 +26,33 @@ class DosenPeringatanPage extends StatefulWidget {
 }
 
 class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+  int _courseFilter = 0;
+  int _sessionFilter = 0;
+
   /// 0 Semua, 1 Kehadiran, 2 Nilai.
   int _tab = 0;
+
+  static const List<String> _courseOptions = [
+    'Semua',
+    'Pemrograman Mobile',
+    'Desain Interaksi',
+    'ADJ',
+    'Machine Learning',
+  ];
+  static const List<String> _sessionOptions = ['C1 & C2', 'Sesi C1', 'Sesi C2'];
 
   @override
   void initState() {
     super.initState();
     NilaiSyncService.instance.refreshFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,9 +67,35 @@ class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
         final all = nilaiSync.liveAtRiskStudents(widget.store.students);
         final lowAttCount = all.where((s) => s.lowAttendance).length;
         final lowScoreCount = all.where((s) => s.lowScore).length;
+        final q = _query.trim().toLowerCase();
         final shown = all.where((s) {
-          if (_tab == 1) return s.lowAttendance;
-          if (_tab == 2) return s.lowScore;
+          if (_tab == 1 && !s.lowAttendance) return false;
+          if (_tab == 2 && !s.lowScore) return false;
+          if (_courseFilter != 0) {
+            final expectedAsisten = switch (_courseFilter) {
+              1 => 'andi',
+              2 => 'feri',
+              3 => 'sinta',
+              4 => 'rizky',
+              _ => '',
+            };
+            if (expectedAsisten.isNotEmpty &&
+                !s.asisten.toLowerCase().contains(expectedAsisten)) {
+              return false;
+            }
+          }
+          if (_sessionFilter != 0) {
+            final nimNum = int.tryParse(s.nim.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            final isC1 = s.kelas.toLowerCase().contains('c1') ||
+                (!s.kelas.toLowerCase().contains('c2') && nimNum.isOdd);
+            if (_sessionFilter == 1 && !isC1) return false;
+            if (_sessionFilter == 2 && isC1) return false;
+          }
+          if (q.isNotEmpty &&
+              !s.name.toLowerCase().contains(q) &&
+              !s.nim.contains(q)) {
+            return false;
+          }
           return true;
         }).toList();
 
@@ -58,6 +105,81 @@ class _DosenPeringatanPageState extends State<DosenPeringatanPage> {
               title: 'Peringatan Dini',
               subtitle:
                   'Praktikan dengan kehadiran atau nilai di bawah batas minimal',
+            ),
+            DosenSearchField(
+              hint: 'Cari nama atau NIM praktikan...',
+              controller: _search,
+              onChanged: (v) => setState(() => _query = v),
+              filterActive: _courseFilter != 0 || _sessionFilter != 0,
+              onFilter: () async {
+                final picked = await dosenShowPicker(
+                  context,
+                  title: 'Filter Mata Kuliah',
+                  options: _courseOptions,
+                  selected: _courseFilter,
+                );
+                if (picked != null && mounted) {
+                  setState(() => _courseFilter = picked);
+                }
+              },
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await dosenShowPicker(
+                      context,
+                      title: 'Filter Mata Kuliah',
+                      options: _courseOptions,
+                      selected: _courseFilter,
+                    );
+                    if (picked != null && mounted) {
+                      setState(() => _courseFilter = picked);
+                    }
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: ItlgShadows.outline,
+                    ),
+                    child: Text(
+                      'Mata Kuliah: ${_courseOptions[_courseFilter]}',
+                      style: labText(11, w: kBold, c: ItlgColors.text),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await dosenShowPicker(
+                      context,
+                      title: 'Filter Sesi',
+                      options: _sessionOptions,
+                      selected: _sessionFilter,
+                    );
+                    if (picked != null && mounted) {
+                      setState(() => _sessionFilter = picked);
+                    }
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: ItlgShadows.outline,
+                    ),
+                    child: Text(
+                      'Sesi: ${_sessionOptions[_sessionFilter]}',
+                      style: labText(11, w: kBold, c: ItlgColors.text),
+                    ),
+                  ),
+                ),
+              ],
             ),
             LabStatRow(
               stats: [

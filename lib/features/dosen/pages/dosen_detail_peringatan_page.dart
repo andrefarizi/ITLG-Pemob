@@ -69,6 +69,15 @@ class _DosenDetailPeringatanPageState extends State<DosenDetailPeringatanPage> {
               ),
               child: DosenStudentCard(student: s, latestFollowUp: latestFu),
             ),
+            LabPrimaryButton(
+              icon: 'chat_bubble',
+              label: 'Hubungi Asisten Penanggung Jawab',
+              large: true,
+              onTap: () => labPush(
+                context,
+                DosenHubungiPage(student: s, onLogoTap: widget.onLogoTap),
+              ),
+            ),
             LabCard(
               children: [
                 DosenClassTitle(kelas: s.kelas),

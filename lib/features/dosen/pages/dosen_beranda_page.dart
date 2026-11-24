@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/nilai_sync_service.dart';
+import '../../../core/services/notification_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
@@ -262,8 +263,15 @@ class _Greeting extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar yang sama dengan di Figma (dipakai juga oleh Laboran).
-          Image.asset('assets/avatar_laboran.png', width: 64, height: 65),
+          ListenableBuilder(
+            listenable: ProfilData.dosen,
+            builder: (_, __) => LabInitialAvatar(
+              initials: ProfilData.dosen.initials,
+              size: 64,
+              hasPhotoBadge: ProfilData.dosen.photoSource != null,
+              photoSource: ProfilData.dosen.photoSource,
+            ),
+          ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -297,25 +305,12 @@ class _Greeting extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onBell,
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: ItlgColors.primary,
-                shape: BoxShape.circle,
-                boxShadow: ItlgShadows.outline,
-              ),
-              child: Image.asset(
-                'assets/icons/ic_bell_filled.png',
-                width: 13.3,
-                height: 16.7,
-                color: Colors.white,
-                filterQuality: FilterQuality.medium,
-              ),
+          ListenableBuilder(
+            listenable: NotificationSyncService.instance,
+            builder: (_, __) => LabBellButton(
+              unreadCount:
+                  NotificationSyncService.instance.unreadCountForRole('dosen'),
+              onTap: onBell,
             ),
           ),
         ],

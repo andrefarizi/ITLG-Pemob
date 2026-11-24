@@ -154,6 +154,28 @@ class _DosenHubungiPageState extends State<DosenHubungiPage> {
               large: true,
               onTap: _send,
             ),
+            // Figma: Kartu "Riwayat Arahan" (5601:3086)
+            if (history.isNotEmpty)
+              LabCard(
+                gap: 12,
+                children: [
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: LabSectionTitle(
+                        icon: 'clock', text: 'Riwayat Arahan'),
+                  ),
+                  for (final f in history)
+                    LabListItem(
+                      leading: const LabIconTile('chat_bubble'),
+                      title: '${f.followUpType} • ${f.formattedClock}',
+                      subtitle: 'Ke ${f.assistantName} • ${f.message}',
+                      titleSize: 12,
+                      trailing: f.isDone
+                          ? const LabChip.live('Ditindaklanjuti')
+                          : const LabChip.warn('Menunggu'),
+                    ),
+                ],
+              ),
           ],
         );
       },

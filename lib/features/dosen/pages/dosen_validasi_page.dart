@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/services/file_download_service.dart';
 import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../aslab/pages/aslab_sanggahan_nilai_page.dart';
 import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
-import '../../shared/lab_actions.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 import 'dosen_minta_revisi_page.dart';
@@ -71,6 +70,7 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
     );
   }
 
+  /// Figma: "Sheet Rincian Nilai per Modul-Dosen" (5818:3260).
   void _showGradeDetail(
     DosenGrade g,
     String courseId,
@@ -78,43 +78,130 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
     String kelas,
     List<DosenGrade> allGrades,
   ) {
-    final val = NilaiSyncService.instance.validationFor(courseId);
-    final statusVal = val.isValidated
-        ? 'Tervalidasi'
-        : (val.isRevisionRequested ? 'Revisi Diminta' : 'Menunggu Validasi');
-    labShowInfoSheet(
+    final rows = NilaiSyncService.instance.moduleBreakdownForStudent(
+      courseId: courseId,
+      nim: g.nim,
+      fallbackBase: int.tryParse(g.tugas),
+    );
+    ({String label, int score})? lowest;
+    for (final r in rows) {
+      if (r.finalScore != null &&
+          (lowest == null || r.finalScore! < lowest.score)) {
+        lowest = (label: r.label, score: r.finalScore!);
+      }
+    }
+    final hasAppeal =
+        NilaiSyncService.instance.pendingAppealForStudent(courseId, g.nim) !=
+            null;
+    final infoText = lowest != null
+        ? '${lowest.label} paling rendah (${lowest.score}).${hasAppeal ? ' Nilai tugas sedang dalam sanggahan.' : ' Nilai sudah disinkronkan dari penilaian asisten.'}'
+        : 'Rincian nilai per modul tersinkron langsung dari database.';
+
+    labShowCustomSheet<void>(
       context,
-      title: 'Detail Nilai • ${g.name}',
-      rows: [
-        ('card_account_details_outline', 'NIM', g.nim),
-        ('book_open', 'Praktikum', '$courseName ($kelas)'),
-        ('clipboard', 'Nilai Tugas', g.tugas),
-        ('people_group', 'Presensi', g.presensi),
-        ('trophy', 'Nilai Akhir', '${g.akhir} (${g.huruf})'),
-        ('circle_check', 'Status', g.lulus ? 'Lulus • $statusVal' : 'Tidak Lulus • $statusVal'),
-      ],
-      primary: (
-        'download',
-        'Unduh Rekap Kelas (.xlsx)',
-        () async {
-          final fname = 'Rekap_Nilai_${courseId.toUpperCase()}.xlsx';
-          final res = await FileDownloadService.instance.downloadFile(
-            fileName: fname,
-            source: 'Rekap Nilai Akhir • $courseName',
-            spreadsheetRows: [
-              ['NIM', 'Nama Praktikan', 'Tugas', 'Presensi', 'Nilai Akhir', 'Huruf', 'Status'],
-              for (final r in allGrades)
-                [r.nim, r.name, r.tugas, r.presensi, r.akhir, r.huruf, r.lulus ? 'Lulus' : 'Tidak Lulus'],
-            ],
-          );
-          if (!mounted) return;
-          labToast(
-            context,
-            res.success
-                ? 'Tersimpan di ${res.location}'
-                : 'Gagal mengunduh $fname',
-          );
-        },
+      title: 'Rincian Nilai • ${g.name}',
+      subtitle: '${g.nim} • $kelas • Nilai Akhir ${g.akhir} (${g.huruf})',
+      child: LabColumn(
+        gap: 14,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: ItlgColors.surfaceDark,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                        flex: 3,
+                        child: Text('Modul',
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Tugas',
+                            textAlign: TextAlign.center,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Kuis',
+                            textAlign: TextAlign.center,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Hadir',
+                            textAlign: TextAlign.center,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Nilai',
+                            textAlign: TextAlign.right,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                  ],
+                ),
+                const Divider(height: 18, color: Color(0xFFE7E9EC)),
+                for (var i = 0; i < rows.length; i++) ...[
+                  if (i > 0)
+                    const Divider(height: 16, color: Color(0xFFECEEF1)),
+                  Row(
+                    children: [
+                      Expanded(
+                          flex: 3,
+                          child: Text(rows[i].label,
+                              style: labText(12, w: kSemiBold))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(
+                              rows[i].tugasScore != null
+                                  ? '${rows[i].tugasScore}'
+                                  : '—',
+                              textAlign: TextAlign.center,
+                              style: labText(
+                                12,
+                                w: (rows[i].tugasScore ?? 100) < 75
+                                    ? kBold
+                                    : kMedium,
+                                c: (rows[i].tugasScore ?? 100) < 75
+                                    ? ItlgColors.primary
+                                    : ItlgColors.text,
+                              ))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(
+                              rows[i].kuisScore != null
+                                  ? '${rows[i].kuisScore}'
+                                  : '—',
+                              textAlign: TextAlign.center,
+                              style: labText(12))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(rows[i].hadir ? '✓' : 'Izin',
+                              textAlign: TextAlign.center,
+                              style: labText(12,
+                                  w: kSemiBold, c: ItlgColors.text))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(
+                              rows[i].finalScore != null
+                                  ? '${rows[i].finalScore}'
+                                  : '—',
+                              textAlign: TextAlign.right,
+                              style: labText(12,
+                                  w: kBold, c: ItlgColors.primary))),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          DosenInfoBox(icon: 'info', text: infoText),
+        ],
       ),
     );
   }
@@ -138,6 +225,7 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
         final livePreview = liveAll.take(5).toList();
         final summary = nilaiSync.summarizeGrades(liveAll);
         final othersCount = (liveAll.length - livePreview.length).clamp(0, 999);
+        final pendingAppeals = nilaiSync.pendingDosenAppealCount;
 
         return LabTabBody(
           children: [
@@ -148,12 +236,39 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     child: done
-                        ? const LabChip.live('Tervalidasi', key: ValueKey('ok'))
+                        ? const LabChip.live('Tervalidasi',
+                            key: ValueKey('ok'))
                         : (valRec.isRevisionRequested
                             ? const LabChip.danger('Revisi Diminta',
                                 key: ValueKey('rev'))
                             : const LabChip.warn('Menunggu Validasi',
                                 key: ValueKey('wait'))),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _pickCourse,
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: ItlgShadows.outline,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Ganti Praktikum',
+                              style: labText(12, w: kBold, c: Colors.black)),
+                          const SizedBox(width: 8),
+                          const LabIcon('chevron_down',
+                              size: 12, color: ItlgColors.textSubtle),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 GestureDetector(
@@ -188,6 +303,32 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
                   text: 'Dinilai oleh ${course.asisten} & Tim Asisten',
                 ),
               ],
+            ),
+            // Figma: Kartu Pintasan "Sanggahan Nilai" (5479:1349)
+            LabListItem(
+              leading: const LabIconTile('triangle_alert'),
+              title: 'Sanggahan Nilai',
+              subtitle: pendingAppeals > 0
+                  ? '$pendingAppeals koreksi nilai menunggu keputusan anda'
+                  : 'Semua sanggahan nilai sudah diputuskan',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (pendingAppeals > 0) ...[
+                    LabTag.red('$pendingAppeals Baru'),
+                    const SizedBox(width: 6),
+                  ],
+                  const LabIcon('chevron_right',
+                      size: 16, color: ItlgColors.primary),
+                ],
+              ),
+              onTap: () => labPush(
+                context,
+                SanggahanNilaiReviewPage(
+                  isDosen: true,
+                  onLogoTap: widget.onHome,
+                ),
+              ),
             ),
             LabCard(
               children: [

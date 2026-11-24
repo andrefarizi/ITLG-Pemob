@@ -5,8 +5,8 @@ import '../../../core/services/nilai_sync_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
+import '../../auth/auth_controller.dart';
 import '../../laboran/widgets/laboran_ui.dart';
-import '../../shared/lab_actions.dart';
 import '../dosen_store.dart';
 import '../widgets/dosen_ui.dart';
 
@@ -30,9 +30,25 @@ class DosenRekapNilaiPage extends StatefulWidget {
 class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
   final TextEditingController _search = TextEditingController();
   String _query = '';
+  late String _activeCourseId = widget.courseId;
 
   /// 0 Semua, 1 Lulus, 2 Tidak Lulus.
   int _tab = 0;
+
+  Future<void> _pickCourse() async {
+    final courses = PraktikumSyncService.instance.courses;
+    final idx = courses.indexWhere((c) => c.id == _activeCourseId);
+    final picked = await dosenShowPicker(
+      context,
+      title: 'Ganti Praktikum',
+      options: [for (final c in courses) '${c.name} (${c.kelas})'],
+      selected: idx < 0 ? 0 : idx,
+    );
+    if (picked != null && picked < courses.length && mounted) {
+      setState(() => _activeCourseId = courses[picked].id);
+      NilaiSyncService.instance.selectCourse(courses[picked].id);
+    }
+  }
 
   @override
   void initState() {
@@ -48,7 +64,7 @@ class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
   }
 
   Future<void> _exportRecap(String courseName, List<DosenGrade> grades) async {
-    final fname = 'Rekap_Nilai_${widget.courseId.toUpperCase()}.xlsx';
+    final fname = 'Rekap_Nilai_${_activeCourseId.toUpperCase()}.xlsx';
     final res = await FileDownloadService.instance.downloadFile(
       fileName: fname,
       source: 'Rekap Nilai Akhir • $courseName',
@@ -66,6 +82,17 @@ class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
           ],
       ],
     );
+    if (res.success) {
+      await NilaiSyncService.instance.recordReportDownload(
+        title: 'Rekap Nilai Akhir $courseName',
+        courseName: courseName,
+        fileName: res.fileName,
+        format: 'XLSX',
+        sizeLabel: res.formattedSize,
+        localPath: res.location,
+        downloadedBy: AuthController.instance.userName,
+      );
+    }
     if (!mounted) return;
     labToast(
       context,
@@ -79,25 +106,130 @@ class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
     String kelas,
     List<DosenGrade> allGrades,
   ) {
-    final val = NilaiSyncService.instance.validationFor(widget.courseId);
-    final statusVal = val.isValidated
-        ? 'Tervalidasi'
-        : (val.isRevisionRequested ? 'Revisi Diminta' : 'Menunggu Validasi');
-    labShowInfoSheet(
+    final rows = NilaiSyncService.instance.moduleBreakdownForStudent(
+      courseId: _activeCourseId,
+      nim: g.nim,
+      fallbackBase: int.tryParse(g.tugas),
+    );
+    ({String label, int score})? lowest;
+    for (final r in rows) {
+      if (r.finalScore != null &&
+          (lowest == null || r.finalScore! < lowest.score)) {
+        lowest = (label: r.label, score: r.finalScore!);
+      }
+    }
+    final hasAppeal = NilaiSyncService.instance
+            .pendingAppealForStudent(_activeCourseId, g.nim) !=
+        null;
+    final infoText = lowest != null
+        ? '${lowest.label} paling rendah (${lowest.score}).${hasAppeal ? ' Nilai tugas sedang dalam sanggahan.' : ' Nilai sudah disinkronkan dari penilaian asisten.'}'
+        : 'Rincian nilai per modul tersinkron langsung dari database.';
+
+    labShowCustomSheet<void>(
       context,
       title: 'Rincian Nilai • ${g.name}',
-      rows: [
-        ('card_account_details_outline', 'NIM', g.nim),
-        ('book_open', 'Praktikum', '$courseName ($kelas)'),
-        ('clipboard', 'Nilai Tugas', g.tugas),
-        ('people_group', 'Presensi', g.presensi),
-        ('trophy', 'Nilai Akhir', '${g.akhir} (${g.huruf})'),
-        ('circle_check', 'Status', g.lulus ? 'Lulus • $statusVal' : 'Tidak Lulus • $statusVal'),
-      ],
-      primary: (
-        'download',
-        'Unduh Rekap Kelas (.xlsx)',
-        () => _exportRecap(courseName, allGrades),
+      subtitle: '${g.nim} • $kelas • Nilai Akhir ${g.akhir} (${g.huruf})',
+      child: LabColumn(
+        gap: 14,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: ItlgColors.surfaceDark,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                        flex: 3,
+                        child: Text('Modul',
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Tugas',
+                            textAlign: TextAlign.center,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Kuis',
+                            textAlign: TextAlign.center,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Hadir',
+                            textAlign: TextAlign.center,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                    Expanded(
+                        flex: 2,
+                        child: Text('Nilai',
+                            textAlign: TextAlign.right,
+                            style: labText(11,
+                                w: kBold, c: ItlgColors.textSubtle))),
+                  ],
+                ),
+                const Divider(height: 18, color: Color(0xFFE7E9EC)),
+                for (var i = 0; i < rows.length; i++) ...[
+                  if (i > 0)
+                    const Divider(height: 16, color: Color(0xFFECEEF1)),
+                  Row(
+                    children: [
+                      Expanded(
+                          flex: 3,
+                          child: Text(rows[i].label,
+                              style: labText(12, w: kSemiBold))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(
+                              rows[i].tugasScore != null
+                                  ? '${rows[i].tugasScore}'
+                                  : '—',
+                              textAlign: TextAlign.center,
+                              style: labText(
+                                12,
+                                w: (rows[i].tugasScore ?? 100) < 75
+                                    ? kBold
+                                    : kMedium,
+                                c: (rows[i].tugasScore ?? 100) < 75
+                                    ? ItlgColors.primary
+                                    : ItlgColors.text,
+                              ))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(
+                              rows[i].kuisScore != null
+                                  ? '${rows[i].kuisScore}'
+                                  : '—',
+                              textAlign: TextAlign.center,
+                              style: labText(12))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(rows[i].hadir ? '✓' : 'Izin',
+                              textAlign: TextAlign.center,
+                              style: labText(12,
+                                  w: kSemiBold, c: ItlgColors.text))),
+                      Expanded(
+                          flex: 2,
+                          child: Text(
+                              rows[i].finalScore != null
+                                  ? '${rows[i].finalScore}'
+                                  : '—',
+                              textAlign: TextAlign.right,
+                              style: labText(12,
+                                  w: kBold, c: ItlgColors.primary))),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          DosenInfoBox(icon: 'info', text: infoText),
+        ],
       ),
     );
   }
@@ -110,10 +242,10 @@ class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
     return ListenableBuilder(
       listenable: Listenable.merge([nilaiSync, praktikumSync, presensiSync]),
       builder: (context, _) {
-        final course = praktikumSync.courseById(widget.courseId);
+        final course = praktikumSync.courseById(_activeCourseId);
         final all = nilaiSync.liveDosenGrades(
           widget.store.grades,
-          courseId: widget.courseId,
+          courseId: _activeCourseId,
         );
         final lulus = all.where((g) => g.lulus).length;
         final q = _query.trim().toLowerCase();
@@ -128,10 +260,33 @@ class _DosenRekapNilaiPageState extends State<DosenRekapNilaiPage> {
         return LabSubPage(
           onLogoTap: widget.onLogoTap,
           children: [
-            LabTitle(
-              title: 'Rekap Nilai Akhir',
-              subtitle:
-                  '${course.name} (${course.kelas}) • ${all.length} praktikan',
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: LabTitle(
+                    title: 'Rekap Nilai Akhir',
+                    subtitle:
+                        '${course.name} (${course.kelas}) • ${all.length} praktikan',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _pickCourse,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: ItlgShadows.outline,
+                    ),
+                    child: Text('Ganti Praktikum',
+                        style: labText(11, w: kBold, c: ItlgColors.primary)),
+                  ),
+                ),
+              ],
             ),
             DosenSearchField(
               hint: 'Cari nama atau NIM praktikan...',

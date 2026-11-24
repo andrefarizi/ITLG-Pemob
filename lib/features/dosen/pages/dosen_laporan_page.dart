@@ -189,6 +189,16 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
         DosenDownload(monthHeader, res.fileName, meta, store.format == 0),
       );
     });
+    await NilaiSyncService.instance.recordReportDownload(
+      title: 'Laporan ${store.praktikumOptions[store.praktikumIndex]}',
+      courseName: store.praktikumOptions[store.praktikumIndex],
+      fileName: res.fileName,
+      format: store.format == 0 ? 'XLSX' : 'PDF',
+      sizeLabel: res.formattedSize,
+      localPath: res.location,
+      downloadedBy: ProfilData.dosen.name,
+    );
+    if (!mounted) return;
     dosenShowDownloaded(context, location: res.location);
   }
 
@@ -310,15 +320,24 @@ class _DosenLaporanPageState extends State<DosenLaporanPage> {
                 ),
               ],
             ),
-            LabColumn(
-              gap: 8,
-              children: [
-                for (final d in store.downloads.take(2))
-                  DosenDownloadItem(
-                    download: d,
-                    onTap: () => _redownloadItem(d),
-                  ),
-              ],
+            ListenableBuilder(
+              listenable: NilaiSyncService.instance,
+              builder: (_, __) {
+                final remote = NilaiSyncService.instance.reportDownloads;
+                final items = remote.isNotEmpty
+                    ? remote.map((r) => r.toDosenDownload()).toList()
+                    : store.downloads;
+                return LabColumn(
+                  gap: 8,
+                  children: [
+                    for (final d in items.take(2))
+                      DosenDownloadItem(
+                        download: d,
+                        onTap: () => _redownloadItem(d),
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ),
