@@ -12,7 +12,7 @@ import 'supabase_service.dart';
 class GradeValidationRecord {
   final String courseId;
 
-  /// 'pending' | 'revision_requested' | 'validated'
+  /// 'draft' | 'pending' (diajukan) | 'revision_requested' (revisi) | 'validated' (divalidasi)
   String status;
   String? revisionPart;
   String? revisionNote;
@@ -28,6 +28,7 @@ class GradeValidationRecord {
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? DateTime.now();
 
+  bool get isDraft => status == 'draft';
   bool get isValidated => status == 'validated';
   bool get isRevisionRequested => status == 'revision_requested';
 
@@ -55,6 +56,9 @@ class GradeAppealRecord {
   final List<String> components;
   final String reason;
   final String? attachmentName;
+  final int currentScore;
+  final int proposedScore;
+  String? assistantRecommendation;
   String status;
   final DateTime createdAt;
 
@@ -67,9 +71,30 @@ class GradeAppealRecord {
     required this.components,
     required this.reason,
     this.attachmentName,
+    this.currentScore = 70,
+    this.proposedScore = 85,
+    this.assistantRecommendation,
     this.status = 'pending',
     required this.createdAt,
   });
+
+  bool get isPending => status == 'pending';
+  bool get isRecommendedApprove => status == 'recommended_approve';
+  bool get isRecommendedReject => status == 'recommended_reject';
+  bool get isWaitingAslab => status == 'pending';
+  bool get isWaitingDosen =>
+      status == 'pending' ||
+      status == 'recommended_approve' ||
+      status == 'recommended_reject';
+  bool get isApproved => status == 'approved' || status == 'resolved';
+  bool get isRejected => status == 'rejected';
+
+  String get initials {
+    final parts = userName.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return 'PR';
+    if (parts.length == 1) return parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
 
   factory GradeAppealRecord.fromJson(Map<String, dynamic> json) {
     final comps = ((json['components_json'] as List?) ?? const [])
@@ -84,6 +109,9 @@ class GradeAppealRecord {
       components: comps,
       reason: (json['reason'] ?? '').toString(),
       attachmentName: json['attachment_name'] as String?,
+      currentScore: (json['current_score'] as num?)?.toInt() ?? 70,
+      proposedScore: (json['proposed_score'] as num?)?.toInt() ?? 85,
+      assistantRecommendation: json['assistant_recommendation'] as String?,
       status: (json['status'] ?? 'pending').toString(),
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
@@ -100,17 +128,21 @@ class AssistantFollowUpRecord {
   final String assistantName;
   final String followUpType;
   final String message;
+  String status;
   final DateTime createdAt;
 
-  const AssistantFollowUpRecord({
+  AssistantFollowUpRecord({
     required this.id,
     required this.studentNim,
     required this.studentName,
     required this.assistantName,
     required this.followUpType,
     required this.message,
+    this.status = 'pending',
     required this.createdAt,
   });
+
+  bool get isDone => status == 'done';
 
   String get formattedClock {
     final local = createdAt.toLocal();
@@ -125,6 +157,76 @@ class AssistantFollowUpRecord {
       assistantName: (json['assistant_name'] ?? 'Asisten Lab').toString(),
       followUpType: (json['followup_type'] ?? 'Konsultasi').toString(),
       message: (json['message'] ?? '').toString(),
+      status: (json['status'] ?? 'pending').toString(),
+      createdAt: json['created_at'] != null
+          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+    );
+  }
+}
+
+/// Riwayat unduhan laporan Dosen yang tersinkron ke Supabase (`public.report_downloads`).
+class ReportDownloadRecord {
+  final String id;
+  final String title;
+  final String courseName;
+  final String fileName;
+  final String format;
+  final String sizeLabel;
+  final String localPath;
+  final String downloadedBy;
+  final DateTime createdAt;
+
+  const ReportDownloadRecord({
+    required this.id,
+    required this.title,
+    required this.courseName,
+    required this.fileName,
+    required this.format,
+    required this.sizeLabel,
+    required this.localPath,
+    required this.downloadedBy,
+    required this.createdAt,
+  });
+
+  bool get isSpreadsheet {
+    final f = format.toLowerCase();
+    final n = fileName.toLowerCase();
+    return f == 'xlsx' || f == 'csv' || n.endsWith('.xlsx') || n.endsWith('.csv');
+  }
+
+  String get monthHeader {
+    const monthsFull = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    final local = createdAt.toLocal();
+    return '${monthsFull[local.month - 1]} ${local.year}';
+  }
+
+  String get metaLabel {
+    const monthsShort = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    final local = createdAt.toLocal();
+    final dd = local.day.toString().padLeft(2, '0');
+    return '$dd ${monthsShort[local.month - 1]} ${local.year} • $sizeLabel';
+  }
+
+  DosenDownload toDosenDownload() =>
+      DosenDownload(monthHeader, fileName, metaLabel, isSpreadsheet);
+
+  factory ReportDownloadRecord.fromJson(Map<String, dynamic> json) {
+    return ReportDownloadRecord(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? 'Laporan Praktikum').toString(),
+      courseName: (json['course_name'] ?? 'Semua Praktikum').toString(),
+      fileName: (json['file_name'] ?? 'Laporan.pdf').toString(),
+      format: (json['format'] ?? 'PDF').toString(),
+      sizeLabel: (json['size_label'] ?? '120 KB').toString(),
+      localPath: (json['local_path'] ?? '').toString(),
+      downloadedBy: (json['downloaded_by'] ?? 'Dosen Pengampu').toString(),
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
@@ -143,12 +245,137 @@ class NilaiSyncService extends ChangeNotifier {
   final Map<String, GradeValidationRecord> _validations = {};
   final List<GradeAppealRecord> _appeals = [];
   final List<AssistantFollowUpRecord> _followUps = [];
+  final List<ReportDownloadRecord> _reportDownloads = [];
   String _selectedCourseId = 'pemob';
 
   String get selectedCourseId => _selectedCourseId;
 
   List<AssistantFollowUpRecord> get allFollowUps =>
       List.unmodifiable(_followUps);
+
+  List<ReportDownloadRecord> get reportDownloads =>
+      List.unmodifiable(_reportDownloads);
+
+  /// Rincian nilai per modul berbasis data live [PraktikumSyncService] &
+  /// [PresensiSyncService] untuk tampilan "Sheet Rincian Nilai per Modul" Dosen.
+  List<({String label, int? tugasScore, int? kuisScore, bool hadir, int? finalScore})>
+      moduleBreakdownForStudent({
+    required String courseId,
+    required String nim,
+    int? fallbackBase,
+  }) {
+    final prak = PraktikumSyncService.instance;
+    final pres = PresensiSyncService.instance;
+    final course = prak.courseById(courseId);
+    final isMainUser = nim == ProfilData.praktikan.idValue;
+    final meetings = [...course.meetings]
+      ..sort((a, b) => a.number.compareTo(b.number));
+    final list =
+        <({String label, int? tugasScore, int? kuisScore, bool hadir, int? finalScore})>[];
+
+    for (final m in meetings) {
+      final sub = prak.submissionFor(courseId, m.number, nim);
+      final quiz = prak.quizAttemptFor(courseId, m.number, nim);
+      final att = pres.recordFor(courseId, m.number, nim);
+
+      int? tugas = (sub != null && sub.status == 'graded') ? sub.score : null;
+      int? kuis = quiz?.score;
+
+      // Untuk modul yang sudah lewat dan ada nilai seed course.grades bagi praktikan utama
+      if (isMainUser && tugas == null) {
+        for (final g in course.grades) {
+          if (g.modul == m.number) {
+            final parsedScore = int.tryParse((g.score ?? '').trim());
+            tugas = parsedScore;
+            if (kuis == null) {
+              for (final comp in g.components) {
+                if (comp.$1.toLowerCase().contains('kuis') ||
+                    comp.$1.toLowerCase().contains('pre')) {
+                  kuis = int.tryParse(comp.$2.trim());
+                  break;
+                }
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      // Jika mahasiswa lain belum punya row modul di DB, gunakan nilai tugas live/base untuk modul selesai
+      final isDoneMeeting = m.status.name != 'upcoming';
+      if (!isMainUser && tugas == null && isDoneMeeting && fallbackBase != null) {
+        tugas = fallbackBase;
+      }
+
+      final hadir = att != null
+          ? att.status.name == 'hadir'
+          : m.status.name == 'hadir';
+
+      int? avg;
+      if (tugas != null && kuis != null) {
+        avg = ((tugas + kuis) / 2).round();
+      } else if (tugas != null) {
+        avg = tugas;
+      } else if (kuis != null) {
+        avg = kuis;
+      }
+
+      list.add((
+        label: 'Modul ${m.number}',
+        tugasScore: tugas,
+        kuisScore: kuis,
+        hadir: hadir,
+        finalScore: avg,
+      ));
+    }
+    return list;
+  }
+
+  /// Simpan riwayat unduhan laporan Dosen ke Supabase (`public.report_downloads`).
+  Future<ReportDownloadRecord> recordReportDownload({
+    required String title,
+    required String courseName,
+    required String fileName,
+    required String format,
+    required String sizeLabel,
+    required String localPath,
+    required String downloadedBy,
+  }) async {
+    final now = DateTime.now();
+    final rec = ReportDownloadRecord(
+      id: 'local-dl-${now.millisecondsSinceEpoch}',
+      title: title,
+      courseName: courseName,
+      fileName: fileName,
+      format: format,
+      sizeLabel: sizeLabel,
+      localPath: localPath,
+      downloadedBy: downloadedBy,
+      createdAt: now,
+    );
+    _reportDownloads.insert(0, rec);
+    notifyListeners();
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('report_downloads').insert({
+          'title': title,
+          'course_name': courseName,
+          'file_name': fileName,
+          'format': format,
+          'size_label': sizeLabel,
+          'local_path': localPath,
+          'downloaded_by': downloadedBy,
+          'created_at': now.toIso8601String(),
+        });
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] recordReportDownload error: $e');
+      }
+    }
+    return rec;
+  }
 
   List<AssistantFollowUpRecord> followUpsForStudent(String studentNim) {
     return _followUps.where((f) => f.studentNim == studentNim).toList();
@@ -340,15 +567,292 @@ class NilaiSyncService extends ChangeNotifier {
   int get pendingValidationCount =>
       _validations.values.where((v) => !v.isValidated).length;
 
+  int get pendingAppealCount => _appeals.where((a) => a.isWaitingAslab).length;
+  int get pendingDosenAppealCount =>
+      _appeals.where((a) => a.isWaitingDosen).length;
+
+  /// Rekomendasi sanggahan (Aslab) atau Keputusan akhir sanggahan (Dosen).
+  /// Sesuai desain: Aslab hanya memberi rekomendasi; keputusan akhir & perubahan
+  /// nilai resmi (+ log `public.grade_change_logs`) dilakukan oleh Dosen.
+  Future<void> decideAppeal({
+    required GradeAppealRecord appeal,
+    required bool approve,
+    int? newScore,
+    String? rejectionReason,
+    required String decidedBy,
+    bool byDosen = false,
+  }) async {
+    final oldScore = appeal.currentScore;
+    final finalScore = newScore ?? appeal.proposedScore;
+    final cleanReason = rejectionReason?.trim() ?? '';
+    final compLabel = appeal.components.isNotEmpty
+        ? appeal.components.first
+        : 'Modul ${appeal.modul}';
+
+    if (!byDosen) {
+      // Aslab hanya memberikan rekomendasi -> diteruskan ke Dosen untuk keputusan akhir
+      appeal.status = approve ? 'recommended_approve' : 'recommended_reject';
+      appeal.assistantRecommendation = approve
+          ? 'Rekomendasi Asisten ($decidedBy): setujui ($finalScore), rubrik poin sudah terpenuhi.'
+          : 'Rekomendasi Asisten ($decidedBy): tolak${cleanReason.isNotEmpty ? ' • $cleanReason' : ''}.';
+      notifyListeners();
+
+      NotificationSyncService.instance.push(
+        role: 'dosen',
+        icon: 'clipboard',
+        title: 'Rekomendasi Sanggahan dari Asisten',
+        body:
+            '$decidedBy meninjau sanggahan ${appeal.userName} ($compLabel): ${approve ? 'rekomendasi setujui ($finalScore)' : 'rekomendasi tolak'}. Menunggu keputusan akhir Anda.',
+        targetKey: 'validasi',
+        courseId: appeal.courseId,
+        meetingNumber: appeal.modul,
+        important: true,
+      );
+    } else {
+      // Dosen membuat keputusan akhir yang mengubah nilai resmi & mencatat log perubahan
+      appeal.status = approve ? 'approved' : 'rejected';
+      notifyListeners();
+
+      if (approve) {
+        await PraktikumSyncService.instance.gradeTugasSubmission(
+          courseId: appeal.courseId,
+          meetingNumber: appeal.modul,
+          userIdentifier: appeal.userIdentifier,
+          userName: appeal.userName,
+          score: finalScore,
+          feedback: 'Nilai diperbarui melalui keputusan sanggahan oleh $decidedBy',
+        );
+      }
+
+      NotificationSyncService.instance.push(
+        role: 'praktikan',
+        icon: approve ? 'circle_check' : 'info',
+        title:
+            approve ? 'Sanggahan Nilai Disetujui' : 'Sanggahan Nilai Ditolak',
+        body: approve
+            ? 'Nilai $compLabel diperbarui menjadi $finalScore oleh $decidedBy.'
+            : 'Sanggahan $compLabel ditolak oleh $decidedBy.${cleanReason.isNotEmpty ? ' Alasan: $cleanReason' : ''}',
+        targetKey: 'detailNilai',
+        courseId: appeal.courseId,
+        meetingNumber: appeal.modul,
+        important: true,
+      );
+
+      NotificationSyncService.instance.push(
+        role: 'aslab',
+        icon: 'circle_check',
+        title: 'Keputusan Akhir Sanggahan oleh Dosen',
+        body:
+            '${appeal.userName} ($compLabel): ${approve ? 'Disetujui ($finalScore)' : 'Ditolak'} oleh $decidedBy.',
+        targetKey: 'evaluasi',
+        courseId: appeal.courseId,
+        meetingNumber: appeal.modul,
+        important: true,
+      );
+    }
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      final nowIso = DateTime.now().toIso8601String();
+      try {
+        await client
+            .from('grade_appeals')
+            .update({
+              'status': appeal.status,
+              'proposed_score': finalScore,
+              'assistant_recommendation': appeal.assistantRecommendation,
+              if (cleanReason.isNotEmpty) 'rejection_reason': cleanReason,
+              if (byDosen) 'decided_by': decidedBy,
+              'updated_at': nowIso,
+            })
+            .eq('course_id', appeal.courseId)
+            .eq('modul', appeal.modul)
+            .eq('user_identifier', appeal.userIdentifier);
+
+        if (byDosen && approve) {
+          await client.from('grade_change_logs').insert({
+            'course_id': appeal.courseId,
+            'modul': appeal.modul,
+            'user_identifier': appeal.userIdentifier,
+            'user_name': appeal.userName,
+            'old_score': oldScore,
+            'new_score': finalScore,
+            'changed_by': decidedBy,
+            'reason': 'Keputusan akhir sanggahan nilai disetujui ($compLabel)',
+            'created_at': nowIso,
+          });
+        }
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] decideAppeal error: $e');
+      }
+    }
+  }
+
+  /// Ajukan ulang rekap nilai dari Aslab ke Dosen setelah revisi selesai.
+  Future<void> resubmitValidation(String courseId,
+      {required String submittedBy}) async {
+    final now = DateTime.now();
+    final rec = validationFor(courseId);
+    rec.status = 'pending';
+    rec.updatedAt = now;
+    _validations[courseId] = rec;
+    notifyListeners();
+
+    final course = PraktikumSyncService.instance.courseById(courseId);
+    NotificationSyncService.instance.push(
+      role: 'dosen',
+      icon: 'shield_check_outline',
+      title: 'Rekap Nilai Diajukan Ulang',
+      body:
+          'Praktikum ${course.name} • diajukan ulang oleh $submittedBy untuk validasi.',
+      targetKey: 'validasi',
+      important: true,
+    );
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        await client.from('grade_validations').upsert(
+          {
+            'course_id': courseId,
+            'status': 'pending',
+            'validated_by': submittedBy,
+            'updated_at': now.toIso8601String(),
+          },
+          onConflict: 'course_id',
+        );
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] resubmitValidation error: $e');
+      }
+    }
+  }
+
+  /// Tandai arahan tindak lanjut dari Dosen sudah ditindaklanjuti oleh Aslab.
+  Future<void> markFollowUpDone(String id, {required String byAslab}) async {
+    AssistantFollowUpRecord? target;
+    for (final f in _followUps) {
+      if (f.id == id) {
+        f.status = 'done';
+        target = f;
+        break;
+      }
+    }
+    if (target == null) return;
+
+    NotificationSyncService.instance.push(
+      role: 'dosen',
+      icon: 'circle_check',
+      title: 'Arahan Ditindaklanjuti',
+      body: '$byAslab menindaklanjuti arahan untuk ${target.studentName}.',
+      targetKey: 'peringatan',
+      important: false,
+    );
+    notifyListeners();
+
+    final client = SupabaseService.instance.client;
+    if (client != null) {
+      try {
+        if (!target.id.startsWith('local-') && !target.id.startsWith('fu-seed-')) {
+          await client
+              .from('assistant_followups')
+              .update({'status': 'done'})
+              .eq('id', target.id);
+        } else {
+          await client
+              .from('assistant_followups')
+              .update({'status': 'done'})
+              .eq('student_nim', target.studentNim)
+              .eq('message', target.message);
+        }
+        _backendAvailable = true;
+      } catch (e) {
+        debugPrint('[NilaiSync] markFollowUpDone error: $e');
+      }
+    }
+  }
+
   void _seedDefaults() {
     _validations
       ..clear()
       ..addAll({
-        'pemob': GradeValidationRecord(courseId: 'pemob', status: 'pending'),
+        'pemob': GradeValidationRecord(
+          courseId: 'pemob',
+          status: 'revision_requested',
+          revisionPart: 'Modul 3',
+          revisionNote:
+              'Tolong cek ulang nilai Modul 3. Ada 3 praktikan bernilai 0 padahal sudah mengumpulkan.',
+        ),
         'desain': GradeValidationRecord(courseId: 'desain', status: 'pending'),
         'adj': GradeValidationRecord(courseId: 'adj', status: 'validated'),
         'ml': GradeValidationRecord(courseId: 'ml', status: 'validated'),
       });
+
+    if (_appeals.isEmpty) {
+      _appeals.addAll([
+        GradeAppealRecord(
+          id: 'app-seed-1',
+          courseId: 'pemob',
+          modul: 3,
+          userIdentifier: '231402045',
+          userName: 'Rina Novita',
+          components: const ['Tugas 3'],
+          reason:
+              'Fitur login dan validasi form sudah sesuai rubrik poin 2 dan 3. Mohon dicek ulang.',
+          attachmentName: 'bukti_tugas3.pdf',
+          currentScore: 70,
+          proposedScore: 85,
+          assistantRecommendation:
+              'Rekomendasi Asisten (Abbil Rizki): setujui, rubrik poin 2 sudah terpenuhi.',
+          status: 'pending',
+          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        ),
+        GradeAppealRecord(
+          id: 'app-seed-2',
+          courseId: 'pemob',
+          modul: 4,
+          userIdentifier: '231402052',
+          userName: 'Dimas Saputra',
+          components: const ['Kuis Modul 4'],
+          reason:
+              'Soal nomor 7 punya dua jawaban benar menurut modul halaman 12.',
+          attachmentName: 'screenshot_soal7.png',
+          currentScore: 60,
+          proposedScore: 75,
+          assistantRecommendation:
+              'Rekomendasi Asisten (Abbil Rizki): perlu peninjauan kunci soal nomor 7.',
+          status: 'pending',
+          createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+        ),
+      ]);
+    }
+
+    if (_followUps.isEmpty) {
+      _followUps.addAll([
+        AssistantFollowUpRecord(
+          id: 'fu-seed-1',
+          studentNim: '231402067',
+          studentName: 'Yoga Siregar',
+          assistantName: 'Abbil Rizki',
+          followUpType: 'Kehadiran',
+          message:
+              'Mohon bantu ingatkan Yoga soal kehadiran dan jadwalkan konsultasi sebelum Pertemuan 6.',
+          status: 'pending',
+          createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+        ),
+        AssistantFollowUpRecord(
+          id: 'fu-seed-2',
+          studentNim: '231402067',
+          studentName: 'Yoga Siregar',
+          assistantName: 'Feri Gunawan',
+          followUpType: 'Remedial',
+          message: 'Berikan tugas remedial Modul 2 sebelum pertemuan berikutnya.',
+          status: 'done',
+          createdAt: DateTime.now().subtract(const Duration(days: 6)),
+        ),
+      ]);
+    }
   }
 
   Future<void> initialize() async {
@@ -385,12 +889,30 @@ class NilaiSyncService extends ChangeNotifier {
             .select()
             .order('created_at', ascending: false)
             .limit(50);
-        _followUps
-          ..clear()
-          ..addAll(followRows.map((r) =>
-              AssistantFollowUpRecord.fromJson(Map<String, dynamic>.from(r))));
+        if (followRows.isNotEmpty) {
+          _followUps
+            ..clear()
+            ..addAll(followRows.map((r) =>
+                AssistantFollowUpRecord.fromJson(Map<String, dynamic>.from(r))));
+        }
       } catch (e) {
         debugPrint('[NilaiSync] Load assistant_followups dilewati: $e');
+      }
+
+      try {
+        final dlRows = await client
+            .from('report_downloads')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(50);
+        if (dlRows.isNotEmpty) {
+          _reportDownloads
+            ..clear()
+            ..addAll(dlRows.map((r) =>
+                ReportDownloadRecord.fromJson(Map<String, dynamic>.from(r))));
+        }
+      } catch (e) {
+        debugPrint('[NilaiSync] Load report_downloads dilewati: $e');
       }
 
       _backendAvailable = true;
@@ -427,6 +949,12 @@ class NilaiSyncService extends ChangeNotifier {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'assistant_followups',
+            callback: (_) => refreshFromBackend(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'report_downloads',
             callback: (_) => refreshFromBackend(),
           )
           .subscribe();
@@ -680,6 +1208,8 @@ class NilaiSyncService extends ChangeNotifier {
     required List<String> components,
     required String reason,
     String? attachmentName,
+    int currentScore = 70,
+    int proposedScore = 85,
   }) async {
     final now = DateTime.now();
     final rec = GradeAppealRecord(
@@ -691,6 +1221,8 @@ class NilaiSyncService extends ChangeNotifier {
       components: components,
       reason: reason,
       attachmentName: attachmentName,
+      currentScore: currentScore,
+      proposedScore: proposedScore,
       status: 'pending',
       createdAt: now,
     );
@@ -731,6 +1263,8 @@ class NilaiSyncService extends ChangeNotifier {
           'components_json': components,
           'reason': reason,
           'attachment_name': attachmentName,
+          'current_score': currentScore,
+          'proposed_score': proposedScore,
           'status': 'pending',
           'created_at': now.toIso8601String(),
         });
@@ -788,6 +1322,7 @@ class NilaiSyncService extends ChangeNotifier {
           'assistant_name': assistantName,
           'followup_type': followUpType,
           'message': message,
+          'status': 'pending',
           'created_at': now.toIso8601String(),
         });
         _backendAvailable = true;
