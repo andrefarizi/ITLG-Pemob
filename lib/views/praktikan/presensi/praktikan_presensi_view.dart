@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Praktikan Presensi View
 class PraktikanPresensiView extends StatelessWidget {
   const PraktikanPresensiView({super.key});
 

@@ -2,19 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 
-/// Splash Screen ITLG Mobile (UI + animasi saja, belum ada backend).
-///
-/// Mengikuti prototype Figma "Splash Screen" (5 frame, 402 x 874):
-///   S1  latar maroon, logo kecil (13x12), opacity 0, rotasi 180°
-///   S2  logo membesar ke 64x58 di tengah (ease-out 800ms, setelah 0.8s)
-///   S3  logo bergeser ke kiri, teks "ITLG" muncul dari bawah (ease-out 800ms)
-///   S4  latar berubah putih, logo & teks berubah biru (ease-out 800ms)
-///   S5  setelah 0.5s, logo + teks mengecil naik ke atas dan konten
-///       sambutan (ilustrasi, judul, subjudul, tombol Mulai) naik dari
-///       bawah (ease-out 800ms)
-///
-/// Semua posisi memakai koordinat frame Figma (402 x 874) lalu diskalakan
-/// ke layar dengan [FittedBox], jadi hasilnya sama persis dengan prototype.
+/// Halaman splash screen dan pengenalan awal aplikasi.
 class SplashScreen extends StatefulWidget {
   /// Dipanggil saat tombol "Mulai" ditekan. Peran dipilih di halaman Masuk.
   final VoidCallback? onStart;
@@ -27,7 +15,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  // ---- Warna dari Design System ----
+  // Warna dari Design System
   static const Color _primary = Color(0xFF850909); // Primary/Normal
   static const Color _secondary = Color(0xFF2369B7); // Secondary/Normal
   static const Color _secondaryDarker = Color(0xFF0C2540); // Secondary/Darker
@@ -36,15 +24,11 @@ class _SplashScreenState extends State<SplashScreen>
 
   static const String _font = 'Montserrat';
 
-  // ---- Ukuran frame Figma ----
+  // Ukuran kanvas referensi tata letak
   static const double _frameW = 402;
   static const double _frameH = 874;
 
-  // ---- Timeline (ms) ----
-  // Disamakan dengan pemutaran prototype Figma:
-  //   S1 maroon diam 0.8s -> logo membesar 0.8s -> logo geser + teks naik
-  //   0.8s -> latar jadi putih 0.8s -> diam 0.5s -> konten sambutan naik 0.8s
-  // Semua transisi Smart Animate "Ease out".
+  // Timeline (ms)
   static const int _startDelayMs = 300; // jeda setelah frame pertama tampil
   static const int _holdMs = 800; // S1 diam (After delay 0.8s)
   static const int _transitionMs = 800; // durasi tiap Smart Animate
@@ -75,8 +59,7 @@ class _SplashScreenState extends State<SplashScreen>
     _recolor = _phase(_recolorStart, _recolorStart + _transitionMs);
     _settle = _phase(_settleStart, _totalMs);
 
-    // Mulai animasi SETELAH frame pertama benar-benar tampil di layar,
-    // supaya waktu loading Flutter tidak "memakan" bagian awal animasi.
+    // Jalankan tahapan animasi setelah frame pertama selesai dirender
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: _startDelayMs), () {
         if (mounted) _controller.forward();
@@ -84,7 +67,7 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  /// Prototype memakai Smart Animate "Ease out" di setiap transisi.
+  /// Kurva transisi animasi.
   Animation<double> _phase(int startMs, int endMs) {
     return CurvedAnimation(
       parent: _controller,
@@ -147,12 +130,10 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Logo
-  // ---------------------------------------------------------------------------
 
   Widget _buildLogo() {
-    // Kotak logo di tiap frame (x, y, w, h) sesuai Figma
+    // Posisi dan ukuran logo pada tiap tahap animasi
     const Rect s1 = Rect.fromLTWH(207, 443, 13, 12);
     const Rect s2 = Rect.fromLTWH(169, 408, 64, 58);
     const Rect s3 = Rect.fromLTWH(108, 412, 64, 58);
@@ -163,7 +144,7 @@ class _SplashScreenState extends State<SplashScreen>
     rect = Rect.lerp(rect, s5, _settle.value)!;
 
     final double rotation = (1 - _grow.value) * 3.141592653589793; // 180° -> 0°
-    // Seperti di Figma: logo memudar masuk bersamaan dengan membesar.
+    // Animasi opasitas dan skala logo
     final double opacity = _grow.value.clamp(0.0, 1.0);
 
     final Color lightColor =
@@ -188,9 +169,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Teks "ITLG / Information Technology Laboratory Group"
-  // ---------------------------------------------------------------------------
 
   Widget _buildWordmark() {
     // Selama logo belum selesai membesar, teks sama sekali tidak digambar.
@@ -199,12 +178,10 @@ class _SplashScreenState extends State<SplashScreen>
     // Frame teks (clip) di S2-S4 dan S5
     const Rect frame = Rect.fromLTWH(185, 402, 108, 70);
     const Rect frameS5 = Rect.fromLTWH(188, 88, 94, 61);
-    // FittedBox di bawah menskalakan isi 108x70 mengikuti ukuran rect.
+    // FittedBox di bawah menskalakan isi mengikuti ukuran rect.
     final Rect rect = Rect.lerp(frame, frameS5, _settle.value)!;
 
     // Teks naik dari y=61 (tersembunyi di bawah area clip) ke y=0
-    // Sebelum muncul, teks diletakkan penuh di bawah area clip (70px) supaya
-    // tidak ada potongan huruf yang mengintip di bawah logo.
     final double textOffset = 72 * (1 - _reveal.value);
 
     final Color titleColor =
@@ -268,12 +245,10 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Konten sambutan (S5)
-  // ---------------------------------------------------------------------------
 
   Widget _buildWelcomeContent() {
-    // Frame 40: dari y=874 (di luar layar) ke (15, 246), ukuran 370 x 531
+    // Animasi masuk kartu sambutan dari bagian bawah layar
     final double left = 16 + (15 - 16) * _settle.value;
     final double top = 874 + (246 - 874) * _settle.value;
     final bool interactive = _controller.value >= 1.0;
@@ -360,9 +335,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// -----------------------------------------------------------------------------
-// Kartu ilustrasi (Surface/Dark + inner shadow, radius 21.59)
-// -----------------------------------------------------------------------------
+// Kartu ilustrasi halaman sambutan
 
 class _IllustrationCard extends StatelessWidget {
   const _IllustrationCard();
@@ -377,7 +350,7 @@ class _IllustrationCard extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: _SplashColors.surfaceDark),
-          // Ilustrasi kartu (sudah termasuk inner shadow dari Figma)
+          // Gambar ilustrasi sambutan
           Image.asset(
             'assets/splash_illustration.png',
             fit: BoxFit.cover,
@@ -457,9 +430,7 @@ class _InnerShadowPainter extends CustomPainter {
       oldDelegate.radius != radius || oldDelegate.shadows != shadows;
 }
 
-// -----------------------------------------------------------------------------
-// Tombol Mulai (370 x 56, radius 12, bayangan dari Design System)
-// -----------------------------------------------------------------------------
+// Tombol mulai menuju halaman login
 
 class _StartButton extends StatelessWidget {
   final String label;
@@ -521,9 +492,7 @@ class _StartButton extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Logo ITLG (digambar ulang dari vektor Figma, viewBox 64 x 58)
-// -----------------------------------------------------------------------------
+// Painter vektor logo ITLG pada splash screen
 
 class _ItlgLogoPainter extends CustomPainter {
   final Color lightColor;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Dosen Dashboard View
 class DosenDashboardView extends StatelessWidget {
   const DosenDashboardView({super.key});
 

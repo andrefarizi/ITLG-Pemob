@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Praktikan Jadwal View
 class PraktikanJadwalView extends StatelessWidget {
   const PraktikanJadwalView({super.key});
 

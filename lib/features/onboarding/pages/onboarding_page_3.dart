@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// Halaman onboarding langkah 3
 class OnboardingPage3 extends StatelessWidget {
   const OnboardingPage3({super.key});
 

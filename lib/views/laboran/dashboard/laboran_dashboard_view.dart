@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Laboran Dashboard View
 class LaboranDashboardView extends StatelessWidget {
   const LaboranDashboardView({super.key});
 

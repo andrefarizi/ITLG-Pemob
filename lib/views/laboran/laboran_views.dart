@@ -1,3 +1,4 @@
+// Komponen Laboran Views
 export 'dashboard/laboran_dashboard_view.dart';
 export 'inventaris/laboran_inventaris_view.dart';
 export 'ticketing/laboran_ticketing_view.dart';

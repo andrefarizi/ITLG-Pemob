@@ -4,8 +4,7 @@ import 'package:flutter/services.dart';
 import '../../core/widgets/itlg_ui.dart';
 import '../gyro/gyro_page.dart';
 
-/// Halaman Notifikasi (Figma: "05 Umum — Login & Notifikasi" > "Notifikasi").
-/// Data masih contoh (belum ada backend).
+/// Halaman daftar notifikasi pengguna.
 class NotifikasiPage extends StatefulWidget {
   const NotifikasiPage({super.key});
 
@@ -35,7 +34,7 @@ class NotifikasiItem {
   });
 }
 
-/// Contoh data notifikasi (sesuai desain Figma).
+/// Contoh data notifikasi.
 List<NotifikasiItem> contohNotifikasi() => [
       NotifikasiItem(
         icon: Icons.schedule_rounded,
@@ -265,11 +264,9 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
   }
 }
 
-// =============================================================================
 // Komponen
-// =============================================================================
 
-/// Bar atas: logo ITLG Mobile + tombol "Tanya Gyro" (Figma "Frame 41").
+/// Bar atas: logo ITLG Mobile + tombol "Tanya Gyro".
 class _TopBar extends StatelessWidget {
   const _TopBar();
 
@@ -480,7 +477,7 @@ class _NotificationCard extends StatelessWidget {
   }
 }
 
-/// Ubin ikon 36 px ala neumorphism (Figma "Icon Tile").
+/// Ubin ikon ala neumorphism.
 class _IconTile extends StatelessWidget {
   final IconData icon;
   const _IconTile({required this.icon});
@@ -493,14 +490,6 @@ class _IconTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFEEF0F3),
         borderRadius: BorderRadius.circular(9),
-        boxShadow: const [
-          BoxShadow(
-              offset: Offset(6, 6), blurRadius: 14, color: Color(0x73A3B1C6)),
-          BoxShadow(
-              offset: Offset(-6, -6),
-              blurRadius: 11,
-              color: Color(0xE6FFFFFF)),
-        ],
       ),
       child: Icon(icon, size: 20, color: ItlgColors.primary),
     );

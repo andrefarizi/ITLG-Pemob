@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Laboran Jadwal View
 class LaboranJadwalView extends StatelessWidget {
   const LaboranJadwalView({super.key});
 

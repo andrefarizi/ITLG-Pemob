@@ -8,6 +8,7 @@ import '../../aslab/reports/aslab_reports_page.dart';
 import '../../laboran/reports/laboran_reports_page.dart';
 import '../../dosen/reports/dosen_reports_page.dart';
 
+// Halaman laporan umum
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
 

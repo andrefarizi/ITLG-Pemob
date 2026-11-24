@@ -26,7 +26,7 @@ enum GyroMood {
   }
 }
 
-/// Pengendali maskot 3D. Dipegang oleh halaman, diteruskan ke [GyroMascotView].
+/// Pengendali maskot 3D.
 class GyroMascotController {
   WebViewController? _web;
   bool _ready = false;
@@ -112,10 +112,6 @@ class _Framing {
 }
 
 /// Menampilkan maskot Gyro 3D (three.js di WebView, latar transparan).
-///
-/// Model, rig dan animasi berasal dari `gyro/mascot.js` yang dibundel ke
-/// `assets/gyro/gyro.html`. Di platform tanpa WebView (web/desktop) yang
-/// tampil adalah placeholder statis.
 class GyroMascotView extends StatefulWidget {
   final GyroMascotController controller;
 

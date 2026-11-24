@@ -6,13 +6,9 @@ import '../../core/services/file_download_service.dart';
 import '../../core/widgets/itlg_ui.dart';
 import '../laboran/widgets/laboran_ui.dart';
 
-/// Aksi tampilan yang dipakai bersama oleh semua peran (tanpa backend):
-/// panel info, pratinjau berkas, QR, Pusat Bantuan, dan tautan.
-///
-/// Gaya panel mengikuti `prakShowPicker`: panel bawah #FDFEFE radius atas 24,
-/// pegangan 40x4, latar gelap #0A0B0C 40%, fade 250 ms.
+/// Fungsi dialog, pratinjau dokumen, dan aksi lintas peran.
 
-/// Satu baris "label : nilai" di panel info.
+/// Satu baris "label: nilai" di panel info.
 typedef LabInfoRow = (String icon, String label, String value);
 
 Future<T?> _showSheet<T>(
@@ -111,8 +107,6 @@ class _InfoRows extends StatelessWidget {
 }
 
 /// Panel info umum: ikon + judul + baris data + catatan + tombol aksi.
-///
-/// [primary] dijalankan setelah panel ditutup.
 Future<void> labShowInfoSheet(
   BuildContext context, {
   required String title,
@@ -180,14 +174,13 @@ String _fileKind(String name) {
   }
 }
 
-/// Pratinjau dokumen PDF layar penuh (Figma: "Pratinjau Dokumen PDF" 5828:3279):
-/// latar #2B2D31, bar atas tombol tutup + nama berkas + info halaman/ukuran,
-/// lembar dokumen putih, dan tombol merah "Unduh Berkas" di bawah.
+/// Dialog Pratinjau Dokumen PDF.
 Future<void> labShowFilePreview(
   BuildContext context, {
   required String name,
-  String size = '3,2 MB',
+  String? size,
   String source = 'Lampiran praktikum',
+  List<String> searchFolders = const [],
 }) {
   final kind = _fileKind(name);
   final cleanTitle = name
@@ -233,7 +226,9 @@ Future<void> labShowFilePreview(
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '$kind • $size',
+                            size == null || size.isEmpty
+                                ? kind
+                                : '$kind • $size',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: labText(11,
@@ -309,14 +304,23 @@ Future<void> labShowFilePreview(
                     final res = await FileDownloadService.instance.downloadFile(
                       fileName: name,
                       source: source,
+                      searchFolders: searchFolders,
                     );
                     if (!context.mounted) return;
-                    labToast(
-                      context,
-                      res.success
-                          ? 'Tersimpan di ${res.location}'
-                          : 'Gagal mengunduh $name',
-                    );
+                    if (res.success) {
+                      await labShowResult(
+                        context,
+                        icon: 'download',
+                        title: 'Berkas Diunduh',
+                        message:
+                            'Berkas tersimpan di folder Unduhan perangkat anda.',
+                      );
+                    } else {
+                      labToast(
+                        context,
+                        'Gagal mengunduh $name: ${res.error ?? 'coba lagi'}',
+                      );
+                    }
                   },
                 ),
               ],
@@ -350,9 +354,7 @@ Future<void> labShowLink(
   );
 }
 
-/// Pop-up QR besar di tengah layar (Figma: "Pop up QR Presensi Asisten-Laboran" 5828:3324):
-/// kartu #F5F5F5 radius 24, QR 200x200, judul Bold 22, keterangan Regular 14,
-/// tombol merah penuh "Tutup".
+/// Dialog QR Presensi Asisten (Laboran).
 Future<void> labShowQr(
   BuildContext context, {
   required String title,
@@ -376,7 +378,7 @@ Future<void> labShowQr(
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 22, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 22, 17, 22),
                 decoration: BoxDecoration(
                   color: ItlgColors.surfaceDark,
                   borderRadius: BorderRadius.circular(24),
@@ -401,7 +403,7 @@ Future<void> labShowQr(
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
                       title,
                       textAlign: TextAlign.center,
@@ -413,17 +415,17 @@ Future<void> labShowQr(
                       textAlign: TextAlign.center,
                       style: labText(14, c: ItlgColors.textMuted),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 13),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => Navigator.of(dialogCtx).pop(),
                       child: Container(
-                        height: 48,
+                        height: 39,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: ItlgColors.primary,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: ItlgShadows.primary,
+                          boxShadow: ItlgShadows.outline,
                         ),
                         child: Text(
                           'Tutup',
@@ -443,8 +445,7 @@ Future<void> labShowQr(
   );
 }
 
-/// Pusat Bantuan Lab (sama untuk semua peran). Isinya sama dengan kartu
-/// Pusat Bantuan di halaman Masuk.
+/// Tampilkan bottom sheet informasi Pusat Bantuan Lab.
 Future<void> labShowHelpCenter(BuildContext context) {
   const alamat = 'Gedung Teknologi Informasi USU (Jl. Alumni, Medan)';
   return labShowInfoSheet(
@@ -558,8 +559,7 @@ Future<void> labShowReportDetail(
   );
 }
 
-/// Halaman "Riwayat Laporan" (Figma: "Riwayat Laporan-Praktikan" 5813:3258 &
-/// "Riwayat Laporan-Aslab" 5816:3063) dengan progress 3 tahap & catatan Laboran.
+/// Halaman Riwayat Laporan Praktikan.
 class LabRiwayatLaporanPage extends StatefulWidget {
   final List<(String, String, String, int)> reports;
   final Listenable? listenable;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// Controller manajemen data pengguna
 class ShiftSchedule {
   final String id;
   final String day;

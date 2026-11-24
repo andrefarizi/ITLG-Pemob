@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Praktikan Dashboard View
 class PraktikanDashboardView extends StatelessWidget {
   const PraktikanDashboardView({super.key});
 

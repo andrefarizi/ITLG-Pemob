@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Komponen bersama yang mengikuti Design System Figma "ITLG MOBILE".
-///
-/// Dipakai oleh halaman Masuk, Lupa Password, dan Notifikasi supaya warna,
-/// bayangan, dan tipografinya seragam.
+/// Komponen UI bersama untuk autentikasi dan notifikasi.
 
-// =============================================================================
 // Token
-// =============================================================================
 
 class ItlgColors {
   ItlgColors._();
@@ -52,36 +47,34 @@ class ItlgText {
 class ItlgShadows {
   ItlgShadows._();
 
-  /// Effect style "Outline Shadow".
+  /// Efek bayangan luar kartu dan tombol.
   static const List<BoxShadow> outline = [
-    BoxShadow(offset: Offset(1, 1), blurRadius: 3, color: Color(0x0F000000)),
-    BoxShadow(offset: Offset(4, 5), blurRadius: 6, color: Color(0x0D000000)),
-    BoxShadow(offset: Offset(8, 12), blurRadius: 8, color: Color(0x08000000)),
-    BoxShadow(offset: Offset(14, 21), blurRadius: 10, color: Color(0x03000000)),
+    BoxShadow(offset: Offset(1, 1), blurRadius: 1.7, color: Color(0x0F000000)),
+    BoxShadow(offset: Offset(4, 5), blurRadius: 4.3, color: Color(0x0D000000)),
+    BoxShadow(offset: Offset(8, 12), blurRadius: 6.1, color: Color(0x08000000)),
+    BoxShadow(offset: Offset(14, 21), blurRadius: 7.8, color: Color(0x03000000)),
   ];
 
-  /// Outline Shadow + cahaya merah di bawah tombol/chip primer.
+  /// Efek bayangan tombol utama berwarna merah.
   static const List<BoxShadow> primary = [
     ...outline,
-    BoxShadow(offset: Offset(0, 4), blurRadius: 4, color: Color(0x40850909)),
+    BoxShadow(offset: Offset(0, 4), blurRadius: 2.6, color: Color(0x40850909)),
   ];
 
-  /// Effect style "inner shadow".
+  /// Efek bayangan dalam untuk kolom input.
   static const List<BoxShadow> inner = [
-    BoxShadow(offset: Offset(4, 4), blurRadius: 4, color: Color(0x1F000000)),
-    BoxShadow(offset: Offset(0, -2), blurRadius: 4, color: Color(0x0D000000)),
+    BoxShadow(offset: Offset(4, 4), blurRadius: 2.6, color: Color(0x1F000000)),
+    BoxShadow(offset: Offset(0, -2), blurRadius: 2.6, color: Color(0x0D000000)),
   ];
 
-  /// Inner shadow yang lebih besar (ikon popup 80x80).
+  /// Efek bayangan dalam ukuran besar untuk kotak ikon.
   static const List<BoxShadow> innerLarge = [
-    BoxShadow(offset: Offset(6, 6), blurRadius: 6, color: Color(0x1F000000)),
-    BoxShadow(offset: Offset(0, -3), blurRadius: 6, color: Color(0x0D000000)),
+    BoxShadow(offset: Offset(6, 6), blurRadius: 4.3, color: Color(0x1F000000)),
+    BoxShadow(offset: Offset(0, -3), blurRadius: 4.3, color: Color(0x0D000000)),
   ];
 }
 
-// =============================================================================
-// Inner shadow (Flutter tidak punya inner shadow bawaan)
-// =============================================================================
+// Widget pembungkus efek bayangan dalam
 
 class InnerShadowBox extends StatelessWidget {
   final double radius;
@@ -153,11 +146,9 @@ class _InnerShadowPainter extends CustomPainter {
       old.radius != radius || old.shadows != shadows;
 }
 
-// =============================================================================
 // Kartu, tombol, input
-// =============================================================================
 
-/// Kartu abu-abu (#F5F5F5) radius 24 dengan Outline Shadow.
+/// Widget kartu kontainer utama.
 class ItlgCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -187,7 +178,7 @@ class ItlgCard extends StatelessWidget {
   }
 }
 
-/// Tombol "← Kembali" (116 x 40) di pojok kiri atas.
+/// Tombol navigasi kembali.
 class ItlgBackButton extends StatelessWidget {
   final VoidCallback? onTap;
   const ItlgBackButton({super.key, this.onTap});
@@ -234,13 +225,13 @@ class ItlgBackButton extends StatelessWidget {
   }
 }
 
-/// Tombol primer merah 50 px (Label Text Bold 16).
+/// Tombol aksi utama.
 class ItlgPrimaryButton extends StatelessWidget {
   final String label;
   final IconData? leadingIcon;
   final IconData? trailingIcon;
 
-  /// Ikon PNG hasil ekspor Figma (22 px) di kanan label.
+  /// Path aset ikon di sebelah kanan label.
   final String? trailingAsset;
   final VoidCallback? onPressed;
   final bool loading;
@@ -321,19 +312,19 @@ class ItlgPrimaryButton extends StatelessWidget {
   }
 }
 
-/// Label + kolom input 48 px (#F9FAFB, radius 12, inner shadow).
+/// Widget kolom input teks beserta label.
 class ItlgTextField extends StatefulWidget {
   final String label;
   final String hint;
   final IconData icon;
 
-  /// Ikon PNG hasil ekspor Figma (20 px); menggantikan [icon] bila diisi.
+  /// Path aset ikon kustom pada kolom input.
   final String? iconAsset;
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final bool obscure;
 
-  /// Tampilkan tombol mata untuk melihat kata sandi (tidak ada di desain Masuk).
+  /// Opsi tampilkan tombol visibilitas kata sandi.
   final bool showObscureToggle;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
@@ -546,7 +537,7 @@ class _ItlgTextFieldState extends State<ItlgTextField> {
   }
 }
 
-/// Baris "Teks biasa ........ Tautan biru >" (mis. "Sudah Ingat Akun?").
+/// Baris teks dengan tautan aksi di sisi kanan.
 class ItlgLinkRow extends StatelessWidget {
   final String text;
   final String link;
@@ -589,11 +580,9 @@ class ItlgLinkRow extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// Logo ITLG (vektor dari Figma)
-// =============================================================================
+// Komponen gambar vektor logo ITLG
 
-/// Logo ITLG berwarna (biru & biru tua).
+/// Widget ikon logo ITLG.
 class ItlgLogoMark extends StatelessWidget {
   final double size;
   final Color lightColor;
@@ -618,7 +607,7 @@ class ItlgLogoMark extends StatelessWidget {
   }
 }
 
-/// Logo ITLG + tulisan "ITLG / Information Technology Laboratory Group".
+/// Widget logo lengkap dengan nama institusi.
 class ItlgWordmark extends StatelessWidget {
   final double height;
   const ItlgWordmark({super.key, this.height = 53});

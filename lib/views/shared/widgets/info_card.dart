@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 /// Shared InfoCard widget — menampilkan info dalam list card sederhana.
-/// Cocok untuk jadwal, pengumuman, dan daftar ringkas.
 class InfoCard extends StatelessWidget {
   final String title;
   final String subtitle;

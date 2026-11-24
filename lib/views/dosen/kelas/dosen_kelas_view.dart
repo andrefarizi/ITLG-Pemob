@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Dosen Kelas View
 class DosenKelasView extends StatelessWidget {
   const DosenKelasView({super.key});
 

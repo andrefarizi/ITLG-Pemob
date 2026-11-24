@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Aslab Rekap View
 class AslabRekapView extends StatelessWidget {
   const AslabRekapView({super.key});
 

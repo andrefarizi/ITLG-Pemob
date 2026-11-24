@@ -72,17 +72,14 @@ class _ITLGAppState extends State<ITLGApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       onGenerateRoute: AppRoutes.onGenerateRoute,
-      // Ukuran teks mengikuti desain Figma walaupun pengaturan "Teks Lebih
-      // Besar" di HP aktif, supaya tidak ada elemen yang bertabrakan.
+      // Kunci skala ukuran teks agar tata letak konsisten
       builder: (context, child) => MediaQuery.withClampedTextScaling(
         maxScaleFactor: 1.0,
         child: child ?? const SizedBox.shrink(),
       ),
       home: _showSplash
           ? SplashScreen(
-              // Alur Figma: Splash -> tombol "Mulai" -> halaman Masuk
-              // (melewati onboarding). Peran dipilih lewat chip di halaman
-              // Masuk.
+              // Navigasi dari splash screen ke halaman login
               onStart: () async {
                 await _authController.logout();
                 setState(() {
@@ -110,8 +107,7 @@ class _ITLGAppState extends State<ITLGApp> {
   }
 }
 
-/// Halaman utama setelah Masuk. Semua peran (Praktikan, Asisten Lab,
-/// Laboran, Dosen) memakai halaman hasil desain Figma.
+/// Halaman utama aplikasi sesuai peran pengguna.
 Widget _roleHome(UserRole role) {
   switch (role) {
     case UserRole.praktikan:

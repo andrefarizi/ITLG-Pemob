@@ -7,12 +7,7 @@ import 'package:flutter/services.dart';
 import 'gyro_replies.dart';
 import 'widgets/gyro_mascot_view.dart';
 
-/// Halaman "Tanya Gyro" – asisten AI ITLG Mobile (UI saja, tanpa backend).
-///
-/// Desain: Figma "Tanya Gyro-Praktikan" (awal) dan
-/// "Tanya Gyro-Percakapan (Berpikir)" (setelah ada percakapan).
-/// Maskot 3D diambil dari folder `gyro/` (mascot.js) dan bereaksi sesuai
-/// event: menyapa → mendengarkan (saat mengetik) → berpikir → menjawab.
+/// Halaman asisten virtual Tanya Gyro.
 class GyroPage extends StatefulWidget {
   const GyroPage({super.key});
 
@@ -79,9 +74,7 @@ class _GyroPageState extends State<GyroPage> with WidgetsBindingObserver {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Event maskot
-  // ---------------------------------------------------------------------------
 
   void _setMood(GyroMood mood) {
     _mascot.setMood(mood);
@@ -130,9 +123,7 @@ class _GyroPageState extends State<GyroPage> with WidgetsBindingObserver {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Input
-  // ---------------------------------------------------------------------------
 
   void _onInputChanged(String text) {
     if (_busy) return;
@@ -250,9 +241,7 @@ class _GyroPageState extends State<GyroPage> with WidgetsBindingObserver {
     });
   }
 
-  // ---------------------------------------------------------------------------
   // Build
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +288,7 @@ class _GyroPageState extends State<GyroPage> with WidgetsBindingObserver {
 
     return Stack(
       children: [
-        // Latar gradasi (Figma: #F8FAFC → #E8ECF1)
+        // Latar gradasi
         const Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -511,9 +500,7 @@ class _GyroPageState extends State<GyroPage> with WidgetsBindingObserver {
   }
 }
 
-// =============================================================================
-// Layout responsif (diturunkan dari ukuran frame Figma 402 x 874)
-// =============================================================================
+// Layout responsif
 
 class _GyroLayout {
   static const double footerHeight = 121;
@@ -552,12 +539,12 @@ class _GyroLayout {
     bool showHint = false;
 
     if (!chatMode) {
-      // Figma: hint 54 px + jarak 85 px + footer 121 px, padding 28 / 22
+      // Perhitungan jarak tata letak panel bawah
       showHint = !keyboardOpen;
       padTop = showHint ? 28 : 18;
       sheetH = padTop + (showHint ? 139 : 0) + footerHeight + 22 + bottomSafe;
     } else {
-      // Figma: sheet mulai 312 px di bawah status bar
+      // Sheet mulai di bawah status bar
       padTop = 22;
       final minSheet = padTop + 150 + 12 + footerHeight + 22 + bottomSafe;
       final desiredTop = topInset + 312;
@@ -572,11 +559,11 @@ class _GyroLayout {
     double mascotH;
     double feetY;
     if (!chatMode) {
-      // Figma: tinggi Gyro 250 px, kaki 142 px di atas sheet
+      // Tinggi Gyro, kaki di atas sheet
       mascotH = math.min(250.0, area * 0.56);
       feetY = sheetTop - (area - mascotH) * 0.717;
     } else {
-      // Figma: tinggi Gyro 172 px, kaki 36 px di atas sheet
+      // Tinggi Gyro, kaki di atas sheet
       mascotH = math.min(172.0, area * 0.67);
       feetY = sheetTop - (area - mascotH) * 0.43;
     }
@@ -595,9 +582,7 @@ class _GyroLayout {
   }
 }
 
-// =============================================================================
 // Warna & gaya (Design System ITLG)
-// =============================================================================
 
 class _GyroColors {
   static const String font = 'Montserrat';
@@ -614,7 +599,7 @@ class _GyroColors {
   static const Color success = Color(0xFF2E9B5B);
   static const Color warning = Color(0xFFD99A00);
 
-  /// Effect style "Outline Shadow" di Design System.
+  /// Efek bayangan kartu dan tombol.
   static const List<BoxShadow> outlineShadow = [
     BoxShadow(offset: Offset(1, 1), blurRadius: 3, color: Color(0x0F000000)),
     BoxShadow(offset: Offset(4, 5), blurRadius: 6, color: Color(0x0D000000)),
@@ -628,9 +613,7 @@ class _GyroColors {
   ];
 }
 
-// =============================================================================
 // Komponen
-// =============================================================================
 
 class _BackButton extends StatelessWidget {
   final VoidCallback onTap;
@@ -823,10 +806,7 @@ class _GyroPlatform extends StatelessWidget {
   }
 }
 
-/// Piringan Gyro sesuai Figma (grup 308 x 66):
-///   Ellipse 1  308x66  #FFFFFF + inner shadow (6,6 b6 12%) & (0,-3 b6 5%)
-///   Ellipse 2  223x31  #F7F7F7 di (42,14) + drop shadow (0,6 b3 10%)
-///   Ellipse 3  146x16  #E6E6E6 di (80,22)
+/// Piringan Gyro
 class _PlatformPainter extends CustomPainter {
   const _PlatformPainter();
 
@@ -836,7 +816,7 @@ class _PlatformPainter extends CustomPainter {
     Rect r(double x, double y, double w, double h) =>
         Rect.fromLTWH(x * sx, y * sy, w * sx, h * sy);
 
-    // Ellipse 1 + inner shadow
+    // Lapisan dasar piringan maskot
     final outer = r(0, 0, 308, 66);
     final outerPath = Path()..addOval(outer);
     canvas.drawPath(outerPath, Paint()..color = Colors.white);
@@ -859,7 +839,7 @@ class _PlatformPainter extends CustomPainter {
     }
     canvas.restore();
 
-    // Ellipse 2 + drop shadow
+    // Lapisan tengah piringan maskot
     final mid = r(42, 14, 223, 31);
     canvas.drawOval(
       mid.shift(Offset(0, 6.3 * sy)),
@@ -869,7 +849,7 @@ class _PlatformPainter extends CustomPainter {
     );
     canvas.drawOval(mid, Paint()..color = const Color(0xFFF7F7F7));
 
-    // Ellipse 3
+    // Lapisan dalam piringan maskot
     canvas.drawOval(r(80, 22, 146, 16), Paint()..color = const Color(0xFFE6E6E6));
   }
 
@@ -1139,7 +1119,7 @@ class _SendButton extends StatelessWidget {
   }
 }
 
-/// Inner shadow kolom input (Figma: 4,4 blur 4 #000 12% dan 0,-2 blur 4 5%).
+/// Efek bayangan kolom input pesan.
 class _InnerShadowPainter extends CustomPainter {
   final double radius;
   const _InnerShadowPainter({required this.radius});

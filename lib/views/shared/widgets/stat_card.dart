@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 /// Reusable StatCard widget untuk semua role views.
-/// Menampilkan angka statistik, judul, dan ikon dengan warna aksen.
 class StatCard extends StatelessWidget {
   final String title;
   final String value;

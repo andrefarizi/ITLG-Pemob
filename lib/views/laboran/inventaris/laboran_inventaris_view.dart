@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Laboran Inventaris View
 class LaboranInventarisView extends StatelessWidget {
   const LaboranInventarisView({super.key});
 

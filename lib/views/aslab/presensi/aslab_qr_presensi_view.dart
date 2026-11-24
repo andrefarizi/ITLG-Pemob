@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Aslab Qr Presensi View
 class AslabQrPresensiView extends StatelessWidget {
   const AslabQrPresensiView({super.key});
 

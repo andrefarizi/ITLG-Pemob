@@ -1,7 +1,4 @@
-/// Jawaban dummy Gyro (belum terhubung backend / AI sungguhan).
-///
-/// Nanti cukup ganti [GyroReplies.answer] dengan pemanggilan API; halaman
-/// Gyro hanya butuh `thinking` (teks gelembung saat berpikir) dan `answer`.
+/// Daftar respons percakapan asisten Gyro.
 class GyroReply {
   /// Teks di gelembung pikiran saat Gyro "berpikir".
   final String thinking;
@@ -27,7 +24,7 @@ class GyroReplies {
       'Ketik pesan dan lihat reaksiku: aku mendengarkan, berpikir, lalu '
       'menjawab.\nKamu juga bisa menyentuh aku.';
 
-  /// Chip saran sebelum percakapan dimulai (sesuai desain Figma).
+  /// Chip saran sebelum percakapan dimulai.
   static const List<String> introSuggestions = [
     'Jadwal hari ini',
     'Deadline tugas',

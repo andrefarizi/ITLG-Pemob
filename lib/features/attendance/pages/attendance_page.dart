@@ -8,6 +8,7 @@ import '../../aslab/attendance/aslab_attendance_page.dart';
 import '../../laboran/attendance/laboran_attendance_page.dart';
 import '../../dosen/attendance/dosen_attendance_page.dart';
 
+// Halaman presensi umum
 class AttendancePage extends StatefulWidget {
   const AttendancePage({super.key});
 

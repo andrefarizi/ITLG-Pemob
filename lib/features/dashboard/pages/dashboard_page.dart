@@ -9,6 +9,7 @@ import '../../laboran/dashboard/laboran_dashboard_page.dart';
 import '../../dosen/dashboard/dosen_dashboard_page.dart';
 import '../../notifications/notifikasi_page.dart';
 
+// Halaman dashboard utama lintas peran
 class DashboardPage extends StatefulWidget {
   final Function(int) onTabChange;
 

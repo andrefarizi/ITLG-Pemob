@@ -117,8 +117,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
 
           // 3. Kontrol Bawah (Indikator Titik + Tombol Lanjut)
-          // Di Halaman 5 (terakhir), tombol navigasi bawah disembunyikan
-          // karena Page 5 sudah memiliki tombol "Sebagai Praktikan" & "Sebagai Asisten Lab"
           if (!isLastPage)
             Positioned(
               left: 24,

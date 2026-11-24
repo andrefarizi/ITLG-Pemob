@@ -7,15 +7,9 @@ import 'package:flutter/services.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../gyro/gyro_page.dart';
 
-/// Komponen halaman peran Laboran (Figma: section "03 Laboran").
-///
-/// Semua ukuran, warna, radius, dan bayangan diambil dari Figma dengan kanvas
-/// 402 px. Lebar konten = lebar layar - 32, jadi di 402 px hasilnya sama
-/// persis dan di layar lain menyesuaikan.
+/// Komponen halaman peran Laboran.
 
-// =============================================================================
 // Token
-// =============================================================================
 
 class LabColors {
   LabColors._();
@@ -45,27 +39,27 @@ class LabColors {
 class LabShadows {
   LabShadows._();
 
-  /// Bayangan timbul pada ikon kotak, pill, dan tombol filter.
+  /// Bayangan timbul pada tombol hari Jadwal Mengajar Aslab.
   static const List<BoxShadow> neu = [
-    BoxShadow(offset: Offset(6, 6), blurRadius: 14, color: Color(0x73A3B1C6)),
-    BoxShadow(offset: Offset(-6, -6), blurRadius: 11, color: Color(0xE6FFFFFF)),
+    BoxShadow(offset: Offset(6, 6), blurRadius: 11.3, color: Color(0x73A3B1C6)),
+    BoxShadow(offset: Offset(-6, -6), blurRadius: 8.7, color: Color(0xE6FFFFFF)),
   ];
 
-  /// Inner shadow jalur progress dan titik langkah yang belum aktif.
+  /// Efek bayangan dalam untuk indikator progres dan kotak meja.
   static const List<BoxShadow> track = [
-    BoxShadow(offset: Offset(-1, -1), blurRadius: 3, color: Color(0xE6FFFFFF)),
-    BoxShadow(offset: Offset(1, 1), blurRadius: 3, color: Color(0x80A3B1C6)),
+    BoxShadow(offset: Offset(-1, -1), blurRadius: 1.7, color: Color(0xE6FFFFFF)),
+    BoxShadow(offset: Offset(1, 1), blurRadius: 1.7, color: Color(0x80A3B1C6)),
   ];
 
-  /// Inner shadow kolom pencarian.
+  /// Efek bayangan dalam untuk kolom pencarian.
   static const List<BoxShadow> search = [
-    BoxShadow(offset: Offset(-3, -3), blurRadius: 6, color: Color(0xE6FFFFFF)),
-    BoxShadow(offset: Offset(3, 3), blurRadius: 6, color: Color(0x80A3B1C6)),
+    BoxShadow(offset: Offset(-3, -3), blurRadius: 4.3, color: Color(0xE6FFFFFF)),
+    BoxShadow(offset: Offset(3, 3), blurRadius: 4.3, color: Color(0x80A3B1C6)),
   ];
 
   /// Bayangan ke atas pada navbar.
   static const List<BoxShadow> navbar = [
-    BoxShadow(offset: Offset(0, -4), blurRadius: 12, color: Color(0x40A3B1C6)),
+    BoxShadow(offset: Offset(0, -4), blurRadius: 9.5, color: Color(0x40A3B1C6)),
   ];
 }
 
@@ -73,7 +67,7 @@ const FontWeight kMedium = FontWeight.w500;
 const FontWeight kSemiBold = FontWeight.w600;
 const FontWeight kBold = FontWeight.w700;
 
-/// Gaya teks Montserrat dengan line-height 120% seperti di Figma.
+/// Gaya teks Montserrat dengan line-height 120%.
 TextStyle labText(
   double size, {
   FontWeight w = FontWeight.w400,
@@ -81,9 +75,7 @@ TextStyle labText(
 }) =>
     ItlgText.style(size: size, weight: w, color: c, height: 1.2);
 
-// =============================================================================
-// Ikon (PNG hasil ekspor Figma, diwarnai lewat [color])
-// =============================================================================
+// Ikon
 
 class LabIcon extends StatelessWidget {
   final String name;
@@ -105,9 +97,7 @@ class LabIcon extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// Navigasi (durasi & arah mengikuti prototipe Figma)
-// =============================================================================
+// Navigasi
 
 /// Halaman detail: masuk dari kanan, 300 ms ease-out.
 Future<T?> labPush<T>(BuildContext context, Widget page) {
@@ -141,9 +131,15 @@ Future<void> labOpenGyro(BuildContext context) {
   );
 }
 
-/// Toast global ITLG (Figma: "Toast Semua Notifikasi Dibaca" 5828:3303):
-/// batang #202124 radius 14, ikon centang hijau 20px, teks SemiBold 13px putih.
-void labToast(BuildContext context, String message) {
+/// Halaman Toast Semua Notifikasi Dibaca.
+void labToast(BuildContext context, String message, {bool? error}) {
+  final errorPattern = RegExp(
+    r'(gagal|bentrok|minimal|sudah lewat|\bharus\b|tidak (dapat|bisa|ditemukan|valid|sesuai)|'
+    r'^(isi|tulis|pilih|lampirkan|jelaskan|beri|unggah berkas|belum ada status|'
+    r'sesi .* dinonaktifkan|metode .* dinonaktifkan|kode .* salah)\b)',
+    caseSensitive: false,
+  );
+  final isError = error ?? errorPattern.hasMatch(message.trim());
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
@@ -153,10 +149,14 @@ void labToast(BuildContext context, String message) {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         backgroundColor: const Color(0xFF202124),
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: isError ? 3 : 2),
         content: Row(
           children: [
-            const LabIcon('circle_check', size: 20, color: LabColors.green),
+            isError
+                ? const LabIcon('triangle_alert',
+                    size: 20, color: Color(0xFFFF6B6B))
+                : const LabIcon('circle_check',
+                    size: 20, color: LabColors.green),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -170,10 +170,7 @@ void labToast(BuildContext context, String message) {
     );
 }
 
-/// Pop-up hasil (Figma: "Pop up Berkas Diunduh", "Pop up Izin Disetujui",
-/// dst): kartu 370 px, ikon 44 px di kotak cekung 80 px, judul Bold 22,
-/// pesan Regular 14, tombol merah 50 px. Muncul dengan fade 250 ms di atas
-/// latar gelap #0A0B0C 40%.
+/// Dialog Berkas Diunduh.
 Future<void> labShowResult(
   BuildContext context, {
   required String icon,
@@ -207,12 +204,14 @@ Future<void> labShowResult(
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Center(
+                    SizedBox(
+                      width: 79.5,
+                      height: 79.5,
                       child: InnerShadowBox(
-                        width: 80,
-                        height: 80,
+                        width: 79.5,
+                        height: 79.5,
                         radius: 19.875,
                         shadows: ItlgShadows.innerLarge,
                         child: Center(
@@ -237,12 +236,13 @@ Future<void> labShowResult(
                         onPressed?.call();
                       },
                       child: Container(
+                        width: double.infinity,
                         height: 50,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: ItlgColors.primary,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: ItlgShadows.primary,
+                          boxShadow: ItlgShadows.outline,
                         ),
                         child: Text(button,
                             style: labText(16,
@@ -260,14 +260,12 @@ Future<void> labShowResult(
   );
 }
 
-// =============================================================================
-// Header atas (Frame 41 + Frame 45) dan tombol Kembali (Frame 29)
-// =============================================================================
+// Komponen header aplikasi dan tombol kembali
 
-/// Jarak antar-bagian di halaman (Figma: auto layout "Content" gap 28).
+/// Jarak antar-bagian di halaman.
 const double kLabSectionGap = 28;
 
-/// Tinggi header di bawah status bar (112 - 60 di Figma).
+/// Tinggi header di bawah status bar.
 const double kLabTopBarBody = 52;
 
 double labTopBarHeight(BuildContext context) =>
@@ -364,8 +362,7 @@ class LabBackButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap ?? () => Navigator.of(context).maybePop(),
       child: Container(
-        // Lebar Figma 116 px; boleh melebar sedikit bila font perangkat
-        // lebih lebar supaya teks "Kembali" tidak terpotong (overflow).
+        // Sesuaikan lebar tombol kembali dengan ukuran teks
         constraints: const BoxConstraints(minWidth: 116),
         height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -388,13 +385,12 @@ class LabBackButton extends StatelessWidget {
   }
 }
 
-/// Kerangka halaman detail (tanpa navbar): header + tombol Kembali tetap di
-/// atas, konten mulai 57 px di bawah header dan bisa di-scroll.
+/// Kerangka tata letak halaman detail.
 class LabSubPage extends StatelessWidget {
   final List<Widget> children;
   final VoidCallback? onLogoTap;
 
-  /// Jarak antar-bagian (Figma: gap auto layout "Content").
+  /// Jarak antar-bagian.
   final double gap;
 
   /// Aksi tombol Kembali (default: tutup halaman ini).
@@ -447,8 +443,7 @@ class LabSubPage extends StatelessWidget {
   }
 }
 
-/// Isi halaman tab (di dalam LaboranShell): konten mulai 20 px di bawah header
-/// dan berakhir 40 px di atas navbar.
+/// Kontainer isi halaman tab utama.
 class LabTabBody extends StatelessWidget {
   final List<Widget> children;
   const LabTabBody({super.key, required this.children});
@@ -463,9 +458,7 @@ class LabTabBody extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Navbar bawah
-// =============================================================================
 
 class LabNavItem {
   final String label;
@@ -532,8 +525,7 @@ class _NavTab extends StatelessWidget {
             boxShadow: active ? ItlgShadows.primary : const [],
           ),
           child: LabIcon(
-            // Ikon navbar sengaja memakai aset tersendiri (ic_nav_*) supaya
-            // tidak ikut berubah ketika ikon konten diganti.
+            // Render ikon tab navigasi bawah
             'nav_${item.icon}',
             size: 20,
             color: active ? Colors.white : ItlgColors.textSubtle,
@@ -556,11 +548,9 @@ class _NavTab extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Susunan
-// =============================================================================
 
-/// Column dengan jarak antar-anak tetap (auto layout vertikal di Figma).
+/// Column dengan jarak antar-anak tetap.
 class LabColumn extends StatelessWidget {
   final double gap;
   final List<Widget> children;
@@ -588,7 +578,7 @@ class LabColumn extends StatelessWidget {
   }
 }
 
-/// Kartu abu-abu #F5F5F5, radius 24, padding 16, jarak isi 16.
+/// Widget kartu kontainer utama.
 class LabCard extends StatelessWidget {
   final List<Widget> children;
   final double gap;
@@ -613,7 +603,7 @@ class LabCard extends StatelessWidget {
   }
 }
 
-/// Judul halaman: Bold 22 + keterangan Regular 14.
+/// Widget judul halaman beserta deskripsi singkat.
 class LabTitle extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -631,7 +621,7 @@ class LabTitle extends StatelessWidget {
   }
 }
 
-/// Keterangan kecil di atas judul kartu (Regular 14 merah tua) + judul.
+/// Header kartu dengan subjudul dan judul utama.
 class LabOverline extends StatelessWidget {
   final String overline;
   final String title;
@@ -656,11 +646,9 @@ class LabOverline extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Elemen kecil
-// =============================================================================
 
-/// Kotak ikon 36 px (#EEF0F3, radius 9). Datar, tanpa bayangan.
+/// Kotak ikon. Datar, tanpa bayangan.
 class LabIconTile extends StatelessWidget {
   final String icon;
   final Color color;
@@ -691,7 +679,7 @@ class LabIconTile extends StatelessWidget {
   }
 }
 
-/// Judul bagian di dalam kartu: kotak merah 28 px + teks SemiBold 14.
+/// Judul bagian di dalam kartu: kotak merah + teks.
 class LabSectionTitle extends StatelessWidget {
   final String icon;
   final String text;
@@ -724,7 +712,7 @@ class LabSectionTitle extends StatelessWidget {
   }
 }
 
-/// Judul bagian di luar kartu: ikon biru 20 px + teks Bold 16.
+/// Judul bagian di luar kartu: ikon biru + teks.
 class LabHeading extends StatelessWidget {
   final String icon;
   final String text;
@@ -748,7 +736,7 @@ class LabHeading extends StatelessWidget {
   }
 }
 
-/// Avatar inisial 36 px.
+/// Avatar inisial.
 class LabAvatar extends StatelessWidget {
   final String initials;
   const LabAvatar(this.initials, {super.key});
@@ -768,7 +756,7 @@ class LabAvatar extends StatelessWidget {
   }
 }
 
-/// Avatar + nama Bold 14 + keterangan Medium 11.
+/// Avatar + nama + keterangan.
 class LabPerson extends StatelessWidget {
   final String initials;
   final String name;
@@ -802,7 +790,7 @@ class LabPerson extends StatelessWidget {
   }
 }
 
-/// Titik status bercincin 10 px (Figma: radio-dot kecil, garis 0,9 px).
+/// Titik status bercincin.
 class LabRingDot extends StatelessWidget {
   final Color color;
   final double size;
@@ -841,7 +829,7 @@ class _RingDotPainter extends CustomPainter {
   bool shouldRepaint(covariant _RingDotPainter old) => old.color != color;
 }
 
-/// Chip status 22 px (radius 24, padding 4/10). Datar, tanpa bayangan.
+/// Chip status. Datar, tanpa bayangan.
 class LabChip extends StatelessWidget {
   final String text;
   final Color bg;
@@ -849,8 +837,7 @@ class LabChip extends StatelessWidget {
   final FontWeight weight;
   final bool dot;
 
-  /// Tidak dipakai lagi (status tidak memakai bayangan); tetap ada supaya
-  /// pemanggil lama tidak perlu diubah.
+  /// Parameter opsional untuk kompatibilitas pemanggilan.
   final bool shadow;
 
   const LabChip(
@@ -935,7 +922,7 @@ class LabChip extends StatelessWidget {
   }
 }
 
-/// Pill abu-abu datar dengan ikon 12 px (jam, Real-time, minggu ke-n).
+/// Pill abu-abu datar dengan ikon (jam, Real-time, minggu ke-n).
 class LabPill extends StatelessWidget {
   final String icon;
   final String text;
@@ -974,7 +961,7 @@ class LabPill extends StatelessWidget {
   }
 }
 
-/// Tag kecil 16 px (radius 6, SemiBold 10).
+/// Tag kecil.
 class LabTag extends StatelessWidget {
   final String text;
   final Color bg;
@@ -1012,7 +999,7 @@ class LabTag extends StatelessWidget {
   }
 }
 
-/// Ikon 12 px + teks Medium 11.
+/// Ikon + teks.
 class LabMeta extends StatelessWidget {
   final String icon;
   final String text;
@@ -1027,8 +1014,7 @@ class LabMeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Text.rich supaya aman dipakai di dalam Row maupun Column (tidak butuh
-    // Flexible) dan tetap terpotong rapi bila ruangnya sempit.
+    // Tampilkan ikon dan teks dalam satu baris
     return Text.rich(
       TextSpan(
         children: [
@@ -1049,7 +1035,7 @@ class LabMeta extends StatelessWidget {
   }
 }
 
-/// Kotak statistik 60 px (inner shadow): label kecil + nilai Bold 14.
+/// Kotak statistik: label kecil + nilai.
 class LabStat extends StatelessWidget {
   final String icon;
   final String label;
@@ -1105,12 +1091,12 @@ class LabStatRow extends StatelessWidget {
   }
 }
 
-/// Label + nilai + batang progress 6 px.
+/// Label + nilai + batang progress.
 class LabProgress extends StatelessWidget {
   final String label;
   final String value;
 
-  /// 0..1 (di Figma: lebar isi / 338).
+  /// 0..1.
   final double fraction;
   final Color color;
 
@@ -1156,7 +1142,7 @@ class LabProgress extends StatelessWidget {
   }
 }
 
-/// Kotak putih dengan inner shadow (radius 12).
+/// Kontainer kotak putih bagian dalam kartu.
 class LabInsetBox extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -1178,7 +1164,7 @@ class LabInsetBox extends StatelessWidget {
   }
 }
 
-/// Baris daftar putih (radius 12, padding 11/14, Outline Shadow).
+/// Baris daftar putih.
 class LabListItem extends StatelessWidget {
   final Widget leading;
   final String title;
@@ -1233,8 +1219,7 @@ class LabListItem extends StatelessWidget {
   }
 }
 
-/// Kartu abu-abu pembungkus daftar (Figma "Kartu Daftar": padding 12,
-/// jarak 10, radius 24, Outline Shadow). Isinya [LabRowCard].
+/// Kartu kontainer untuk daftar item.
 class LabListCard extends StatelessWidget {
   final List<Widget> children;
   final double gap;
@@ -1260,7 +1245,7 @@ class LabListCard extends StatelessWidget {
   }
 }
 
-/// Baris putih timbul di dalam [LabListCard] (radius 16, padding 14).
+/// Baris putih timbul di dalam [LabListCard].
 class LabRowCard extends StatelessWidget {
   final List<Widget> children;
   final double gap;
@@ -1293,17 +1278,15 @@ class LabRowCard extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Tab pilihan & tombol
-// =============================================================================
 
-/// Deret tab/opsi 39 px. Yang aktif merah dengan cahaya, lainnya putih.
+/// Deret tab/opsi. Yang aktif merah dengan cahaya, lainnya putih.
 class LabTabs extends StatelessWidget {
   final List<String> labels;
   final int index;
   final ValueChanged<int> onChanged;
 
-  /// Tab halaman: gap 12 & padding 14. Opsi di kartu: gap 10 & padding 12.
+  /// Mode tampilan tab halaman atau opsi kartu.
   final double gap;
   final double hPadding;
 
@@ -1384,8 +1367,7 @@ class _TabChip extends StatelessWidget {
   }
 }
 
-/// Tombol merah. Kecil: 41 px (Bold 12, ikon 16). Besar: 50 px (Bold 16,
-/// ikon 22).
+/// Widget tombol aksi utama berwarna merah.
 class LabPrimaryButton extends StatelessWidget {
   final String icon;
   final String label;
@@ -1435,7 +1417,7 @@ class LabPrimaryButton extends StatelessWidget {
   }
 }
 
-/// Tombol putih (#FBFCFC, garis dalam putih 4 px) dengan teks merah.
+/// Tombol putih dengan teks merah.
 class LabOutlineButton extends StatelessWidget {
   final String icon;
   final String label;
@@ -1457,10 +1439,10 @@ class LabOutlineButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: large ? 50 : 41,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: LabColors.bar,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white, width: 4),
           boxShadow: ItlgShadows.outline,
         ),
         child: Row(
@@ -1484,7 +1466,7 @@ class LabOutlineButton extends StatelessWidget {
   }
 }
 
-/// Dua tombol sejajar dengan perbandingan lebar Figma (167 : 159, jarak 12).
+/// Baris dua tombol aksi berdampingan.
 class LabButtonPair extends StatelessWidget {
   final Widget left;
   final Widget right;
@@ -1502,7 +1484,7 @@ class LabButtonPair extends StatelessWidget {
   }
 }
 
-/// Lingkaran status 26/28 px berisi ikon putih.
+/// Indikator status berbentuk lingkaran dengan ikon.
 class LabStatusDot extends StatelessWidget {
   final double size;
   final Color color;
@@ -1527,14 +1509,9 @@ class LabStatusDot extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// Komponen UX Baru (Figma: Avatar Inisial, Badge Lonceng, Pop up Konfirmasi,
-// Pop up Hasil, Sheet Scrollable, & Date-Time Picker)
-// =============================================================================
+// Komponen avatar, tombol notifikasi, dialog, dan bottom sheet
 
-/// Avatar inisial bulat bergaya Figma (`#F3E6E6`, border `#D9B8B8`, teks `#850909`).
-/// Jika [photoSource] berisi URL Supabase atau path file lokal yang valid,
-/// menampilkan foto profil nyata secara bulat dengan fallback otomatis ke inisial.
+/// Widget avatar foto profil atau inisial nama.
 class LabInitialAvatar extends StatelessWidget {
   final String initials;
   final double size;
@@ -1611,8 +1588,7 @@ class LabInitialAvatar extends StatelessWidget {
   }
 }
 
-/// Tombol lonceng notifikasi bulat merah 40x40 (Figma 5813:3004 / 5497:1559 /
-/// 5479:186 / 5479:1160) dengan badge bulat putih berbingkai merah di kanan atas.
+/// Tombol ikon lonceng notifikasi beserta lencana jumlah.
 class LabBellButton extends StatelessWidget {
   final int unreadCount;
   final VoidCallback onTap;
@@ -1639,25 +1615,24 @@ class LabBellButton extends StatelessWidget {
               width: 40,
               height: 40,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: ItlgColors.primary,
                 shape: BoxShape.circle,
-                boxShadow: ItlgShadows.primary,
               ),
-              child: const LabIcon('bell_filled', size: 19, color: Colors.white),
+              child: const LabIcon('bell_filled', size: 18, color: Colors.white),
             ),
             if (unreadCount > 0)
               Positioned(
                 top: -1,
                 right: -1,
                 child: Container(
-                  constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: ItlgColors.primary, width: 1.6),
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: ItlgColors.primary, width: 1.5),
                   ),
                   child: Text(
                     unreadCount > 99 ? '99+' : '$unreadCount',
@@ -1672,8 +1647,7 @@ class LabBellButton extends StatelessWidget {
   }
 }
 
-/// Tombol merah lembut bergaya Figma ("Akhiri Pemakaian Meja" 5712:2948 &
-/// "Batalkan Permintaan Tukar Jadwal" 5814:3113): latar #FCEAEA, teks #850909 Bold.
+/// Tombol aksi sekunder berwarna merah muda.
 class LabSoftDangerButton extends StatelessWidget {
   final String icon;
   final String label;
@@ -1692,10 +1666,10 @@ class LabSoftDangerButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: 48,
+        height: 50,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFFFCEAEA),
+          color: const Color(0xFFFCECEC),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -1718,7 +1692,7 @@ class LabSoftDangerButton extends StatelessWidget {
   }
 }
 
-/// Figma: "Sheet Filter & Urutkan" (5828:3158).
+/// Bottom sheet Filter & Urutkan.
 Future<({int sortIndex, int statusIndex})?> labShowFilterSortSheet(
   BuildContext context, {
   int initialSort = 0,
@@ -1809,8 +1783,7 @@ Future<({int sortIndex, int statusIndex})?> labShowFilterSortSheet(
   );
 }
 
-/// Pop-up konfirmasi dua tombol bergaya Figma ("Keluar Akun", "Akhiri Meja",
-/// "Selesai Kuis", "Batalkan Pengumpulan"). Mengembalikan true jika dikonfirmasi.
+/// Dialog konfirmasi dengan dua tombol aksi.
 Future<bool> labShowConfirmDialog(
   BuildContext context, {
   required String icon,
@@ -1836,7 +1809,7 @@ Future<bool> labShowConfirmDialog(
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 22, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 22, 17, 22),
                 decoration: BoxDecoration(
                   color: ItlgColors.surfaceDark,
                   borderRadius: BorderRadius.circular(24),
@@ -1844,26 +1817,28 @@ Future<bool> labShowConfirmDialog(
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Center(
+                    SizedBox(
+                      width: 79.5,
+                      height: 79.5,
                       child: InnerShadowBox(
                         width: 79.5,
                         height: 79.5,
-                        radius: 20,
+                        radius: 19.875,
                         color: ItlgColors.field,
                         shadows: ItlgShadows.innerLarge,
                         child: Center(
                           child: LabIcon(icon,
-                              size: 40, color: ItlgColors.primary),
+                              size: 44, color: ItlgColors.primary),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: labText(20, w: kBold, c: ItlgColors.text),
+                      style: labText(22, w: kBold, c: ItlgColors.text),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -1871,7 +1846,7 @@ Future<bool> labShowConfirmDialog(
                       textAlign: TextAlign.center,
                       style: labText(14, c: ItlgColors.textMuted),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 13),
                     Row(
                       children: [
                         Expanded(
@@ -1884,13 +1859,13 @@ Future<bool> labShowConfirmDialog(
                               decoration: BoxDecoration(
                                 color: LabColors.bar,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white, width: 1.5),
+                                border: Border.all(color: Colors.white, width: 1),
                                 boxShadow: ItlgShadows.outline,
                               ),
                               child: Text(
                                 cancelLabel,
                                 textAlign: TextAlign.center,
-                                style: labText(14,
+                                style: labText(16,
                                     w: kBold, c: ItlgColors.primary),
                               ),
                             ),
@@ -1908,14 +1883,14 @@ Future<bool> labShowConfirmDialog(
                               decoration: BoxDecoration(
                                 color: ItlgColors.primary,
                                 borderRadius: BorderRadius.circular(12),
-                                boxShadow: ItlgShadows.primary,
+                                boxShadow: ItlgShadows.outline,
                               ),
                               child: Text(
                                 confirmLabel,
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: labText(14,
+                                style: labText(16,
                                     w: kBold, c: ItlgColors.surfaceWhite),
                               ),
                             ),
@@ -1935,8 +1910,7 @@ Future<bool> labShowConfirmDialog(
   return res ?? false;
 }
 
-/// Pop-up hasil 1 tombol bergaya Figma ("Kata Sandi Diperbarui",
-/// "Check-In Berhasil", "Sanggahan Disetujui", "Nilai Diperbarui").
+/// Dialog informasi hasil aksi dengan satu tombol.
 Future<void> labShowResultDialog(
   BuildContext context, {
   required String icon,
@@ -1962,7 +1936,7 @@ Future<void> labShowResultDialog(
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 22, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 22, 17, 22),
                 decoration: BoxDecoration(
                   color: ItlgColors.surfaceDark,
                   borderRadius: BorderRadius.circular(24),
@@ -1970,26 +1944,28 @@ Future<void> labShowResultDialog(
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Center(
+                    SizedBox(
+                      width: 79.5,
+                      height: 79.5,
                       child: InnerShadowBox(
                         width: 79.5,
                         height: 79.5,
-                        radius: 20,
+                        radius: 19.875,
                         color: ItlgColors.field,
                         shadows: ItlgShadows.innerLarge,
                         child: Center(
                           child: LabIcon(icon,
-                              size: 40, color: ItlgColors.primary),
+                              size: 44, color: ItlgColors.primary),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: labText(20, w: kBold, c: ItlgColors.text),
+                      style: labText(22, w: kBold, c: ItlgColors.text),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -1997,7 +1973,7 @@ Future<void> labShowResultDialog(
                       textAlign: TextAlign.center,
                       style: labText(14, c: ItlgColors.textMuted),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 13),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {
@@ -2005,12 +1981,13 @@ Future<void> labShowResultDialog(
                         onPressed?.call();
                       },
                       child: Container(
+                        width: double.infinity,
                         height: 50,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: ItlgColors.primary,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: ItlgShadows.primary,
+                          boxShadow: ItlgShadows.outline,
                         ),
                         child: Text(
                           button,
@@ -2030,7 +2007,7 @@ Future<void> labShowResultDialog(
   );
 }
 
-/// Bottom sheet umum ITLG dengan handle bar 40x4 dan scroll otomatis.
+/// Bottom sheet umum ITLG dengan handle bar dan scroll otomatis.
 Future<T?> labShowCustomSheet<T>(
   BuildContext context, {
   required String title,
@@ -2088,7 +2065,7 @@ Future<T?> labShowCustomSheet<T>(
   );
 }
 
-/// Figma: "Sheet Pilih Tanggal & Jam" (5816:3260).
+/// Bottom sheet Pilih Tanggal & Jam.
 Future<DateTime?> labShowDateTimePicker(
   BuildContext context, {
   DateTime? initial,

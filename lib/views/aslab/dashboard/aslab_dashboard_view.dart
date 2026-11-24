@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Aslab Dashboard View
 class AslabDashboardView extends StatelessWidget {
   const AslabDashboardView({super.key});
 

@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/praktikum_sync_service.dart';
+import '../../../core/services/presensi_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import 'prak_google_map.dart';
 
-/// Komponen khusus halaman Praktikan (Figma: section "01 Praktikan").
-/// Komponen umum (kartu, chip, tombol, navbar) ada di
-/// lib/features/laboran/widgets/laboran_ui.dart.
+/// Komponen khusus halaman Praktikan.
 
-// =============================================================================
 // Token
-// =============================================================================
 
 class PrakColors {
   PrakColors._();
@@ -27,43 +25,41 @@ class PrakColors {
 class PrakShadows {
   PrakShadows._();
 
-  /// "Neu" yang lebih kecil (tombol hari, pill minggu, tombol filter).
+  /// Efek bayangan untuk tombol hari yang tidak dipilih.
   static const List<BoxShadow> neu5 = [
-    BoxShadow(offset: Offset(5, 5), blurRadius: 12, color: Color(0x73A3B1C6)),
-    BoxShadow(offset: Offset(-5, -5), blurRadius: 10, color: Color(0xE6FFFFFF)),
+    BoxShadow(offset: Offset(5, 5), blurRadius: 9.5, color: Color(0x73A3B1C6)),
+    BoxShadow(offset: Offset(-5, -5), blurRadius: 7.8, color: Color(0xE6FFFFFF)),
   ];
 
-  /// Kotak ikon 36 px di kartu jadwal & Detail Praktikum.
+  /// Kotak ikon di kartu jadwal & Detail Praktikum.
   static const List<BoxShadow> tile = [
     BoxShadow(
-        offset: Offset(5.7, 5.7), blurRadius: 13.7, color: Color(0x73A3B1C6)),
+        offset: Offset(5.7, 5.7), blurRadius: 11.0, color: Color(0x73A3B1C6)),
     BoxShadow(
-        offset: Offset(-5.7, -5.7), blurRadius: 11.4, color: Color(0xE6FFFFFF)),
+        offset: Offset(-5.7, -5.7), blurRadius: 9.0, color: Color(0xE6FFFFFF)),
   ];
 
-  /// Outline Shadow yang diperkecil (kotak ikon 34 px di Detail Praktikum).
+  /// Efek bayangan ukuran kecil untuk kotak ikon.
   static const List<BoxShadow> outlineSmall = [
     BoxShadow(
-        offset: Offset(1.3, 1.3), blurRadius: 3.9, color: Color(0x0F000000)),
+        offset: Offset(1.3, 1.3), blurRadius: 2.5, color: Color(0x0F000000)),
     BoxShadow(
-        offset: Offset(5.2, 6.5), blurRadius: 7.8, color: Color(0x0D000000)),
+        offset: Offset(5.2, 6.5), blurRadius: 5.9, color: Color(0x0D000000)),
     BoxShadow(
-        offset: Offset(10.5, 15.7), blurRadius: 10.5, color: Color(0x08000000)),
+        offset: Offset(10.5, 15.7), blurRadius: 8.2, color: Color(0x08000000)),
     BoxShadow(
-        offset: Offset(18.3, 27.5), blurRadius: 13.1, color: Color(0x03000000)),
+        offset: Offset(18.3, 27.5), blurRadius: 10.5, color: Color(0x03000000)),
   ];
 
-  /// Tombol hari terpilih: 0,4 blur 10, merah 30%.
+  /// Efek bayangan untuk tombol hari yang sedang aktif.
   static const List<BoxShadow> daySelected = [
-    BoxShadow(offset: Offset(0, 4), blurRadius: 10, color: Color(0x4D850909)),
+    BoxShadow(offset: Offset(0, 4), blurRadius: 7.8, color: Color(0x4D850909)),
   ];
 }
 
-// =============================================================================
 // Kerangka
-// =============================================================================
 
-/// Isi halaman tab Praktikan: konten mulai 20 px di bawah header.
+/// Isi halaman tab Praktikan: konten mulai di bawah header.
 class PrakTabBody extends StatelessWidget {
   final List<Widget> children;
   final double left;
@@ -88,7 +84,7 @@ class PrakTabBody extends StatelessWidget {
   }
 }
 
-/// Teks tautan merah di tengah (Bold 12).
+/// Teks tautan merah di tengah.
 class PrakLink extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
@@ -106,7 +102,7 @@ class PrakLink extends StatelessWidget {
   }
 }
 
-/// "Lihat Semua", "2 Praktikum", dll. (Regular 12 merah).
+/// Teks tautan aksi di sisi kanan judul bagian.
 class PrakSideLink extends StatelessWidget {
   final String text;
   final VoidCallback? onTap;
@@ -143,7 +139,7 @@ class PrakSpaceRow extends StatelessWidget {
   }
 }
 
-/// Garis pemisah 1 px (#B5B9BC, 40%).
+/// Garis pemisah.
 class PrakDivider extends StatelessWidget {
   const PrakDivider({super.key});
 
@@ -153,11 +149,9 @@ class PrakDivider extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Elemen kecil
-// =============================================================================
 
-/// Kotak angka merah 36 px (nomor pertemuan / soal).
+/// Kotak angka merah (nomor pertemuan / soal).
 class PrakNumberTile extends StatelessWidget {
   final String number;
   const PrakNumberTile(this.number, {super.key});
@@ -177,7 +171,7 @@ class PrakNumberTile extends StatelessWidget {
   }
 }
 
-/// Kotak buku 36 px (#EEF0F3) dengan ikon basil:book-solid merah tua.
+/// Kotak buku dengan ikon basil:book-solid merah tua.
 class PrakBookTile extends StatelessWidget {
   final Color color;
   final Widget? child;
@@ -199,7 +193,7 @@ class PrakBookTile extends StatelessWidget {
   }
 }
 
-/// Kotak ikon 34 px (#F5F5F5, datar) untuk berkas & kuis.
+/// Kotak ikon untuk berkas & kuis.
 class PrakFileIcon extends StatelessWidget {
   final String icon;
   final Color color;
@@ -232,7 +226,7 @@ class PrakFileIcon extends StatelessWidget {
   }
 }
 
-/// Tag 17 px (padding 2/8) yang dipakai di Detail Praktikum & Daftar.
+/// Tag yang dipakai di Detail Praktikum & Daftar.
 class PrakTag17 extends StatelessWidget {
   final String text;
   final bool red;
@@ -258,7 +252,7 @@ class PrakTag17 extends StatelessWidget {
   }
 }
 
-/// Chip hijau 24 px "Presensi Berlangsung" di Beranda (padding 10, jarak 10).
+/// Chip hijau "Presensi Berlangsung" di Beranda.
 class PrakLiveChip24 extends StatelessWidget {
   final String text;
   const PrakLiveChip24(this.text, {super.key});
@@ -289,8 +283,7 @@ class PrakLiveChip24 extends StatelessWidget {
   }
 }
 
-/// Chip kecil 19 px (padding 3/10, SemiBold 11): kuning lembut untuk yang
-/// belum selesai, hijau muda untuk yang sudah selesai.
+/// Lencana status pengerjaan tugas atau kuis.
 class PrakSoftChip extends StatelessWidget {
   final String text;
   final Color bg;
@@ -327,7 +320,7 @@ class PrakSoftChip extends StatelessWidget {
   }
 }
 
-/// Chip kuning lebar tetap 172 px ("Belum Dikumpulkan").
+/// Chip kuning lebar tetap ("Belum Dikumpulkan").
 class PrakWarnChipWide extends StatelessWidget {
   final String text;
   final bool italic;
@@ -378,7 +371,7 @@ class PrakTimerPill extends StatelessWidget {
   }
 }
 
-/// Ikon kecil + teks Regular 12 abu-abu (meta di Beranda, tinggi 18).
+/// Ikon kecil + teks abu-abu (meta di Beranda, tinggi 18).
 class PrakMetaR12 extends StatelessWidget {
   final String icon;
   final double iconWidth;
@@ -436,7 +429,7 @@ class PrakMetaR12 extends StatelessWidget {
   }
 }
 
-/// Jadwal, ruangan, dan asisten (Beranda: jarak antar-baris 8, antar-item 34).
+/// Informasi jadwal, ruangan, dan asisten pada kartu beranda.
 class PrakScheduleMeta extends StatelessWidget {
   final String jadwal;
   final String room;
@@ -476,34 +469,43 @@ class PrakScheduleMeta extends StatelessWidget {
   }
 }
 
-/// Jadwal, ruangan, dan asisten sesi presensi (Medium 11).
+/// Informasi sesi presensi yang sedang aktif.
 class PrakSessionMeta extends StatelessWidget {
   const PrakSessionMeta({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const LabColumn(
-      gap: 8,
-      cross: CrossAxisAlignment.start,
-      children: [
-        Row(
+    final presensi = PresensiSyncService.instance;
+    return ListenableBuilder(
+      listenable: presensi,
+      builder: (context, _) {
+        final session = presensi.activeSession;
+        final course =
+            PraktikumSyncService.instance.courseById(session.courseId);
+        return LabColumn(
+          gap: 8,
+          cross: CrossAxisAlignment.start,
           children: [
-            Flexible(
-              child: LabMeta(icon: 'clock', text: 'Senin • 08:00–09:40 WIB'),
+            Row(
+              children: [
+                Flexible(
+                  child: LabMeta(icon: 'clock', text: course.jadwalAbsensi),
+                ),
+                const SizedBox(width: 24),
+                Flexible(
+                  child: LabMeta(icon: 'location', text: session.labName),
+                ),
+              ],
             ),
-            SizedBox(width: 24),
-            Flexible(
-              child: LabMeta(icon: 'location', text: 'Lab Komputer 1'),
-            ),
+            LabMeta(icon: 'person', text: 'Asisten: ${session.startedBy}'),
           ],
-        ),
-        LabMeta(icon: 'person', text: 'Asisten: Andi Pratama'),
-      ],
+        );
+      },
     );
   }
 }
 
-/// Batang progress 6 px tanpa label.
+/// Batang progress tanpa label.
 class PrakTrack extends StatelessWidget {
   final double fraction;
   final Color color;
@@ -530,7 +532,7 @@ class PrakTrack extends StatelessWidget {
   }
 }
 
-/// Nilai besar: angka Bold 34 merah + "/ 100" Bold 16, rata bawah.
+/// Nilai besar: angka merah + "/ 100", rata bawah.
 class PrakBigScore extends StatelessWidget {
   final String score;
   const PrakBigScore(this.score, {super.key});
@@ -553,7 +555,7 @@ class PrakBigScore extends StatelessWidget {
   }
 }
 
-/// Kotak ikon cekung 80 px (#F9FAFB, radius 20) dengan ikon 38 px.
+/// Kotak ikon cekung dengan ikon.
 class PrakIconWell extends StatelessWidget {
   final String icon;
   final Color color;
@@ -561,16 +563,19 @@ class PrakIconWell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InnerShadowBox(
-      width: 80,
-      height: 80,
-      radius: 20,
-      child: Center(child: LabIcon(icon, size: 38, color: color)),
+    return Center(
+      child: InnerShadowBox(
+        width: 80,
+        height: 80,
+        radius: 20,
+        shadows: ItlgShadows.innerLarge,
+        child: Center(child: LabIcon(icon, size: 38, color: color)),
+      ),
     );
   }
 }
 
-/// Kotak pemberitahuan berwarna dengan ikon 18 px.
+/// Kotak pemberitahuan berwarna dengan ikon.
 class PrakNotice extends StatelessWidget {
   final String icon;
   final String text;
@@ -624,7 +629,7 @@ class PrakNotice extends StatelessWidget {
   }
 }
 
-/// Tombol nonaktif abu-abu 50 px (#B5B9BC) dengan ikon gembok.
+/// Tombol nonaktif abu-abu dengan ikon gembok.
 class PrakDisabledButton extends StatelessWidget {
   final String label;
   const PrakDisabledButton(this.label, {super.key});
@@ -725,11 +730,9 @@ class PrakPlainButton extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Formulir
-// =============================================================================
 
-/// Label Regular 14 + isi, jarak 8.
+/// Pembungkus kolom input dengan label di bagian atas.
 class PrakField extends StatelessWidget {
   final String label;
   final Widget child;
@@ -744,7 +747,7 @@ class PrakField extends StatelessWidget {
   }
 }
 
-/// Kolom isian 48 px (#F9FAFB, inner shadow).
+/// Kolom isian.
 class PrakInput extends StatefulWidget {
   final TextEditingController controller;
   final String? leadingIcon;
@@ -904,7 +907,7 @@ class _PrakInputState extends State<PrakInput> {
   }
 }
 
-/// Kolom pilihan 48 px dengan chevron ke bawah.
+/// Kolom pilihan dengan chevron ke bawah.
 class PrakSelect extends StatelessWidget {
   final String value;
   final VoidCallback onTap;
@@ -932,7 +935,7 @@ class PrakSelect extends StatelessWidget {
   }
 }
 
-/// Area teks (#F9FAFB, inner shadow). Nonaktif = tidak bisa diketik.
+/// Area teks. Nonaktif = tidak bisa diketik.
 class PrakTextArea extends StatefulWidget {
   final TextEditingController? controller;
   final String hint;
@@ -1049,8 +1052,7 @@ class _PrakTextAreaState extends State<PrakTextArea> {
   }
 }
 
-/// Kotak unggah (putih cekung): ikon awan 36 px di kotak 60 px, atau ikon
-/// kamera di kotak 36 px ([camera] = true).
+/// Area unggah berkas atau foto bukti.
 class PrakUploadBox extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1106,7 +1108,7 @@ class PrakUploadBox extends StatelessWidget {
   }
 }
 
-/// Baris berkas putih 56 px: ikon tugas, nama Bold 12, keterangan, aksi 18 px.
+/// Baris berkas putih: ikon tugas, nama, keterangan, aksi.
 class PrakFileItem extends StatelessWidget {
   final String name;
   final String meta;
@@ -1163,7 +1165,7 @@ class PrakFileItem extends StatelessWidget {
   }
 }
 
-/// Pilihan berikon 39 px (Jenis Pengajuan, Kategori Perangkat).
+/// Pilihan berikon (Jenis Pengajuan, Kategori Perangkat).
 class PrakOptionChips extends StatelessWidget {
   final List<(String, String)> options;
   final int index;
@@ -1221,7 +1223,7 @@ class PrakOptionChips extends StatelessWidget {
   }
 }
 
-/// Kotak centang 22 px (radius 6).
+/// Kotak centang.
 class PrakCheckBox extends StatelessWidget {
   final bool checked;
   const PrakCheckBox(this.checked, {super.key});
@@ -1250,7 +1252,7 @@ class PrakCheckBox extends StatelessWidget {
   }
 }
 
-/// Pilihan bercentang 53 px. Tercentang: kartu putih timbul. Tidak: cekung.
+/// Pilihan bercentang. Tercentang: kartu putih timbul. Tidak: cekung.
 class PrakCheckOption extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1307,10 +1309,7 @@ class PrakCheckOption extends StatelessWidget {
   }
 }
 
-/// Kolom cari 48 px + tombol filter 48 px.
-///
-/// [compact] = versi Daftar Praktikum (ikon vektor, bayangan filter lebih
-/// kecil). Selain itu versi Pengumuman (ikon akar-icons).
+/// Kolom cari + tombol filter.
 class PrakSearchField extends StatelessWidget {
   final String hint;
   final TextEditingController controller;
@@ -1386,8 +1385,6 @@ class PrakSearchField extends StatelessWidget {
             decoration: BoxDecoration(
               color: LabColors.tile,
               borderRadius: BorderRadius.circular(12),
-              // Daftar Praktikum (compact): tombol filter datar sesuai Figma.
-              boxShadow: compact ? const [] : LabShadows.neu,
             ),
             child: LabIcon(compact ? 'm_filter' : 'settings_horizontal',
                 size: 15,
@@ -1400,11 +1397,9 @@ class PrakSearchField extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Bintang penilaian
-// =============================================================================
 
-/// Label Bold 12 + "n / 5", lalu 5 bintang 28 px (jarak 8).
+/// Label + "n / 5", lalu 5 bintang.
 class PrakRatingRow extends StatelessWidget {
   final String label;
 
@@ -1457,9 +1452,7 @@ class PrakRatingRow extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Stepper presensi (Verifikasi → Tanda Tangan → Selesai)
-// =============================================================================
 
 class PrakStepper extends StatelessWidget {
   /// 0 = Verifikasi aktif, 1 = Tanda Tangan aktif.
@@ -1542,7 +1535,7 @@ class PrakStepper extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: ItlgShadows.outline,
       ),
-      // Isi stepper butuh ~290 px; di layar yang lebih sempit diperkecil.
+      // Sesuaikan skala stepper presensi dengan lebar layar
       child: LayoutBuilder(
         builder: (context, box) => FittedBox(
           fit: BoxFit.scaleDown,
@@ -1558,12 +1551,9 @@ class PrakStepper extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Pop-up "Presensi Tercatat"
-// =============================================================================
 
-/// Kartu 370 px (Figma "Pop up Presensi Berhasil"), muncul dengan fade 250 ms
-/// di atas latar gelap #0A0B0C 40%.
+/// Dialog konfirmasi presensi berhasil dicatat.
 Future<void> prakShowPresensiBerhasil(
   BuildContext context, {
   required VoidCallback onPilihMeja,
@@ -1603,9 +1593,7 @@ Future<void> prakShowPresensiBerhasil(
                         textAlign: TextAlign.center,
                         style: labText(22, w: kBold)),
                     Text(
-                      'Kehadiran anda pada Praktikum Pemrograman Mobile, '
-                      'Senin 05 Oktober 2026 pukul 08:03 WIB berhasil '
-                      'dicatat beserta tanda tangan.',
+                      _presensiBerhasilText(),
                       textAlign: TextAlign.center,
                       style: labText(14, c: ItlgColors.textMuted),
                     ),
@@ -1638,8 +1626,7 @@ Future<void> prakShowPresensiBerhasil(
   );
 }
 
-/// Peta 338 x 180 (Google Maps nyata + pin lab + posisi anda).
-/// Dipakai di Tombol Hadir (Praktikan) dan Bukti Presensi (Asisten Lab).
+/// Peta (Google Maps nyata + pin lab + posisi anda).
 class PrakLocationMap extends StatelessWidget {
   final bool inside;
   const PrakLocationMap({super.key, required this.inside});
@@ -1650,12 +1637,9 @@ class PrakLocationMap extends StatelessWidget {
   }
 }
 
-// =============================================================================
 // Sheet pilihan (sama dengan sheet di peran Dosen)
-// =============================================================================
 
-/// Panel bawah #FDFEFE radius atas 24: pegangan 40x4, judul Bold 16, opsi
-/// putih 48 px. Mengembalikan indeks yang dipilih (null bila ditutup).
+/// Widget bottom sheet pemilih opsi.
 Future<int?> prakShowPicker(
   BuildContext context, {
   required String title,
@@ -1673,7 +1657,12 @@ Future<int?> prakShowPicker(
       opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: Material(
+        child: ConstrainedBox(
+          // Daftar panjang (mis. 48 slot jadwal) harus bisa di-scroll
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+          ),
+          child: Material(
           color: ItlgColors.surfaceWhite,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: Padding(
@@ -1696,6 +1685,12 @@ Future<int?> prakShowPicker(
                 const SizedBox(height: 12),
                 Text(title, style: labText(16, w: kBold, c: Colors.black)),
                 const SizedBox(height: 12),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                 for (var i = 0; i < options.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   GestureDetector(
@@ -1729,9 +1724,14 @@ Future<int?> prakShowPicker(
                     ),
                   ),
                 ],
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
+        ),
         ),
       ),
     ),
@@ -1744,4 +1744,33 @@ String prakClock(int seconds) {
   final m = (s ~/ 60).toString().padLeft(2, '0');
   final r = (s % 60).toString().padLeft(2, '0');
   return '$m:$r';
+}
+
+/// Ringkasan informasi pada dialog presensi berhasil.
+String _presensiBerhasilText() {
+  const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+  const bulan = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+  final session = PresensiSyncService.instance.activeSession;
+  final course = PraktikumSyncService.instance.courseById(session.courseId);
+  // Jam WIB (UTC+7), tidak bergantung zona waktu perangkat.
+  final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+  final jam =
+      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+  return 'Kehadiran anda pada Praktikum ${course.name} Pertemuan '
+      '${session.meetingNumber}, ${hari[now.weekday - 1]} ${now.day} '
+      '${bulan[now.month - 1]} ${now.year} pukul $jam WIB berhasil dicatat '
+      'beserta tanda tangan.';
 }

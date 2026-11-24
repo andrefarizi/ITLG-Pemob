@@ -4,26 +4,20 @@ import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../dosen_store.dart';
 
-/// Komponen khusus halaman Dosen Pengampu (Figma: section "04 Dosen
-/// Pengampu"). Komponen umum (kartu, chip, tombol, navbar) ada di
-/// lib/features/laboran/widgets/laboran_ui.dart.
+/// Komponen UI khusus halaman Dosen.
 
-/// Latar gelap di belakang pop-up dan sheet (#0A0B0C, 40%).
+/// Latar gelap di belakang pop-up dan sheet.
 const Color kDosenScrim = Color(0x660A0B0C);
 
-/// Fade 250 ms ease-out, sama dengan transisi overlay di prototipe Figma.
+/// Fade 250 ms ease-out, sama dengan transisi overlay.
 Widget _fade(Animation<double> anim, Widget child) => FadeTransition(
       opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
       child: child,
     );
 
-// =============================================================================
-// Pop-up hasil (Figma: "Pop up Nilai Tervalidasi", "Pop up Revisi Terkirim",
-// "Pop up Pesan Terkirim", "Pop up Laporan Diunduh")
-// =============================================================================
+// Dialog Nilai Tervalidasi.
 
-/// Kartu 370 px: ikon 44 px di kotak cekung 80 px, judul Bold 22, pesan
-/// Regular 14, tombol merah 50 px. Tidak tertutup saat area gelap diketuk.
+/// Widget kartu dialog informasi.
 Future<void> dosenShowResult(
   BuildContext context, {
   required String icon,
@@ -57,16 +51,20 @@ Future<void> dosenShowResult(
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    InnerShadowBox(
-                      width: 80,
-                      height: 80,
-                      radius: 19.875,
-                      shadows: ItlgShadows.innerLarge,
-                      child: Center(
-                        child: LabIcon(icon,
-                            size: 44, color: ItlgColors.primary),
+                    SizedBox(
+                      width: 79.5,
+                      height: 79.5,
+                      child: InnerShadowBox(
+                        width: 79.5,
+                        height: 79.5,
+                        radius: 19.875,
+                        shadows: ItlgShadows.innerLarge,
+                        child: Center(
+                          child: LabIcon(icon,
+                              size: 44, color: ItlgColors.primary),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -85,6 +83,7 @@ Future<void> dosenShowResult(
                         onPressed?.call();
                       },
                       child: Container(
+                        width: double.infinity,
                         height: 50,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
@@ -108,12 +107,9 @@ Future<void> dosenShowResult(
   );
 }
 
-// =============================================================================
-// Sheet pilihan (Figma: "Sheet Pilih Praktikum", "Sheet Pilih Periode")
-// =============================================================================
+// Bottom sheet Pilih Praktikum.
 
-/// Panel bawah #FDFEFE radius atas 24: pegangan 40x4, judul Bold 16, opsi
-/// putih 48 px dengan dukungan scroll jika daftar panjang (Figma: "Sheet Pilih Kelas & Sesi (Scroll)").
+/// Widget bottom sheet pemilih opsi.
 Future<int?> dosenShowPicker(
   BuildContext context, {
   required String title,
@@ -221,11 +217,9 @@ Future<int?> dosenShowPicker(
   );
 }
 
-// =============================================================================
 // Elemen formulir
-// =============================================================================
 
-/// "TIF 3001 - Kelas C" (Bold 16 merah tua) + judul praktikum Bold 22.
+/// Header informasi kode kelas dan nama praktikum.
 class DosenClassTitle extends StatelessWidget {
   final String kelas;
   final String? code;
@@ -251,7 +245,7 @@ class DosenClassTitle extends StatelessWidget {
   }
 }
 
-/// Label Regular 14 + kolom teks 110 px (#F9FAFB, inner shadow).
+/// Label + kolom teks.
 class DosenTextArea extends StatefulWidget {
   final String label;
   final TextEditingController controller;
@@ -374,8 +368,7 @@ class _DosenTextAreaState extends State<DosenTextArea> {
   }
 }
 
-/// Pilihan bercentang 53 px. Tercentang: kartu putih timbul + kotak merah.
-/// Tidak: kartu putih cekung + kotak abu-abu.
+/// Pilihan bercentang. Tercentang: kartu putih timbul + kotak merah.
 class DosenCheckOption extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -449,7 +442,7 @@ class DosenCheckOption extends StatelessWidget {
   }
 }
 
-/// Kolom cari 48 px (cekung) + tombol filter 48 px (timbul).
+/// Kolom cari (cekung) + tombol filter (timbul).
 class DosenSearchField extends StatelessWidget {
   final String hint;
   final TextEditingController controller;
@@ -522,7 +515,6 @@ class DosenSearchField extends StatelessWidget {
             decoration: BoxDecoration(
               color: LabColors.tile,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: LabShadows.neu,
             ),
             child: LabIcon('settings_horizontal',
                 size: 15,
@@ -535,7 +527,7 @@ class DosenSearchField extends StatelessWidget {
   }
 }
 
-/// Kotak info biru muda (#DEE9F4) dengan ikon 18 px.
+/// Kotak info biru muda dengan ikon.
 class DosenInfoBox extends StatelessWidget {
   final String icon;
   final String text;
@@ -562,7 +554,7 @@ class DosenInfoBox extends StatelessWidget {
   }
 }
 
-/// Tombol nonaktif abu-abu 50 px (#B5B9BC).
+/// Tombol nonaktif abu-abu.
 class DosenDisabledButton extends StatelessWidget {
   final String icon;
   final String label;
@@ -589,8 +581,7 @@ class DosenDisabledButton extends StatelessWidget {
   }
 }
 
-/// Tabel rekap nilai: kolom 130 / 44 / 52 / 60 dengan jarak 8 (lebar 310).
-/// Huruf mutu "D" (tidak lulus) memakai tag merah.
+/// Widget tabel rekapitulasi nilai praktikan.
 class DosenGradeTable extends StatelessWidget {
   final List<DosenGrade> grades;
   final ValueChanged<DosenGrade>? onTapGrade;

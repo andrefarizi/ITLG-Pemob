@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/utils/constants.dart';
 
 /// Widget shared RoleBadge untuk menampilkan badge role aktif pengguna.
-/// Digunakan di seluruh views lintas role.
 class SharedRoleBadge extends StatelessWidget {
   final UserRole role;
   final bool showLabel;

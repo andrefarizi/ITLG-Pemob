@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Praktikan Tugas View
 class PraktikanTugasView extends StatelessWidget {
   const PraktikanTugasView({super.key});
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Komponen Laboran Ticketing View
 class LaboranTicketingView extends StatelessWidget {
   const LaboranTicketingView({super.key});
 

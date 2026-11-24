@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
+// Kartu ringkasan statistik dashboard
 class StatMetricCard extends StatelessWidget {
   final String title;
   final String value;
