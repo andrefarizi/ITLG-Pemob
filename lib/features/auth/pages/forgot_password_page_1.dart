@@ -77,9 +77,10 @@ class _ForgotPasswordPage1State extends State<ForgotPasswordPage1> {
 
       if (!sent) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             behavior: SnackBarBehavior.floating,
-            content: Text('Gagal mengirim email. Periksa koneksi internet Anda.'),
+            content: Text(EmailService.instance.lastError ??
+                'Gagal mengirim email. Periksa koneksi internet Anda.'),
           ),
         );
         return;

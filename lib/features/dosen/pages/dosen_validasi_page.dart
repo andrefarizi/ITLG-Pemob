@@ -116,7 +116,7 @@ class _DosenValidasiPageState extends State<DosenValidasiPage> {
             null;
     final infoText = lowest != null
         ? '${lowest.label} paling rendah (${lowest.score}).${hasAppeal ? ' Nilai tugas sedang dalam sanggahan.' : ' Nilai sudah disinkronkan dari penilaian asisten.'}'
-        : 'Rincian nilai per modul tersinkron langsung dari database.';
+        : 'Rincian nilai per modul tersinkron otomatis.';
 
     labShowCustomSheet<void>(
       context,

@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Rahasia lokal untuk --dart-define-from-file (SMTP, Maps). Salin dari dart_defines.example.json
+/dart_defines.json

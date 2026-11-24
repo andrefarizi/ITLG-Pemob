@@ -22,38 +22,63 @@ class EmailService {
 
   static const Duration _otpTtl = Duration(minutes: 60);
 
-  /// Generate & kirim OTP ke [toEmail]. Return true jika berhasil.
+  /// Pesan galat terakhir untuk ditampilkan ke pengguna (null = berhasil).
+  String? lastError;
+
+  static String get _cleanUser => _smtpUser.trim();
+  static String get _cleanPass => _smtpPass.replaceAll(RegExp(r'\s+'), '');
+
+  /// SMTP siap bila email & sandi aplikasi Gmail diisi lewat
+  /// `--dart-define` / `--dart-define-from-file` (bukan nilai contoh).
+  static bool get isConfigured =>
+      _cleanUser.contains('@') &&
+      _cleanPass.isNotEmpty &&
+      !_cleanPass.startsWith('YOUR_');
+
+  /// Generate & kirim OTP ke [toEmail]. Return true hanya bila email benar-benar
+  /// terkirim. Kode OTP tidak pernah dicetak ke log.
   Future<bool> sendOtp(String toEmail) async {
+    lastError = null;
+    if (!isConfigured) {
+      lastError = 'Pengiriman email belum dikonfigurasi (SMTP). '
+          'Hubungi admin laboratorium.';
+      debugPrint('[EmailService] SMTP_PASS belum diisi. Jalankan aplikasi dengan '
+          '--dart-define-from-file=dart_defines.json (lihat README).');
+      return false;
+    }
+
     final code = _generateCode();
     _otpStore[toEmail] = _OtpEntry(code: code, createdAt: DateTime.now());
-
-    debugPrint('====================================================');
-    debugPrint('[EmailService] KODE OTP UNTUK $toEmail : $code');
-    debugPrint('====================================================');
 
     try {
       final smtpServer = SmtpServer(
         _smtpHost,
         port: _smtpPort,
         ssl: true,
-        username: _smtpUser,
-        password: _smtpPass,
+        username: _cleanUser,
+        password: _cleanPass,
       );
 
       final message = Message()
-        ..from = Address(_smtpUser, _fromName)
+        ..from = Address(_cleanUser, _fromName)
         ..recipients.add(toEmail)
         ..subject = 'Kode OTP Reset Kata Sandi – ITLG Mobile'
         ..html = _buildHtml(code);
 
       await send(message, smtpServer);
-      debugPrint('[EmailService] Email OTP berhasil terkirim ke $toEmail');
+      debugPrint('[EmailService] Email OTP terkirim.');
       return true;
     } catch (e) {
-      debugPrint('[EmailService] Pengiriman SMTP terkendala: $e');
-      debugPrint('[EmailService] Menggunakan kode OTP lokal: $code');
-      // Kembalikan true agar alur pengujian user tidak terblokir
-      return true;
+      // OTP yang tidak terkirim tidak boleh bisa dipakai.
+      _otpStore.remove(toEmail);
+      final auth = e.toString().contains('535') ||
+          e.toString().contains('Authentication');
+      lastError = auth
+          ? 'Server email menolak login (sandi aplikasi Gmail salah/kedaluwarsa). '
+              'Hubungi admin laboratorium.'
+          : 'Gagal mengirim email. Periksa koneksi internet lalu coba lagi.';
+      debugPrint('[EmailService] Pengiriman SMTP gagal: $e');
+      return false;
     }
   }
 

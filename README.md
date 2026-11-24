@@ -61,14 +61,16 @@ Tambahkan ke `android/local.properties` (berkas ini tidak ter-commit):
 MAPS_API_KEY=isi_kunci_google_maps_anda
 ```
 
-### 5. (Opsional) Email OTP Lupa Password
-```bash
-flutter run --dart-define=SMTP_USER=email_anda@gmail.com --dart-define=SMTP_PASS=sandi_aplikasi_gmail
-```
+### 5. Email OTP Lupa Password (SMTP Gmail)
+Tanpa langkah ini, Lupa Password menampilkan "Pengiriman email belum dikonfigurasi" dan OTP tidak terkirim.
+1. Akun Gmail pengirim → **Google Account → Keamanan → Verifikasi 2 Langkah** (aktifkan) →
+   **Sandi aplikasi** → buat sandi untuk "ITLG Mobile" (16 huruf). Sandi Gmail biasa **tidak** bisa dipakai.
+2. Salin `dart_defines.example.json` menjadi `dart_defines.json` (tidak ter-commit), lalu isi
+   `SMTP_USER` (alamat Gmail pengirim) dan `SMTP_PASS` (sandi aplikasi tadi, tanpa spasi).
 
 ### 6. Jalankan
 ```bash
-flutter run
+flutter run --dart-define-from-file=dart_defines.json
 ```
 
 ### Akun uji (dari seed `schema.sql`)

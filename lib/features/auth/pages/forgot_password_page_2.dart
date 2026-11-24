@@ -151,7 +151,8 @@ class _ForgotPasswordPage2State extends State<ForgotPasswordPage2> {
         content: Text(
           sent
               ? 'Kode OTP baru dikirim ke ${widget.targetIdentifier}'
-              : 'Gagal mengirim ulang email. Coba lagi.',
+              : (EmailService.instance.lastError ??
+                  'Gagal mengirim ulang email. Coba lagi.'),
         ),
       ),
     );
