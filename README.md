@@ -20,7 +20,7 @@ Aplikasi mobile Flutter untuk manajemen praktikum laboratorium komputer dengan d
 
 | Kategori | Teknologi | Kegunaan di Proyek |
 |---|---|---|
-| **Mobile Framework & Bahasa** | **Flutter** & **Dart** (`SDK ^3.13.1`) | Membangun antarmuka dan logika aplikasi mobile lintas 4 role (Praktikan, Aslab, Laboran, Dosen) menggunakan *state management* bawaan (`ChangeNotifier` & `ListenableBuilder`). |
+| **Mobile Framework & Bahasa** | **Flutter** & **Dart** (`SDK ^3.9.2`) | Membangun antarmuka dan logika aplikasi mobile lintas 4 role (Praktikan, Aslab, Laboran, Dosen) menggunakan *state management* bawaan (`ChangeNotifier` & `ListenableBuilder`). |
 | **Native Android Bridge** | **Kotlin**, **Gradle (JVM 17)** & **MethodChannel** | Integrasi fitur native perangkat Android seperti pemilih berkas/galeri (*Storage Access Framework*), penyimpanan file unduhan laporan, dan sinkronisasi jadwal ke kalender perangkat. |
 | **Backend & Database** | **Supabase** (`supabase_flutter ^2.18.3`) — **PostgreSQL** | Database relasional utama beserta *Row Level Security (RLS)* dan fungsi *RPC PL/pgSQL* (penguncian transaksi meja anti-ganda, verifikasi & reset kata sandi). |
 | **Autentikasi & Real-time** | **Supabase Auth** & **Supabase Realtime** | Manajemen login/logout sesi 4 role berbasis NIM/NIP serta sinkronisasi data dan notifikasi lintas role secara langsung (*real-time*). |
@@ -36,7 +36,7 @@ Aplikasi mobile Flutter untuk manajemen praktikum laboratorium komputer dengan d
 ## 🚀 Cara Menjalankan (setelah clone)
 
 ### 1. Prasyarat
-- Flutter SDK (Dart `^3.13`), Android Studio + emulator/HP Android, JDK 17.
+- Flutter SDK (Dart `^3.9.2`), Android Studio + emulator/HP Android, JDK 17.
 - Proyek Supabase (gratis di [supabase.com](https://supabase.com)) bila ingin database sendiri.
 
 ### 2. Ambil dependensi
