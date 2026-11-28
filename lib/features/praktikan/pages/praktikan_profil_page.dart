@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_notification_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../laboran/widgets/laboran_ui.dart';
 import '../../shared/lab_actions.dart';
@@ -33,6 +34,14 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
   void initState() {
     super.initState();
     _p.addListener(_onProfil);
+    widget.nav.store.pushOn =
+        DeviceNotificationService.instance.isEnabledForRole('praktikan');
+  }
+
+  Future<void> _togglePush(bool v) async {
+    setState(() => widget.nav.store.pushOn = v);
+    await DeviceNotificationService.instance.setEnabledForRole('praktikan', v);
+    if (mounted) setState(() {});
   }
 
   @override
@@ -172,9 +181,9 @@ class _PraktikanProfilPageState extends State<PraktikanProfilPage> {
                   subtitle: 'Presensi, pengumuman, dan deadline tugas',
                   trailing: _Toggle(
                     value: store.pushOn,
-                    onChanged: (v) => setState(() => store.pushOn = v),
+                    onChanged: _togglePush,
                   ),
-                  onTap: () => setState(() => store.pushOn = !store.pushOn),
+                  onTap: () => _togglePush(!store.pushOn),
                 ),
                 _SettingItem(
                   icon: 'lock_on',

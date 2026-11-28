@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_notification_service.dart';
 import '../../../core/services/praktikum_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/lab_actions.dart';
@@ -35,6 +36,14 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
   void initState() {
     super.initState();
     _p.addListener(_onProfil);
+    widget.store.pushOn =
+        DeviceNotificationService.instance.isEnabledForRole('dosen');
+  }
+
+  Future<void> _togglePush(bool v) async {
+    setState(() => widget.store.pushOn = v);
+    await DeviceNotificationService.instance.setEnabledForRole('dosen', v);
+    if (mounted) setState(() {});
   }
 
   @override
@@ -193,9 +202,9 @@ class _DosenProfilPageState extends State<DosenProfilPage> {
                   subtitle: 'Validasi nilai, laporan, dan peringatan',
                   trailing: _Toggle(
                     value: store.pushOn,
-                    onChanged: (v) => setState(() => store.pushOn = v),
+                    onChanged: _togglePush,
                   ),
-                  onTap: () => setState(() => store.pushOn = !store.pushOn),
+                  onTap: () => _togglePush(!store.pushOn),
                 ),
                 _SettingItem(
                   icon: 'lock_on',
