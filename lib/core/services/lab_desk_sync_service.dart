@@ -1045,10 +1045,14 @@ class LabDeskSyncService extends ChangeNotifier {
 
     // Jika user sebelumnya sudah booking meja lain di lab ini, lepaskan dulu
     final prevDeskNum = bookedDeskForUser(userKey, labName: labName);
+    final prevWasBroken =
+        prevDeskNum != null && labMap[prevDeskNum]?.status == PrakDesk.broken;
     if (prevDeskNum != null && prevDeskNum != deskNumber) {
       final prev = labMap[prevDeskNum];
-      if (prev != null && prev.status == PrakDesk.taken) {
-        prev.status = PrakDesk.available;
+      if (prev != null) {
+        if (prev.status == PrakDesk.taken) {
+          prev.status = PrakDesk.available;
+        }
         prev.bookedByUserId = null;
         prev.bookedByName = null;
         prev.bookedAt = null;
@@ -1161,7 +1165,7 @@ class LabDeskSyncService extends ChangeNotifier {
             await client
                 .from('lab_desks')
                 .update({
-                  'status': 'available',
+                  'status': prevWasBroken ? 'broken' : 'available',
                   'booked_by_user_id': null,
                   'booked_by_name': null,
                   'booked_at': null,
