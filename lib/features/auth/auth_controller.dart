@@ -1,3 +1,4 @@
+import '../../core/services/notification_sync_service.dart';
 import '../../core/services/presensi_sync_service.dart';
 
 import 'package:flutter/material.dart';
@@ -51,6 +52,7 @@ class AuthController extends ChangeNotifier {
       _userIdentifier = result.profile!.identifier;
       _userName = result.profile!.fullName;
       notifyListeners();
+      NotificationSyncService.instance.onUserLogin();
     }
 
     return result;
