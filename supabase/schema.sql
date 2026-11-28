@@ -91,11 +91,10 @@ BEGIN
 END;
 $$;
 
--- Catatan keamanan: fungsi ini terbuka untuk anon karena dipakai "Lupa Password"
--- (OTP dibuat & dicek di aplikasi). Setelah Lupa Password dipindah ke pemulihan
--- bawaan Supabase Auth, cabut aksesnya:
---   REVOKE EXECUTE ON FUNCTION public.reset_password_by_email(text, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.reset_password_by_email(text, text) TO anon, authenticated, service_role;
+-- Fungsi ini dikunci khusus service_role karena Lupa Password sudah memakai
+-- pemulihan resmi bawaan Supabase Auth (resetPasswordForEmail + verifyOTP + updateUser).
+REVOKE EXECUTE ON FUNCTION public.reset_password_by_email(text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reset_password_by_email(text, text) TO service_role;
 
 -- Fungsi RPC Verifikasi Kata Sandi Saat Ini (untuk halaman Ubah Kata Sandi dari Profil)
 CREATE OR REPLACE FUNCTION public.verify_user_password(user_email text, current_password text)

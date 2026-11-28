@@ -2,21 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "ITLG Mobile (Debug + dart_defines.json)",
+      "name": "ITLG Mobile (Debug)",
       "request": "launch",
-      "type": "dart",
-      "toolArgs": [
-        "--dart-define-from-file=dart_defines.json"
-      ]
+      "type": "dart"
     },
     {
-      "name": "ITLG Mobile (Release + dart_defines.json)",
+      "name": "ITLG Mobile (Release)",
       "request": "launch",
       "type": "dart",
-      "flutterMode": "release",
-      "toolArgs": [
-        "--dart-define-from-file=dart_defines.json"
-      ]
+      "flutterMode": "release"
     }
   ]
 }

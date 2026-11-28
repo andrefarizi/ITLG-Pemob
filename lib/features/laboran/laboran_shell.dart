@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/services/device_notification_service.dart';
 import '../../core/widgets/itlg_ui.dart';
 import '../auth/auth_controller.dart';
 import 'laboran_store.dart';
@@ -40,6 +41,27 @@ class _LaboranShellState extends State<LaboranShell> {
     LabNavItem('Inventaris', 'desktop_device'),
     LabNavItem('Profil', 'person'),
   ];
+
+  void _handleNotifTap() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      _openNotifikasi();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    DeviceNotificationService.instance.requestPermissionOnce();
+    DeviceNotificationService.instance.registerTapHandler(_handleNotifTap);
+  }
+
+  @override
+  void dispose() {
+    DeviceNotificationService.instance.unregisterTapHandler(_handleNotifTap);
+    super.dispose();
+  }
 
   void _openTab(int tab) {
     if (tab != _tab) setState(() => _tab = tab);

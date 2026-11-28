@@ -114,15 +114,16 @@ class _ForgotPasswordPage2State extends State<ForgotPasswordPage2> {
 
     setState(() => _loading = true);
 
-    // Validasi OTP
+    // Validasi OTP ke Supabase Auth
     final email = widget.targetEmail;
-    final valid = EmailService.instance.verifyOtp(email, _code);
+    final valid = await EmailService.instance.verifyOtp(email, _code);
 
     if (!mounted) return;
     setState(() => _loading = false);
 
     if (!valid) {
-      setState(() => _error = 'Kode OTP salah atau sudah kedaluwarsa');
+      setState(() => _error =
+          EmailService.instance.lastError ?? 'Kode OTP salah atau sudah kedaluwarsa');
       return;
     }
 

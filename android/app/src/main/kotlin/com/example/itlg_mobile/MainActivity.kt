@@ -2,17 +2,25 @@ package com.example.itlg_mobile
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.CalendarContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -25,10 +33,105 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val REQ_CALENDAR_PERMISSION = 4091
         private const val REQ_PICK_FILE = 4092
+        private const val REQ_NOTIFICATION_PERMISSION = 4093
+        private const val NOTIF_CHANNEL_ID = "itlg_push_alerts"
+        private const val EXTRA_OPEN_NOTIFICATIONS = "itlg_open_notifications"
     }
 
     private var pendingCalendarPermResult: MethodChannel.Result? = null
     private var pendingFilePickResult: MethodChannel.Result? = null
+    private var pendingNotificationPermResult: MethodChannel.Result? = null
+    private var notificationChannel: MethodChannel? = null
+    private var pendingNotificationTap: Boolean = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ensureNotificationChannel()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS, false) == true) {
+            pendingNotificationTap = true
+            intent?.removeExtra(EXTRA_OPEN_NOTIFICATIONS)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS, false)) {
+            intent.removeExtra(EXTRA_OPEN_NOTIFICATIONS)
+            val ch = notificationChannel
+            if (ch != null) {
+                ch.invokeMethod("onNotificationTapped", null)
+            } else {
+                pendingNotificationTap = true
+            }
+        }
+    }
+
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(
+                NOTIF_CHANNEL_ID,
+                "Notifikasi ITLG Mobile",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Pemberitahuan presensi, jadwal, tugas, nilai, dan laboratorium"
+                enableVibration(true)
+                enableLights(true)
+                lightColor = 0xFF850909.toInt()
+            }
+            mgr.createNotificationChannel(channel)
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+        return NotificationManagerCompat.from(this).areNotificationsEnabled()
+    }
+
+    private fun showDeviceNotification(notifId: Int, title: String, body: String): Boolean {
+        if (!hasNotificationPermission()) return false
+        return try {
+            ensureNotificationChannel()
+            val tapIntent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_OPEN_NOTIFICATIONS, true)
+            }
+            val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val contentIntent = PendingIntent.getActivity(this, notifId, tapIntent, pendingFlags)
+
+            val largeIcon = BitmapFactory.decodeResource(resources, R.drawable.ic_notif_large)
+            val notification = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_itlg)
+                .setLargeIcon(largeIcon)
+                .setColor(0xFF0E2C48.toInt())
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
+                .build()
+
+            NotificationManagerCompat.from(this).notify(notifId, notification)
+            true
+        } catch (_: SecurityException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     private fun isAndroidEmulator(): Boolean {
         return (Build.FINGERPRINT.startsWith("generic")
@@ -67,6 +170,11 @@ class MainActivity : FlutterActivity() {
                 grantResults.all { it == PackageManager.PERMISSION_GRANTED }
             pendingCalendarPermResult?.success(granted)
             pendingCalendarPermResult = null
+        } else if (requestCode == REQ_NOTIFICATION_PERMISSION) {
+            val granted = grantResults.isNotEmpty() &&
+                grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            pendingNotificationPermResult?.success(granted)
+            pendingNotificationPermResult = null
         }
     }
 
@@ -487,5 +595,41 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        val notifCh = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.example.itlg_mobile/notifications")
+        notificationChannel = notifCh
+        notifCh.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "hasNotificationPermission" -> {
+                    result.success(hasNotificationPermission())
+                }
+                "requestNotificationPermission" -> {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasNotificationPermission()) {
+                        result.success(hasNotificationPermission())
+                    } else {
+                        pendingNotificationPermResult?.success(false)
+                        pendingNotificationPermResult = result
+                        ActivityCompat.requestPermissions(
+                            this,
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            REQ_NOTIFICATION_PERMISSION
+                        )
+                    }
+                }
+                "consumeInitialTap" -> {
+                    val tapped = pendingNotificationTap
+                    pendingNotificationTap = false
+                    result.success(tapped)
+                }
+                "showNotification" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val id = (args?.get("id") as? Number)?.toInt() ?: (System.currentTimeMillis() and 0x7fffffff).toInt()
+                    val title = (args?.get("title") as? String) ?: "ITLG Mobile"
+                    val body = (args?.get("body") as? String) ?: ""
+                    result.success(showDeviceNotification(id, title, body))
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 }

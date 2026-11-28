@@ -40,6 +40,12 @@ class _AslabDetailPraktikumPageState extends State<AslabDetailPraktikumPage> {
           (x) => x.id == widget.course.id,
           orElse: () => widget.course,
         );
+        final nextMeetingNumber = c.meetings.fold<int>(
+              0,
+              (latest, meeting) =>
+                  meeting.number > latest ? meeting.number : latest,
+            ) +
+            1;
         return LabSubPage(
           onLogoTap: nav.home,
           children: [
@@ -50,13 +56,14 @@ class _AslabDetailPraktikumPageState extends State<AslabDetailPraktikumPage> {
                   gap: 13,
                   stats: [
                     LabStat(
-                        icon: 'people_group',
-                        label: 'Praktikan',
-                        value: () {
-                          final n = PresensiSyncService.instance
-                              .knownStudentCount(c.id);
-                          return n == 0 ? '-' : '$n Orang';
-                        }()),
+                      icon: 'people_group',
+                      label: 'Praktikan',
+                      value: () {
+                        final n = PresensiSyncService.instance
+                            .knownStudentCount(c.id);
+                        return n == 0 ? '-' : '$n Orang';
+                      }(),
+                    ),
                     LabStat(icon: 'clock', label: 'Waktu', value: c.jadwal),
                   ],
                 ),
@@ -67,6 +74,18 @@ class _AslabDetailPraktikumPageState extends State<AslabDetailPraktikumPage> {
                   color: ItlgColors.primary,
                 ),
               ],
+            ),
+            LabOutlineButton(
+              icon: 'calendar',
+              label: 'Tambah Pertemuan',
+              large: true,
+              onTap: nextMeetingNumber > 12
+                  ? null
+                  : () => nav.tambahPertemuan(
+                      context,
+                      courseId: c.id,
+                      meetingNumber: nextMeetingNumber,
+                    ),
             ),
             LabPrimaryButton(
               icon: 'plus',
@@ -81,12 +100,7 @@ class _AslabDetailPraktikumPageState extends State<AslabDetailPraktikumPage> {
             ),
             for (final m in c.meetings)
               if (_tab == 0 || m.items.any((it) => it.kind == _tab - 1))
-                _MeetingCard(
-                  meeting: m,
-                  tab: _tab,
-                  nav: nav,
-                  courseId: c.id,
-                ),
+                _MeetingCard(meeting: m, tab: _tab, nav: nav, courseId: c.id),
           ],
         );
       },
@@ -116,7 +130,8 @@ class _MeetingCard extends StatelessWidget {
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => nav.detailPertemuan(context, meeting, courseId: courseId),
+          onTap: () =>
+              nav.detailPertemuan(context, meeting, courseId: courseId),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -127,11 +142,16 @@ class _MeetingCard extends StatelessWidget {
                   PrakNumberTile('${meeting.number}'),
                   const SizedBox(width: 13),
                   Expanded(
-                    child: Text(meeting.title,
-                        style: labText(16, w: kBold, c: Colors.black)),
+                    child: Text(
+                      meeting.title,
+                      style: labText(16, w: kBold, c: Colors.black),
+                    ),
                   ),
-                  const LabIcon('arrow_right',
-                      size: 16, color: LabColors.filterIcon),
+                  const LabIcon(
+                    'arrow_right',
+                    size: 16,
+                    color: LabColors.filterIcon,
+                  ),
                 ],
               ),
             ],
@@ -174,39 +194,64 @@ class _ItemBox extends StatelessWidget {
     switch (item.kind) {
       case 0:
         left = LabOutlineButton(
-            icon: 'pencil',
-            label: 'Edit Modul',
-            onTap: () => nav.editModul(context,
-                courseId: courseId, meetingNumber: meetingNumber));
+          icon: 'pencil',
+          label: 'Edit Modul',
+          onTap: () => nav.editModul(
+            context,
+            courseId: courseId,
+            meetingNumber: meetingNumber,
+          ),
+        );
         right = LabPrimaryButton(
-            icon: 'eye',
-            label: 'Detail Modul',
-            onTap: () => nav.detailModul(context,
-                courseId: courseId, meetingNumber: meetingNumber));
+          icon: 'eye',
+          label: 'Detail Modul',
+          onTap: () => nav.detailModul(
+            context,
+            courseId: courseId,
+            meetingNumber: meetingNumber,
+          ),
+        );
         break;
       case 1:
         left = LabOutlineButton(
-            icon: 'pencil',
-            label: 'Edit Tugas',
-            onTap: () => nav.editTugas(context,
-                courseId: courseId, meetingNumber: meetingNumber));
+          icon: 'pencil',
+          label: 'Edit Tugas',
+          onTap: () => nav.editTugas(
+            context,
+            courseId: courseId,
+            meetingNumber: meetingNumber,
+          ),
+        );
         right = LabPrimaryButton(
-            icon: 'clipboard',
-            label: 'Evaluasi Tugas',
-            onTap: () => nav.evaluasiTugas(context,
-                courseId: courseId, meetingNumber: meetingNumber));
+          icon: 'clipboard',
+          label: 'Evaluasi Tugas',
+          onTap: () => nav.evaluasiTugas(
+            context,
+            courseId: courseId,
+            meetingNumber: meetingNumber,
+          ),
+        );
         break;
       default:
         left = LabOutlineButton(
-            icon: 'pencil',
-            label: 'Edit Kuis',
-            onTap: () => nav.tambahMateri(context,
-                kind: 2, courseId: courseId, meetingNumber: meetingNumber));
+          icon: 'pencil',
+          label: 'Edit Kuis',
+          onTap: () => nav.tambahMateri(
+            context,
+            kind: 2,
+            courseId: courseId,
+            meetingNumber: meetingNumber,
+          ),
+        );
         right = LabPrimaryButton(
-            icon: 'eye',
-            label: 'Lihat Hasil',
-            onTap: () => nav.hasilKuis(context,
-                courseId: courseId, meetingNumber: meetingNumber));
+          icon: 'eye',
+          label: 'Lihat Hasil',
+          onTap: () => nav.hasilKuis(
+            context,
+            courseId: courseId,
+            meetingNumber: meetingNumber,
+          ),
+        );
     }
     return LabInsetBox(
       child: LabColumn(
@@ -223,9 +268,10 @@ class _ItemBox extends StatelessWidget {
                   children: [
                     tag,
                     Text(item.title, style: labText(12, w: kBold)),
-                    Text(item.meta,
-                        style: labText(11,
-                            w: kMedium, c: ItlgColors.textSubtle)),
+                    Text(
+                      item.meta,
+                      style: labText(11, w: kMedium, c: ItlgColors.textSubtle),
+                    ),
                   ],
                 ),
               ),

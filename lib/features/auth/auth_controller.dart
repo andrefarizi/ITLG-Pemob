@@ -1,3 +1,4 @@
+import '../../core/services/notification_sync_service.dart';
 import '../../core/services/presensi_sync_service.dart';
 
 import 'package:flutter/material.dart';
@@ -66,6 +67,7 @@ class AuthController extends ChangeNotifier {
         _rememberedRole = null;
       }
       notifyListeners();
+      NotificationSyncService.instance.onUserLogin();
     }
 
     return result;

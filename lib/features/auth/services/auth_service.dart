@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/constants.dart';
+import '../auth_controller.dart';
 import '../models/user_profile.dart';
 
 class AuthResult {
@@ -450,14 +451,38 @@ class AuthService {
     return null;
   }
 
-  /// Update password di Supabase Auth untuk user dengan [email].
+  /// Simpan kata sandi baru ke Supabase Auth menggunakan sesi recovery hasil verifyOTP.
   Future<bool> updatePasswordByEmail(String email, String newPassword) async {
     final lowerEmail = email.toLowerCase().trim();
-    _customPasswords[lowerEmail] = newPassword;
-    final legacyEmail = _legacyAuthEmails[lowerEmail];
-    if (legacyEmail != null) {
-      _customPasswords[legacyEmail] = newPassword;
+    final client = SupabaseService.instance.client;
+
+    if (client != null) {
+      if (client.auth.currentSession == null) {
+        debugPrint('[AuthService] Sesi pemulihan OTP tidak ditemukan / kedaluwarsa.');
+        return false;
+      }
+      try {
+        await client.auth.updateUser(UserAttributes(password: newPassword));
+        // Jika dibuka dari halaman Login (belum masuk ke aplikasi), tutup sesi recovery
+        // agar pengguna masuk kembali secara normal memakai kata sandi baru.
+        if (!AuthController.instance.isLoggedIn) {
+          await client.auth.signOut();
+        }
+        _customPasswords.remove(lowerEmail);
+        final legacyEmail = _legacyAuthEmails[lowerEmail];
+        if (legacyEmail != null) {
+          _customPasswords.remove(legacyEmail);
+        }
+        debugPrint('[AuthService] Kata sandi berhasil diperbarui via Supabase Auth updateUser');
+        return true;
+      } catch (e) {
+        debugPrint('[AuthService] updateUser error: $e');
+        return false;
+      }
     }
+
+    // Fallback offline / dummy
+    _customPasswords[lowerEmail] = newPassword;
     for (final u in _dummyUsers) {
       if (u.identifiers.any((id) => id.toLowerCase() == lowerEmail)) {
         for (final id in u.identifiers) {
@@ -465,31 +490,6 @@ class AuthService {
         }
       }
     }
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.rpc('reset_password_by_email', params: {
-          'user_email': lowerEmail,
-          'new_password': newPassword,
-        });
-        debugPrint('[AuthService] Password berhasil diubah via RPC reset_password_by_email di Supabase');
-      } catch (e) {
-        debugPrint('[AuthService] RPC reset_password_by_email belum aktif: $e');
-      }
-
-      // 2. Jika user sedang aktif login, ubah via updateUser
-      try {
-        if (client.auth.currentSession != null) {
-          await client.auth.updateUser(UserAttributes(password: newPassword));
-          debugPrint('[AuthService] Password berhasil diubah via Supabase updateUser');
-        }
-      } catch (e) {
-        debugPrint('[AuthService] updateUser error: $e');
-      }
-    }
-
-    debugPrint('[AuthService] Password baru berhasil disetel untuk $lowerEmail');
     return true;
   }
 }
