@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/constants.dart';
+import '../auth_controller.dart';
 import '../models/user_profile.dart';
 
 class AuthResult {
@@ -123,18 +124,11 @@ class AuthService {
     ),
   ];
 
-  static String _roleName(UserRole role) {
-    switch (role) {
-      case UserRole.praktikan:
-        return 'Mahasiswa';
-      case UserRole.aslab:
-        return 'Asisten Lab';
-      case UserRole.laboran:
-        return 'Laboran';
-      case UserRole.dosen:
-        return 'Dosen';
-    }
-  }
+  /// Pesan error generik standar OWASP (mencegah account & role enumeration).
+  static const String invalidLoginMessage =
+      'Peran, nomor induk, atau kata sandi tidak sesuai.';
+
+  static final RegExp _safeIdentifierPattern = RegExp(r'^[\w.@+-]+$');
 
   /// Proses masuk (login) dengan dukungan Supabase + PostgreSQL
   /// Aturan akun resmi ITLG: email kampus berdomain @students.usu.ac.id.
@@ -151,23 +145,29 @@ class AuthService {
     required String password,
     required UserRole selectedRole,
   }) async {
+    final trimmedId = identifier.trim();
+    if (trimmedId.isEmpty ||
+        password.isEmpty ||
+        !_safeIdentifierPattern.hasMatch(trimmedId)) {
+      return const AuthResult.failure(invalidLoginMessage);
+    }
+
     final client = SupabaseService.instance.client;
 
-    // Bila login memakai email, wajib email @students.usu.ac.id.
-    if (identifier.contains('@') && !isStudentsUsuEmail(identifier)) {
-      return const AuthResult.failure(
-          'Gunakan email @students.usu.ac.id atau Nomor Induk.');
+    // Bila login memakai email, wajib email @students.usu.ac.id (tanpa membocorkan format).
+    if (trimmedId.contains('@') && !isStudentsUsuEmail(trimmedId)) {
+      return const AuthResult.failure(invalidLoginMessage);
     }
 
     if (client != null) {
       try {
         debugPrint('[AuthService] Mencoba login melalui Supabase...');
         // 1. Cari profil di PostgreSQL berdasarkan NIM/NIP atau Email
-        final normalizedInput = identifier.trim().toLowerCase();
+        final normalizedInput = trimmedId.toLowerCase();
         final legacyAlias = _legacyAuthEmails[normalizedInput];
         final queryFilter = legacyAlias != null
-            ? 'identifier.eq.$identifier,email.eq.$normalizedInput,email.eq.$legacyAlias'
-            : 'identifier.eq.$identifier,email.eq.$identifier';
+            ? 'identifier.eq.$trimmedId,email.eq.$normalizedInput,email.eq.$legacyAlias'
+            : 'identifier.eq.$trimmedId,email.eq.$normalizedInput';
         final response = await client
             .from('profiles')
             .select()
@@ -175,7 +175,7 @@ class AuthService {
             .maybeSingle();
 
         if (response == null) {
-          return const AuthResult.failure('Nomor Induk / Email tidak terdaftar.');
+          return const AuthResult.failure(invalidLoginMessage);
         }
 
         var profile = UserProfile.fromJson(response);
@@ -186,19 +186,16 @@ class AuthService {
 
         // Akun wajib memakai email resmi @students.usu.ac.id.
         if (!isStudentsUsuEmail(profile.email)) {
-          return const AuthResult.failure(
-              'Akun ini belum memakai email @students.usu.ac.id. Hubungi admin ITLG.');
+          return const AuthResult.failure(invalidLoginMessage);
         }
 
-        // 2. Validasi kesesuaian peran yang dipilih di UI
+        // 2. Validasi kesesuaian peran yang dipilih di UI (tanpa membocorkan peran asli)
         if (profile.role != selectedRole) {
-          return AuthResult.failure(
-            'Akun ini terdaftar sebagai ${_roleName(profile.role)}, bukan ${_roleName(selectedRole)}.',
-          );
+          return const AuthResult.failure(invalidLoginMessage);
         }
 
         // 3. Autentikasi
-        final normalizedId = identifier.trim().toLowerCase();
+        final normalizedId = trimmedId.toLowerCase();
         final legacyEmail = _legacyAuthEmails[profile.email.toLowerCase()];
         final customPassword = _customPasswords[normalizedId] ??
             _customPasswords[profile.email.toLowerCase()] ??
@@ -207,7 +204,7 @@ class AuthService {
         // Jika kata sandi baru disetel via alur Lupa Password
         if (customPassword != null) {
           if (password != customPassword) {
-            return const AuthResult.failure('Kata sandi salah. Silakan periksa kembali.');
+            return const AuthResult.failure(invalidLoginMessage);
           }
           debugPrint('[AuthService] Berhasil login via kata sandi baru: ${profile.fullName}');
           return AuthResult.success(profile);
@@ -236,35 +233,33 @@ class AuthService {
 
         debugPrint('[AuthService] Berhasil login via Supabase: ${profile.fullName}');
         return AuthResult.success(profile);
+      } on AuthRetryableFetchException catch (e) {
+        debugPrint('[AuthService] Gagal jaringan Supabase Auth: ${e.message}');
+        return const AuthResult.failure(
+          'Gagal terhubung ke server. Periksa koneksi internet Anda.',
+        );
       } on AuthException catch (e) {
         debugPrint('[AuthService] Gagal autentikasi Supabase: ${e.message}');
-        if (e.message.toLowerCase().contains('invalid login credentials')) {
-          return const AuthResult.failure('Kata sandi salah. Silakan periksa kembali.');
-        }
-        return AuthResult.failure(e.message);
+        return const AuthResult.failure(invalidLoginMessage);
       } catch (e) {
         debugPrint('[AuthService] Error saat login Supabase: $e');
-        return const AuthResult.failure('Gagal terhubung ke server. Periksa koneksi internet Anda.');
+        return const AuthResult.failure(
+          'Gagal terhubung ke server. Periksa koneksi internet Anda.',
+        );
       }
     }
 
     // Fallback: Mode Data Dummy Lokal
     await Future<void>.delayed(const Duration(milliseconds: 600));
 
-    final normalizedId = identifier.trim().toLowerCase();
+    final normalizedId = trimmedId.toLowerCase();
     final matchedUser = _dummyUsers.cast<_DummyUser?>().firstWhere(
           (u) => u!.identifiers.any((i) => i.toLowerCase() == normalizedId),
           orElse: () => null,
         );
 
-    if (matchedUser == null) {
-      return const AuthResult.failure('Nomor Induk / Email tidak terdaftar.');
-    }
-
-    if (matchedUser.profile.role != selectedRole) {
-      return AuthResult.failure(
-        'Akun ini terdaftar sebagai ${_roleName(matchedUser.profile.role)}, bukan ${_roleName(selectedRole)}.',
-      );
+    if (matchedUser == null || matchedUser.profile.role != selectedRole) {
+      return const AuthResult.failure(invalidLoginMessage);
     }
 
     final customPassword = _customPasswords[normalizedId] ??
@@ -272,7 +267,7 @@ class AuthService {
     final effectivePassword = customPassword ?? matchedUser.password;
 
     if (effectivePassword != password) {
-      return const AuthResult.failure('Kata sandi salah. Silakan periksa kembali.');
+      return const AuthResult.failure(invalidLoginMessage);
     }
 
     debugPrint('[AuthService] Berhasil login via Dummy Data: ${matchedUser.profile.fullName}');
@@ -456,14 +451,38 @@ class AuthService {
     return null;
   }
 
-  /// Update password di Supabase Auth untuk user dengan [email].
+  /// Simpan kata sandi baru ke Supabase Auth menggunakan sesi recovery hasil verifyOTP.
   Future<bool> updatePasswordByEmail(String email, String newPassword) async {
     final lowerEmail = email.toLowerCase().trim();
-    _customPasswords[lowerEmail] = newPassword;
-    final legacyEmail = _legacyAuthEmails[lowerEmail];
-    if (legacyEmail != null) {
-      _customPasswords[legacyEmail] = newPassword;
+    final client = SupabaseService.instance.client;
+
+    if (client != null) {
+      if (client.auth.currentSession == null) {
+        debugPrint('[AuthService] Sesi pemulihan OTP tidak ditemukan / kedaluwarsa.');
+        return false;
+      }
+      try {
+        await client.auth.updateUser(UserAttributes(password: newPassword));
+        // Jika dibuka dari halaman Login (belum masuk ke aplikasi), tutup sesi recovery
+        // agar pengguna masuk kembali secara normal memakai kata sandi baru.
+        if (!AuthController.instance.isLoggedIn) {
+          await client.auth.signOut();
+        }
+        _customPasswords.remove(lowerEmail);
+        final legacyEmail = _legacyAuthEmails[lowerEmail];
+        if (legacyEmail != null) {
+          _customPasswords.remove(legacyEmail);
+        }
+        debugPrint('[AuthService] Kata sandi berhasil diperbarui via Supabase Auth updateUser');
+        return true;
+      } catch (e) {
+        debugPrint('[AuthService] updateUser error: $e');
+        return false;
+      }
     }
+
+    // Fallback offline / dummy
+    _customPasswords[lowerEmail] = newPassword;
     for (final u in _dummyUsers) {
       if (u.identifiers.any((id) => id.toLowerCase() == lowerEmail)) {
         for (final id in u.identifiers) {
@@ -471,31 +490,6 @@ class AuthService {
         }
       }
     }
-
-    final client = SupabaseService.instance.client;
-    if (client != null) {
-      try {
-        await client.rpc('reset_password_by_email', params: {
-          'user_email': lowerEmail,
-          'new_password': newPassword,
-        });
-        debugPrint('[AuthService] Password berhasil diubah via RPC reset_password_by_email di Supabase');
-      } catch (e) {
-        debugPrint('[AuthService] RPC reset_password_by_email belum aktif: $e');
-      }
-
-      // 2. Jika user sedang aktif login, ubah via updateUser
-      try {
-        if (client.auth.currentSession != null) {
-          await client.auth.updateUser(UserAttributes(password: newPassword));
-          debugPrint('[AuthService] Password berhasil diubah via Supabase updateUser');
-        }
-      } catch (e) {
-        debugPrint('[AuthService] updateUser error: $e');
-      }
-    }
-
-    debugPrint('[AuthService] Password baru berhasil disetel untuk $lowerEmail');
     return true;
   }
 }

@@ -24,6 +24,7 @@ import 'pages/aslab_riwayat_tukar_shift_page.dart';
 import 'pages/aslab_sesi_aktif_page.dart';
 import 'pages/aslab_shift_jaga_page.dart';
 import 'pages/aslab_tambah_materi_page.dart';
+import 'pages/aslab_tambah_pertemuan_page.dart';
 
 /// Indeks tab navbar Asisten Lab.
 class AslabTab {
@@ -54,8 +55,10 @@ class AslabNav {
         reverseTransitionDuration: const Duration(milliseconds: 300),
         pageBuilder: (_, __, ___) => page,
         transitionsBuilder: (_, anim, __, child) => SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
           child: child,
         ),
       ),
@@ -90,29 +93,43 @@ class AslabNav {
   Future<void> detailPraktikum(BuildContext c, AslabCourse course) =>
       _open(c, AslabDetailPraktikumPage(nav: this, course: course), false);
 
+  Future<void> tambahPertemuan(
+    BuildContext c, {
+    required String courseId,
+    required int meetingNumber,
+  }) => _open(
+    c,
+    AslabTambahPertemuanPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
+
   Future<void> detailPertemuan(
     BuildContext c,
     AslabMeeting meeting, {
     String courseId = 'pemob',
-  }) =>
-      _open(
-        c,
-        AslabDetailPertemuanPage(
-            nav: this, meeting: meeting, courseId: courseId),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabDetailPertemuanPage(nav: this, meeting: meeting, courseId: courseId),
+    false,
+  );
 
   Future<void> detailModul(
     BuildContext c, {
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabDetailModulPage(
-            nav: this, courseId: courseId, meetingNumber: meetingNumber),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabDetailModulPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   /// [kind]: 0 modul, 1 tugas, 2 kuis.
   Future<void> tambahMateri(
@@ -120,53 +137,58 @@ class AslabNav {
     int kind = 0,
     String courseId = 'pemob',
     int? meetingNumber,
-  }) =>
-      _open(
-        c,
-        AslabTambahMateriPage(
-          nav: this,
-          kind: kind,
-          courseId: courseId,
-          meetingNumber: meetingNumber,
-        ),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabTambahMateriPage(
+      nav: this,
+      kind: kind,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   Future<void> editModul(
     BuildContext c, {
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabEditModulPage(
-            nav: this, courseId: courseId, meetingNumber: meetingNumber),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabEditModulPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   Future<void> editTugas(
     BuildContext c, {
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabEditTugasPage(
-            nav: this, courseId: courseId, meetingNumber: meetingNumber),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabEditTugasPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   Future<void> hasilKuis(
     BuildContext c, {
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabHasilKuisPage(
-            nav: this, courseId: courseId, meetingNumber: meetingNumber),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabHasilKuisPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   // Penilaian
 
@@ -174,30 +196,31 @@ class AslabNav {
     BuildContext c, {
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabEvaluasiTugasPage(
-            nav: this, courseId: courseId, meetingNumber: meetingNumber),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabEvaluasiTugasPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   Future<void> penilaianTugas(
     BuildContext c, {
     AslabStudent student = kRina,
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabPenilaianTugasPage(
-          nav: this,
-          student: student,
-          courseId: courseId,
-          meetingNumber: meetingNumber,
-        ),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabPenilaianTugasPage(
+      nav: this,
+      student: student,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   // Absensi
 
@@ -208,16 +231,15 @@ class AslabNav {
     BuildContext c, {
     String courseId = 'pemob',
     int? meetingNumber,
-  }) =>
-      _open(
-        c,
-        AslabBuatSesiPage(
-          nav: this,
-          courseId: courseId,
-          meetingNumber: meetingNumber,
-        ),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabBuatSesiPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   Future<void> sesiAktif(BuildContext c, {bool replace = false}) =>
       _open(c, AslabSesiAktifPage(nav: this), replace);
@@ -226,33 +248,31 @@ class AslabNav {
     BuildContext c, {
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabDetailPresensiPage(
-          nav: this,
-          courseId: courseId,
-          meetingNumber: meetingNumber,
-        ),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabDetailPresensiPage(
+      nav: this,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   Future<void> buktiPresensi(
     BuildContext c, {
     AslabPresence? presence,
     String courseId = 'pemob',
     int meetingNumber = 4,
-  }) =>
-      _open(
-        c,
-        AslabBuktiPresensiPage(
-          nav: this,
-          presence: presence,
-          courseId: courseId,
-          meetingNumber: meetingNumber,
-        ),
-        false,
-      );
+  }) => _open(
+    c,
+    AslabBuktiPresensiPage(
+      nav: this,
+      presence: presence,
+      courseId: courseId,
+      meetingNumber: meetingNumber,
+    ),
+    false,
+  );
 
   // Profil
 

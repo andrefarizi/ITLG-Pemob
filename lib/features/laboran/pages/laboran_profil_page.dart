@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_notification_service.dart';
 import '../../../core/services/lab_desk_sync_service.dart';
 import '../../../core/widgets/itlg_ui.dart';
 import '../../shared/lab_actions.dart';
@@ -35,6 +36,14 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
   void initState() {
     super.initState();
     _p.addListener(_onProfil);
+    widget.store.pushOn =
+        DeviceNotificationService.instance.isEnabledForRole('laboran');
+  }
+
+  Future<void> _togglePush(bool v) async {
+    setState(() => widget.store.pushOn = v);
+    await DeviceNotificationService.instance.setEnabledForRole('laboran', v);
+    if (mounted) setState(() {});
   }
 
   @override
@@ -190,9 +199,9 @@ class _LaboranProfilPageState extends State<LaboranProfilPage> {
                   minHeight: 64,
                   trailing: _Toggle(
                     value: store.pushOn,
-                    onChanged: (v) => setState(() => store.pushOn = v),
+                    onChanged: _togglePush,
                   ),
-                  onTap: () => setState(() => store.pushOn = !store.pushOn),
+                  onTap: () => _togglePush(!store.pushOn),
                 ),
                 _SettingItem(
                   icon: 'lock_on',

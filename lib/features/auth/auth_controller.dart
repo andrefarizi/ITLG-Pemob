@@ -1,3 +1,4 @@
+import '../../core/services/notification_sync_service.dart';
 import '../../core/services/presensi_sync_service.dart';
 
 import 'package:flutter/material.dart';
@@ -17,12 +18,18 @@ class AuthController extends ChangeNotifier {
   String _userIdentifier = '241402105'; // default NIM/NIP
   String _userName = 'Andre Al Farizi Sebayang';
   UserProfile? _currentProfile;
+  bool _rememberMe = false;
+  String? _rememberedIdentifier;
+  UserRole? _rememberedRole;
 
   UserRole get currentRole => _currentRole;
   bool get isLoggedIn => _isLoggedIn;
   String get userIdentifier => _currentProfile?.identifier ?? _userIdentifier;
   String get userName => _currentProfile?.fullName ?? _userName;
   UserProfile? get currentProfile => _currentProfile;
+  bool get rememberMe => _rememberMe;
+  String? get rememberedIdentifier => _rememberedIdentifier;
+  UserRole? get rememberedRole => _rememberedRole;
 
   void setRole(UserRole role) {
     _currentRole = role;
@@ -37,6 +44,7 @@ class AuthController extends ChangeNotifier {
     required String identifier,
     required String password,
     required UserRole role,
+    bool rememberMe = false,
   }) async {
     final result = await AuthService.instance.login(
       identifier: identifier,
@@ -50,7 +58,16 @@ class AuthController extends ChangeNotifier {
       _currentRole = result.profile!.role;
       _userIdentifier = result.profile!.identifier;
       _userName = result.profile!.fullName;
+      _rememberMe = rememberMe;
+      if (rememberMe) {
+        _rememberedIdentifier = identifier.trim();
+        _rememberedRole = result.profile!.role;
+      } else {
+        _rememberedIdentifier = null;
+        _rememberedRole = null;
+      }
       notifyListeners();
+      NotificationSyncService.instance.onUserLogin();
     }
 
     return result;

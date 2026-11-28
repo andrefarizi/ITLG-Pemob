@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/auth_controller.dart';
+import '../utils/constants.dart';
+import 'device_notification_service.dart';
 import 'supabase_service.dart';
 
 /// Satu item notifikasi lintas role yang tersinkron ke Supabase + Realtime.
@@ -115,7 +117,79 @@ class NotificationSyncService extends ChangeNotifier {
   /// (null = tabel belum tersedia → pakai kolom bersama `is_read`).
   Set<String>? _readIds;
 
+  /// ID notifikasi yang sudah ada sebelum sesi saat ini agar data historis
+  /// lama tidak memicu spam pop-up notifikasi HP saat aplikasi pertama dibuka.
+  final Set<String> _baselineIds = {};
+  bool _baselineCaptured = false;
+
+  /// Catatan ID notifikasi yang sudah pernah ditampilkan ke status bar HP per akun.
+  final Map<String, Set<String>> _pushedByUser = {};
+
   String get _me => AuthController.instance.userIdentifier;
+
+  String get _activeRoleKey {
+    switch (AuthController.instance.currentRole) {
+      case UserRole.praktikan:
+        return 'praktikan';
+      case UserRole.aslab:
+        return 'aslab';
+      case UserRole.laboran:
+        return 'laboran';
+      case UserRole.dosen:
+        return 'dosen';
+    }
+  }
+
+  bool _alreadyPushed(String userKey, String notifId) =>
+      _pushedByUser[userKey]?.contains(notifId) ?? false;
+
+  void _markPushed(String userKey, String notifId) {
+    _pushedByUser.putIfAbsent(userKey, () => <String>{}).add(notifId);
+  }
+
+  Future<void> _maybeShowOnDevice(AppNotificationRecord n) async {
+    if (!AuthController.instance.isLoggedIn) return;
+    final role = _activeRoleKey;
+    final userKey = '$role:$_me';
+    if (!_visible(n, role) || n.isRead || n.id.startsWith('seed-')) return;
+    if (_alreadyPushed(userKey, n.id)) return;
+
+    _markPushed(userKey, n.id);
+    await DeviceNotificationService.instance.show(
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      forRole: role,
+    );
+  }
+
+  /// Dipanggil setelah pengguna berhasil login untuk menyinkronkan notifikasi
+  /// terbaru dan memunculkan notifikasi baru yang masuk ke status bar HP.
+  Future<void> onUserLogin() async {
+    await DeviceNotificationService.instance.requestPermissionOnce();
+    await refreshFromBackend(notifyNewForActiveUser: false);
+    if (!AuthController.instance.isLoggedIn) return;
+
+    final role = _activeRoleKey;
+    final userKey = '$role:$_me';
+    final recentCutoff = DateTime.now().subtract(const Duration(minutes: 30));
+    final sessionCutoff = DateTime.now().subtract(const Duration(hours: 12));
+    final freshUnread = forRole(role)
+        .where((n) =>
+            !n.isRead &&
+            !n.id.startsWith('seed-') &&
+            !_alreadyPushed(userKey, n.id) &&
+            ((!_baselineIds.contains(n.id) &&
+                    n.createdAt.toLocal().isAfter(sessionCutoff)) ||
+                n.createdAt.toLocal().isAfter(recentCutoff)))
+        .take(3)
+        .toList()
+        .reversed;
+
+    for (final n in freshUnread) {
+      await _maybeShowOnDevice(n);
+    }
+  }
 
   bool _visible(AppNotificationRecord n, String role) =>
       n.role == role && (n.targetUser == null || n.targetUser == _me);
@@ -323,13 +397,15 @@ class NotificationSyncService extends ChangeNotifier {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
-    await refreshFromBackend();
+    await refreshFromBackend(notifyNewForActiveUser: false);
+    _baselineCaptured = true;
     _subscribeRealtime();
   }
 
-  Future<void> refreshFromBackend() async {
+  Future<void> refreshFromBackend({bool notifyNewForActiveUser = true}) async {
     final client = SupabaseService.instance.client;
     if (client == null) return;
+    final previousIds = {for (final x in _items) x.id};
     try {
       final rows = await client
           .from('notifications')
@@ -363,8 +439,21 @@ class NotificationSyncService extends ChangeNotifier {
             n.isRead = reads.contains(n.id);
           }
         }
+        if (!_baselineCaptured) {
+          _baselineIds.addAll(_items.map((e) => e.id));
+        }
         _backendAvailable = true;
         notifyListeners();
+
+        if (notifyNewForActiveUser && _baselineCaptured) {
+          final newlyArrived = _items
+              .where((n) => !previousIds.contains(n.id) && !_baselineIds.contains(n.id))
+              .toList()
+              .reversed;
+          for (final n in newlyArrived) {
+            await _maybeShowOnDevice(n);
+          }
+        }
         debugPrint(
             '[NotificationSync] Berhasil sinkronisasi ${_items.length} notifikasi dari Supabase.');
       }
@@ -428,6 +517,7 @@ class NotificationSyncService extends ChangeNotifier {
     );
     _items.insert(0, rec);
     notifyListeners();
+    await _maybeShowOnDevice(rec);
 
     final client = SupabaseService.instance.client;
     if (client != null) {
@@ -468,10 +558,15 @@ class NotificationSyncService extends ChangeNotifier {
               .maybeSingle();
         }
         if (inserted != null) {
+          final serverRec =
+              AppNotificationRecord.fromJson(Map<String, dynamic>.from(inserted));
+          if (AuthController.instance.isLoggedIn &&
+              _visible(serverRec, _activeRoleKey)) {
+            _markPushed('$_activeRoleKey:$_me', serverRec.id);
+          }
           final idx = _items.indexWhere((x) => x.id == localId);
           if (idx != -1) {
-            _items[idx] = AppNotificationRecord.fromJson(
-                Map<String, dynamic>.from(inserted));
+            _items[idx] = serverRec;
             notifyListeners();
           }
         }
