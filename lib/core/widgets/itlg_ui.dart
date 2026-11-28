@@ -329,6 +329,9 @@ class ItlgTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final String? errorText;
+
+  /// Menandai border merah tanpa harus menampilkan teks error di bawah kolom.
+  final bool hasErrorBorder;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
@@ -345,6 +348,7 @@ class ItlgTextField extends StatefulWidget {
     this.keyboardType,
     this.textInputAction,
     this.errorText,
+    this.hasErrorBorder = false,
     this.onChanged,
     this.onSubmitted,
   });
@@ -392,7 +396,8 @@ class _ItlgTextFieldState extends State<ItlgTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final hasError = widget.errorText != null;
+    final hasErrorText = widget.errorText != null;
+    final hasError = hasErrorText || widget.hasErrorBorder;
     final activeBorderColor = hasError
         ? ItlgColors.error
         : (_isFocused ? ItlgColors.primary : const Color(0xFFE2E8F0));
@@ -525,7 +530,7 @@ class _ItlgTextFieldState extends State<ItlgTextField> {
             ),
           ),
         ),
-        if (hasError) ...[
+        if (hasErrorText) ...[
           const SizedBox(height: 6),
           Text(
             widget.errorText!,
